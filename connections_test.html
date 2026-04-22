@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>UFC Fantasy - Connection Test</title>
+  
+  <!-- Basic styling so it's readable -->
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      max-width: 900px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      background: #f5f5f5;
+    }
+    h1 {
+      border-bottom: 2px solid #333;
+      padding-bottom: 0.5rem;
+    }
+    .status {
+      padding: 1rem;
+      border-radius: 4px;
+      margin: 1rem 0;
+    }
+    .status.loading { background: #fff3cd; }
+    .status.success { background: #d4edda; }
+    .status.error { background: #f8d7da; }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      background: white;
+      margin-top: 1rem;
+    }
+    th, td {
+      padding: 8px 12px;
+      text-align: left;
+      border-bottom: 1px solid #ddd;
+    }
+    th {
+      background: #333;
+      color: white;
+    }
+    tr:hover { background: #f0f0f0; }
+    .champion { font-weight: bold; color: #d4af37; }
+  </style>
+</head>
+<body>
+
+  <h1>UFC Fantasy League - Connection Test</h1>
+  
+  <!-- Status message will update as the connection progresses -->
+  <div id="status" class="status loading">Connecting to Supabase...</div>
+  
+  <!-- Table where we'll display fighters -->
+  <table id="fighterTable" style="display:none;">
+    <thead>
+      <tr>
+        <th>Rank</th>
+        <th>Name</th>
+        <th>Nickname</th>
+        <th>Division</th>
+        <th>Record</th>
+        <th>Country</th>
+      </tr>
+    </thead>
+    <tbody id="fighterBody"></tbody>
+  </table>
+
+  <!-- Load Supabase client from CDN -->
+  <!-- This is a public CDN link that provides the Supabase JavaScript library -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  
+  <script>
+    // ========================================================================
+    // SUPABASE CONFIG
+    // ========================================================================
+    // These are PUBLIC keys - safe to include in frontend code
+    // Anyone viewing your source can see them, but they're restricted by RLS
+    
+    const SUPABASE_URL = 'https://zfffboipbdegrzyyzoto.supabase.co';
+    
+    // TODO: Replace with your actual publishable key from Supabase
+    // Dashboard: Project Settings > API > Project API keys > "anon / public"
+    const SUPABASE_ANON_KEY = 'sb_publishable_f58saCGut6ALNzE2IJ7YNA_81tKmyvG';
+    
+    // ========================================================================
+    // CREATE CLIENT
+    // ========================================================================
+    // This creates an object we can use to talk to Supabase
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    
+    // ========================================================================
+    // FETCH FIGHTERS
+    // ========================================================================
+    async function loadFighters() {
+      const statusEl = document.getElementById('status');
+      
+      try {
+        // Query the fighters table
+        // .select() = SELECT *
+        // .eq() = WHERE clause  
+        // .order() = ORDER BY
+        // .limit() = LIMIT
+        const { data, error } = await supabaseClient
+          .from('fighters')
+          .select('name, nickname, primary_division, current_rank, is_champion, record_wins, record_losses, record_draws, country')
+          .order('is_champion', { ascending: false })  // Champions first
+          .order('current_rank', { nullsFirst: false });
+        
+        // If Supabase returned an error, throw it
+        if (error) throw error;
+        
+        // Success - update status and show table
+        statusEl.textContent = `Loaded ${data.length} fighters from Supabase`;
+        statusEl.className = 'status success';
+        
+        renderTable(data);
+        
+      } catch (err) {
+        // Something went wrong - show the error
+        statusEl.innerHTML = `<strong>Error:</strong> ${err.message}<br>
+          <small>Check the browser console (F12) for details.</small>`;
+        statusEl.className = 'status error';
+        console.error('Full error:', err);
+      }
+    }
+    
+    // ========================================================================
+    // RENDER TABLE
+    // ========================================================================
+    function renderTable(fighters) {
+      const table = document.getElementById('fighterTable');
+      const tbody = document.getElementById('fighterBody');
+      
+      // Clear any existing rows
+      tbody.innerHTML = '';
+      
+      // Create a row for each fighter
+      fighters.forEach(f => {
+        const row = document.createElement('tr');
+        
+        // Format rank: "C" for champion, "#N" for ranked, "-" for unranked
+        let rankDisplay;
+        if (f.is_champion) rankDisplay = '<span class="champion">CHAMP</span>';
+        else if (f.current_rank) rankDisplay = `#${f.current_rank}`;
+        else rankDisplay = '-';
+        
+        // Format the record (wins-losses-draws)
+        const record = `${f.record_wins}-${f.record_losses}-${f.record_draws}`;
+        
+        // Make division name pretty
+        const divDisplay = f.primary_division.replace(/_/g, ' ');
+        
+        // Build the row HTML
+        row.innerHTML = `
+          <td>${rankDisplay}</td>
+          <td>${f.name}</td>
+          <td>${f.nickname || ''}</td>
+          <td>${divDisplay}</td>
+          <td>${record}</td>
+          <td>${f.country || ''}</td>
+        `;
+        tbody.appendChild(row);
+      });
+      
+      // Show the table
+      table.style.display = 'table';
+    }
+    
+    // Run the fetch as soon as the page loads
+    loadFighters();
+  </script>
+</body>
+</html>

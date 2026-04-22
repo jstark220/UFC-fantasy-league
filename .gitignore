@@ -1,0 +1,153 @@
+# ============================================================================
+# SECRETS AND ENVIRONMENT VARIABLES
+# ============================================================================
+# NEVER commit these - they contain API keys and passwords
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+.env.test
+*.pem
+*.key
+*.cert
+secrets/
+
+# ============================================================================
+# NODE / JAVASCRIPT
+# ============================================================================
+# Dependencies - these get rebuilt from package.json
+node_modules/
+data-tools/node_modules/
+public/node_modules/
+
+# Package manager debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# npm cache
+.npm/
+
+# Optional npm configuration files
+.npmrc
+
+# ============================================================================
+# OPERATING SYSTEM FILES
+# ============================================================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+.directory
+.Trash-*
+
+# ============================================================================
+# IDE AND EDITOR FILES
+# ============================================================================
+# VS Code
+.vscode/
+*.code-workspace
+
+# Cursor
+.cursor/
+
+# JetBrains (WebStorm, IntelliJ)
+.idea/
+*.iml
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*.swn
+.*.swp
+
+# Emacs
+*~
+\#*\#
+.\#*
+
+# ============================================================================
+# LOGS AND RUNTIME
+# ============================================================================
+*.log
+logs/
+pids/
+*.pid
+*.seed
+
+# ============================================================================
+# BUILD OUTPUTS
+# ============================================================================
+dist/
+build/
+out/
+.next/
+.nuxt/
+.cache/
+
+# ============================================================================
+# TEST / COVERAGE
+# ============================================================================
+coverage/
+.nyc_output/
+*.lcov
+.jest/
+
+# ============================================================================
+# SUPABASE SPECIFIC
+# ============================================================================
+# Local Supabase CLI files if you use them later
+.supabase/
+supabase/.branches/
+supabase/.temp/
+
+# Database dumps (can contain real user data)
+*.dump
+*.backup
+db-backups/
+
+# ============================================================================
+# PROJECT SPECIFIC
+# ============================================================================
+# Scratch work folder for experiments
+scratch/
+sandbox/
+playground/
+
+# Generated reports
+reports/
+
+# Local override files
+*.local
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# ============================================================================
+# DEPLOYMENT
+# ============================================================================
+# Vercel
+.vercel/
+
+# Netlify (if ever used)
+.netlify/
