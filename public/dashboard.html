@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - UFC Fantasy League</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <!-- This entire div starts hidden. dashboard.js checks auth first,
+       then reveals it. This prevents a flash of content before the
+       session check completes and a redirect fires if needed. -->
+  <div class="dashboard-page" id="dashboardContent" style="display: none;">
+
+    <div class="dashboard-header">
+      <h1>UFC Fantasy League</h1>
+      <button class="btn-secondary" id="logoutBtn">Log Out</button>
+    </div>
+
+    <!-- User's email is injected here by dashboard.js -->
+    <p id="welcomeMessage"></p>
+
+    <!-- Future content (league info, roster, leaderboard, etc.) goes below -->
+
+  </div>
+
+  <!-- Load Supabase CDN first, then shared config, then this page's logic -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/dashboard.js"></script>
+
+</body>
+</html>

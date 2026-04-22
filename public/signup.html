@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign Up - UFC Fantasy League</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="auth-page">
+
+  <div class="card">
+    <h1>Create Account</h1>
+    <p class="subtitle">Join UFC Fantasy League</p>
+
+    <!-- Error or success message; hidden by default, shown by signup.js -->
+    <div id="message" class="message"></div>
+
+    <form id="signupForm">
+
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input type="email" id="email" placeholder="you@example.com" required>
+      </div>
+
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" placeholder="At least 8 characters" required>
+      </div>
+
+      <div class="form-group">
+        <label for="confirmPassword">Confirm Password</label>
+        <input type="password" id="confirmPassword" placeholder="Repeat your password" required>
+      </div>
+
+      <button type="submit" class="btn-primary" id="submitBtn">Create Account</button>
+
+    </form>
+
+    <div class="form-footer">
+      Already have an account? <a href="login.html">Log in</a>
+    </div>
+  </div>
+
+  <!-- Load Supabase CDN first, then shared config, then this page's logic -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/signup.js"></script>
+
+</body>
+</html>

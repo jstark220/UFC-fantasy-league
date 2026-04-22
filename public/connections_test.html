@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UFC Fantasy - Connection Test</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="connection-page">
+
+  <h1>UFC Fantasy League - Connection Test</h1>
+
+  <!-- Status banner; connections-test.js updates the class and text -->
+  <div id="status" class="status loading">Connecting to Supabase...</div>
+
+  <!-- Fighter table; hidden until data loads -->
+  <table id="fighterTable" style="display: none;">
+    <thead>
+      <tr>
+        <th>Rank</th>
+        <th>Name</th>
+        <th>Nickname</th>
+        <th>Division</th>
+        <th>Record</th>
+        <th>Country</th>
+      </tr>
+    </thead>
+    <tbody id="fighterBody"></tbody>
+  </table>
+
+  <!-- Load Supabase CDN first, then shared config, then this page's logic -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/connections-test.js"></script>
+
+</body>
+</html>
