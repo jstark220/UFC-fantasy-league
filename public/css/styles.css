@@ -241,3 +241,248 @@ th {
 tr:hover { background: #f0f0f0; }
 
 .champion { font-weight: bold; color: #d4af37; }
+
+/* ========================================================================
+   GENERIC PAGE LAYOUT
+   Used by my-leagues.html, league.html, and future interior pages
+   ======================================================================== */
+
+.page {
+  max-width: 900px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 2px solid #333;
+  padding-bottom: 0.75rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.page-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.page-header-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+/* "← My Leagues" style back navigation */
+.back-link {
+  display: inline-block;
+  margin-bottom: 1rem;
+  color: #666;
+  text-decoration: none;
+  font-size: 0.875rem;
+}
+
+.back-link:hover {
+  color: #333;
+}
+
+/* ========================================================================
+   BUTTON VARIANTS
+   ======================================================================== */
+
+/* Gold action button, auto-width (for page-level actions, not form submits) */
+.btn-gold {
+  display: inline-block;
+  padding: 0.5rem 1.1rem;
+  background: #d4af37;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.15s;
+}
+
+.btn-gold:hover {
+  background: #b8962e;
+}
+
+/* Small red button for destructive actions (e.g. remove member) */
+.btn-danger {
+  padding: 0.3rem 0.6rem;
+  background: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-danger:hover {
+  background: #b02a37;
+}
+
+/* ========================================================================
+   LEAGUE LIST (my-leagues.html)
+   ======================================================================== */
+
+.league-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.league-card {
+  background: white;
+  border-radius: 6px;
+  padding: 1.1rem 1.25rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  gap: 1rem;
+}
+
+.league-card-info {
+  flex: 1;
+}
+
+.league-card-name {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #111;
+  margin: 0 0 0.3rem 0;
+}
+
+.league-card-meta {
+  font-size: 0.825rem;
+  color: #666;
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* ========================================================================
+   BADGES
+   Role indicators shown on league cards and member lists
+   ======================================================================== */
+
+.badge {
+  display: inline-block;
+  padding: 0.2rem 0.5rem;
+  border-radius: 3px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.badge-commissioner {
+  background: #d4af37;
+  color: white;
+}
+
+.badge-member {
+  background: #e0e0e0;
+  color: #555;
+}
+
+/* ========================================================================
+   EMPTY STATE
+   Shown when the user has no leagues yet
+   ======================================================================== */
+
+.empty-state {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: #888;
+}
+
+.empty-state p {
+  margin-bottom: 1.25rem;
+  font-size: 1rem;
+}
+
+/* ========================================================================
+   INVITE CODE DISPLAY
+   Used on create-league.html and league.html (commissioner view)
+   ======================================================================== */
+
+.invite-code-box {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: #f0f0f0;
+  border-radius: 4px;
+  padding: 0.75rem 1rem;
+  margin: 0.5rem 0 1rem;
+}
+
+/* Large monospace code display */
+.invite-code-text {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  color: #111;
+  flex: 1;
+}
+
+.copy-btn {
+  padding: 0.35rem 0.75rem;
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.copy-btn:hover {
+  background: #e8e8e8;
+}
+
+/* ========================================================================
+   SECTION
+   Content sections within a page (members, details, scoring, etc.)
+   ======================================================================== */
+
+.section {
+  margin-top: 2rem;
+}
+
+.section h2 {
+  font-size: 1.1rem;
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 0.5rem;
+  margin-bottom: 1rem;
+  color: #333;
+}
+
+/* ========================================================================
+   DETAIL GRID
+   Key-value pairs for league info (format, draft type, start date, etc.)
+   ======================================================================== */
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.5rem 1.5rem;
+  font-size: 0.9rem;
+}
+
+.detail-label {
+  color: #888;
+  font-weight: 600;
+}
+
+.detail-value {
+  color: #111;
+}

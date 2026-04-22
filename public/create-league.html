@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Create League - UFC Fantasy League</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="auth-page">
+
+  <div class="card">
+
+    <a href="my-leagues.html" class="back-link">← My Leagues</a>
+
+    <h1>Create League</h1>
+    <p class="subtitle">Set up a new UFC Fantasy League</p>
+
+    <!-- Error or success message; hidden by default -->
+    <div id="message" class="message"></div>
+
+    <form id="createForm">
+
+      <div class="form-group">
+        <label for="leagueName">League Name</label>
+        <input type="text" id="leagueName" placeholder="e.g. Octagon Champions" maxlength="60" required>
+      </div>
+
+      <div class="form-group">
+        <label for="format">Format</label>
+        <select id="format" required>
+          <option value="season">Season-Long</option>
+          <option value="dynasty">Dynasty</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="draftFormat">Draft Format</label>
+        <select id="draftFormat" required>
+          <option value="snake">Snake Draft</option>
+          <option value="auction">Auction Draft</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="startDate">Season Start Date <span style="font-weight: normal; color: #888;">(optional)</span></label>
+        <input type="date" id="startDate">
+      </div>
+
+      <div class="form-group">
+        <label for="teamName">Your Team Name</label>
+        <input type="text" id="teamName" placeholder="3-30 characters" minlength="3" maxlength="30" required>
+      </div>
+
+      <!-- Auto-generated invite code displayed before the submit button -->
+      <div class="form-group">
+        <label>Invite Code</label>
+        <p style="font-size: 0.8rem; color: #888; margin: 0 0 0.4rem;">
+          Share this with managers you want to invite. Generated automatically.
+        </p>
+        <div class="invite-code-box">
+          <span class="invite-code-text" id="inviteCodeDisplay"></span>
+          <button type="button" class="copy-btn" id="copyBtn">Copy</button>
+        </div>
+      </div>
+
+      <button type="submit" class="btn-primary" id="submitBtn">Create League</button>
+
+    </form>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/auth-guard.js"></script>
+  <script src="js/create-league.js"></script>
+
+</body>
+</html>

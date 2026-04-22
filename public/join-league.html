@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Join League - UFC Fantasy League</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="auth-page">
+
+  <div class="card">
+
+    <a href="my-leagues.html" class="back-link">← My Leagues</a>
+
+    <h1>Join League</h1>
+    <p class="subtitle">Enter an invite code to join a league</p>
+
+    <!-- Error or success message; hidden by default -->
+    <div id="message" class="message"></div>
+
+    <form id="joinForm">
+
+      <div class="form-group">
+        <label for="inviteCode">Invite Code</label>
+        <!-- oninput auto-uppercases as the user types -->
+        <input type="text" id="inviteCode" placeholder="6-character code" maxlength="6" required
+               oninput="this.value = this.value.toUpperCase()">
+      </div>
+
+      <div class="form-group">
+        <label for="teamName">Your Team Name</label>
+        <input type="text" id="teamName" placeholder="3-30 characters" minlength="3" maxlength="30" required>
+      </div>
+
+      <button type="submit" class="btn-primary" id="submitBtn">Join League</button>
+
+    </form>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/auth-guard.js"></script>
+  <script src="js/join-league.js"></script>
+
+</body>
+</html>

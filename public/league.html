@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>League - UFC Fantasy League</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <!-- Hidden until auth check and data load complete -->
+  <div class="page" id="pageContent" style="display: none;">
+
+    <a href="my-leagues.html" class="back-link">← My Leagues</a>
+
+    <div class="page-header">
+      <!-- League name injected by league.js -->
+      <h1 id="leagueName"></h1>
+    </div>
+
+    <!-- League details grid (format, draft, start date) -->
+    <div class="section">
+      <h2>Details</h2>
+      <div class="detail-grid" id="leagueDetails"></div>
+    </div>
+
+    <!-- Invite code section - only shown to the commissioner by league.js -->
+    <div class="section" id="inviteSection" style="display: none;">
+      <h2>Invite Code</h2>
+      <p style="font-size: 0.9rem; color: #666;">Share this code with managers you want to invite.</p>
+      <div class="invite-code-box">
+        <span class="invite-code-text" id="inviteCodeDisplay"></span>
+        <button class="copy-btn" id="copyInviteBtn">Copy</button>
+      </div>
+    </div>
+
+    <!-- Member list - populated by league.js -->
+    <div class="section">
+      <h2>Members (<span id="memberCount">0</span> / <span id="maxManagers">8</span>)</h2>
+      <table id="memberTable">
+        <thead>
+          <tr>
+            <th>Team Name</th>
+            <th>Role</th>
+            <!-- Actions column header inserted by JS if user is commissioner -->
+            <th id="actionsHeader" style="display: none;">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="memberTableBody"></tbody>
+      </table>
+    </div>
+
+    <!-- ================================================================
+         SCORING RULES v1.2 (static - these cannot be customized per PRD)
+         ================================================================ -->
+    <div class="section">
+      <h2>Scoring Rules (v1.2)</h2>
+
+      <p style="font-size: 0.85rem; color: #666; margin-bottom: 0.5rem;">Base scoring (applied to every fight)</p>
+      <table>
+        <thead><tr><th>Stat</th><th>Points</th></tr></thead>
+        <tbody>
+          <tr><td>Significant strike landed</td><td>+0.1</td></tr>
+          <tr><td>Takedown</td><td>+1.0</td></tr>
+          <tr><td>Reversal</td><td>+1.0</td></tr>
+          <tr><td>Knockdown</td><td>+2.0</td></tr>
+          <tr><td>Control time (per second)</td><td>+0.01</td></tr>
+        </tbody>
+      </table>
+
+      <p style="font-size: 0.85rem; color: #666; margin: 1.25rem 0 0.5rem;">Win bonuses</p>
+      <table>
+        <thead><tr><th>Outcome</th><th>Points</th></tr></thead>
+        <tbody>
+          <tr><td>Round 1 finish</td><td>+18</td></tr>
+          <tr><td>Round 2 finish</td><td>+14</td></tr>
+          <tr><td>Round 3 finish</td><td>+9</td></tr>
+          <tr><td>Round 4 or 5 finish</td><td>+8</td></tr>
+          <tr><td>Decision win</td><td>+6</td></tr>
+          <tr><td>Quick win bonus (under 60s in R1)</td><td>+5 additional</td></tr>
+        </tbody>
+      </table>
+
+      <p style="font-size: 0.85rem; color: #666; margin: 1.25rem 0 0.5rem;">League bonuses</p>
+      <table>
+        <thead><tr><th>Event</th><th>Points</th></tr></thead>
+        <tbody>
+          <tr><td>Performance of the Night</td><td>+6</td></tr>
+          <tr><td>Fight of the Night (both fighters)</td><td>+4</td></tr>
+          <tr><td>Divisional title win</td><td>+10</td></tr>
+          <tr><td>Successful title defense</td><td>+5</td></tr>
+          <tr><td>BMF or interim title win</td><td>+5</td></tr>
+          <tr><td>Successful BMF or interim defense</td><td>+3</td></tr>
+          <tr><td>Top-5 ranked opponent win</td><td>+4</td></tr>
+          <tr><td>Top-10 ranked opponent win</td><td>+2</td></tr>
+          <tr><td>Top-15 ranked opponent win</td><td>+1</td></tr>
+        </tbody>
+      </table>
+
+      <p style="font-size: 0.85rem; color: #666; margin: 1.25rem 0 0.5rem;">Card position multipliers</p>
+      <table>
+        <thead><tr><th>Position</th><th>Multiplier</th></tr></thead>
+        <tbody>
+          <tr><td>Main event</td><td>1.2x</td></tr>
+          <tr><td>Co-main event</td><td>1.1x</td></tr>
+          <tr><td>All other fights</td><td>1.0x</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/auth-guard.js"></script>
+  <script src="js/league.js"></script>
+
+</body>
+</html>
