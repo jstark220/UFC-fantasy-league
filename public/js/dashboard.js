@@ -15,14 +15,8 @@ async function initDashboard() {
   document.getElementById('dashboardContent').style.display = 'block';
 
   // Show the logged-in user's email as the welcome message
-  document.getElementById('welcomeMessage').textContent = 'Welcome, ' + user.email;
-
-  // Wire up the logout button
-  document.getElementById('logoutBtn').addEventListener('click', async function() {
-    // signOut() clears the session both on the Supabase server and in localStorage
-    await supabaseClient.auth.signOut();
-    window.location.href = 'login.html';
-  });
+  // Logout is handled by the globalLogoutBtn in the nav (calls logOut() from auth-guard.js)
+  document.getElementById('welcomeMessage').textContent = 'Logged in as ' + user.email;
 }
 
 initDashboard();

@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <script src="js/theme.js"></script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="styles/tokens.css">
+  <link rel="stylesheet" href="styles/components.css">
+
+  <title>Knockdown Fantasy — UFC Fantasy Leagues</title>
+</head>
+<body class="home-page">
+
+  <nav class="top-nav">
+    <a href="index.html" class="top-nav__logo">
+      <span class="kf-red">Knockdown</span> Fantasy
+    </a>
+
+    <div class="top-nav__links">
+      <a href="#fighters" class="btn-ghost">Fighters</a>
+      <a href="#howto"    class="btn-ghost">How it works</a>
+    </div>
+
+    <div class="top-nav__actions">
+      <button class="btn-theme" onclick="toggleTheme()" aria-label="Toggle theme">☾</button>
+      <a href="login.html"  class="btn-ghost">Log in</a>
+      <a href="signup.html" class="btn-primary">Sign up free</a>
+    </div>
+  </nav>
+
+  <!-- ================================================================
+       HERO
+       Two-column: left = headline + copy, right = live fight card.
+       Cage-mesh CSS background + crimson arena glow.
+       ================================================================ -->
+  <section class="hero" id="events">
+    <div class="hero__inner">
+
+      <div class="hero__left">
+        <p class="hero__eyebrow">For fans who watch the prelims</p>
+
+        <h1 class="hero__title">
+          Build your<br><span class="kf-red">dynasty.</span><br>Own the cage.
+        </h1>
+
+        <p class="hero__subtitle">
+          Score points for how your fighters win — not just that they win.
+          Sig strikes, takedowns, finishes, title defenses. The faster the
+          finish, the bigger the bonus.
+        </p>
+
+        <div class="hero__actions">
+          <a href="signup.html" class="btn-primary">Start your league free</a>
+          <a href="#howto"      class="btn-secondary">How it works</a>
+        </div>
+      </div>
+
+      <div class="hero__right">
+        <div class="hero-card">
+          <p class="hero-card__eyebrow">Next event</p>
+          <h2 class="hero-card__event">UFC 329</h2>
+          <p class="hero-card__meta">Sat, May 3 &middot; T-Mobile Arena, Las Vegas</p>
+
+          <div class="hero-card__countdown">
+            <div class="countdown-unit">
+              <span class="countdown-unit__value" id="cdDays">--</span>
+              <span class="countdown-unit__label">Days</span>
+            </div>
+            <div class="countdown-unit">
+              <span class="countdown-unit__value" id="cdHours">--</span>
+              <span class="countdown-unit__label">Hours</span>
+            </div>
+            <div class="countdown-unit">
+              <span class="countdown-unit__value" id="cdMins">--</span>
+              <span class="countdown-unit__label">Mins</span>
+            </div>
+          </div>
+
+          <div class="hero-card__main">
+            <p class="hero-card__fight-label">Main Event &middot; Lightweight Title</p>
+            <p class="hero-card__matchup">
+              Islam Makhachev
+              <span class="vs">vs</span>
+              Arman Tsarukyan II
+            </p>
+          </div>
+
+          <a href="signup.html" class="btn-primary" style="width:100%; justify-content:center;">
+            Start your league now
+          </a>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- Stats strip: product credibility at a glance -->
+  <div class="stats-strip">
+    <span class="stats-strip__item"><strong>233</strong> active fighters</span>
+    <span class="stats-strip__dot"></span>
+    <span class="stats-strip__item"><strong>9</strong> men's divisions</span>
+    <span class="stats-strip__dot"></span>
+    <span class="stats-strip__item"><strong>3</strong> women's divisions</span>
+    <span class="stats-strip__dot"></span>
+    <span class="stats-strip__item">Real stat scoring</span>
+    <span class="stats-strip__dot"></span>
+    <span class="stats-strip__item">Free to play</span>
+  </div>
+
+  <!-- ================================================================
+       HOW IT WORKS — 3 numbered steps
+       ================================================================ -->
+  <section class="home-section home-section--alt" id="howto">
+    <div class="home-section__header">
+      <p class="home-section__eyebrow">The format</p>
+      <h2 class="home-section__title">How Knockdown Fantasy works</h2>
+      <p class="home-section__sub">
+        Season-long or dynasty. Snake or auction draft. Up to 8 managers per league.
+      </p>
+    </div>
+
+    <div class="how-it-works">
+
+      <div class="step-card">
+        <p class="step-card__number">01</p>
+        <h3 class="step-card__title">Draft your roster</h3>
+        <p class="step-card__body">
+          Snake or auction format. Build a 20-fighter roster from 233 active
+          athletes across every weight class. Champions, top contenders,
+          and deep-cut prospects — your call.
+        </p>
+      </div>
+
+      <div class="step-card">
+        <p class="step-card__number">02</p>
+        <h3 class="step-card__title">Set your lineup</h3>
+        <p class="step-card__body">
+          Pick 3 starters before the card locks Saturday night. Lineup lock
+          hits at the first prelim. After that, you ride whatever happens
+          inside the cage.
+        </p>
+      </div>
+
+      <div class="step-card">
+        <p class="step-card__number">03</p>
+        <h3 class="step-card__title">Score on fight night</h3>
+        <p class="step-card__body">
+          Points for sig strikes, takedowns, control time, and finishes.
+          A first-round KO on the main card scores more than a five-round
+          decision on the prelims. Finishing is always the right call.
+        </p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ================================================================
+       CHAMPION GALLERY — dynamically rendered from Supabase
+       ================================================================ -->
+  <section class="home-section" id="fighters">
+    <div class="home-section__header">
+      <p class="home-section__eyebrow">First-round draft value</p>
+      <h2 class="home-section__title">The belt holders</h2>
+      <p class="home-section__sub">
+        Champions earn a +10 title defense bonus every time they compete.
+        Safe floor — but everyone knows it, so they go early.
+      </p>
+    </div>
+
+    <div class="card-grid" id="championGrid">
+      <p style="color:var(--text-tertiary); font-size:var(--text-body-sm);">Loading...</p>
+    </div>
+  </section>
+
+  <!-- ================================================================
+       DIVISION SPOTLIGHT — dynamically rendered from Supabase
+       ================================================================ -->
+  <section class="home-section home-section--alt">
+    <div class="home-section__header">
+      <p class="home-section__eyebrow">155 lbs</p>
+      <h2 class="home-section__title">Lightweight is stacked</h2>
+      <p class="home-section__sub">
+        Topuria moved up from featherweight holding gold at 145. Below him,
+        four fighters who've each held the lightweight title or an interim
+        belt in the past three years. Drafting this division is a genuine dilemma.
+      </p>
+    </div>
+
+    <div class="card-grid" id="spotlightGrid">
+      <p style="color:var(--text-tertiary); font-size:var(--text-body-sm);">Loading...</p>
+    </div>
+  </section>
+
+  <!-- ================================================================
+       UFC 329 FIGHT CARD
+       True poster layout: fighters face each other across a VS center.
+       Main event is larger. Title fights get a gold top border.
+       ================================================================ -->
+  <section class="home-section">
+    <div class="home-section__header">
+      <p class="home-section__eyebrow">UFC 329 &middot; May 3 &middot; Las Vegas</p>
+      <h2 class="home-section__title">Fight card</h2>
+      <p class="home-section__sub">
+        Four title fights on one card. Set your lineup before Saturday's first prelim.
+      </p>
+    </div>
+
+    <div class="fights-list">
+
+      <!-- Main event: visually dominant, larger type, gold title border -->
+      <div class="fight-card-row fight-card-row--main fight-card-row--title">
+        <div class="fighter-corner fighter-corner--left">
+          <div class="fighter-corner__flag">🇷🇺</div>
+          <h3 class="fighter-corner__name">Islam Makhachev</h3>
+          <p class="fighter-corner__record">(26-1) &middot; Champion</p>
+        </div>
+        <div class="fight-card-vs">
+          <span class="fight-card-vs__label">Main Event</span>
+          <span class="fight-card-vs__text">VS</span>
+          <span class="fight-card-vs__division">Lightweight Title</span>
+        </div>
+        <div class="fighter-corner fighter-corner--right">
+          <div class="fighter-corner__flag">🇦🇲</div>
+          <h3 class="fighter-corner__name">Arman Tsarukyan</h3>
+          <p class="fighter-corner__record">(22-3) &middot; #1</p>
+        </div>
+      </div>
+
+      <!-- Co-main: standard size, title border -->
+      <div class="fight-card-row fight-card-row--title">
+        <div class="fighter-corner fighter-corner--left">
+          <div class="fighter-corner__flag">🇬🇪</div>
+          <h3 class="fighter-corner__name">Ilia Topuria</h3>
+          <p class="fighter-corner__record">(17-0) &middot; Champion</p>
+        </div>
+        <div class="fight-card-vs">
+          <span class="fight-card-vs__label">Co-Main</span>
+          <span class="fight-card-vs__text">VS</span>
+          <span class="fight-card-vs__division">Featherweight Title</span>
+        </div>
+        <div class="fighter-corner fighter-corner--right">
+          <div class="fighter-corner__flag">🇺🇸</div>
+          <h3 class="fighter-corner__name">Max Holloway</h3>
+          <p class="fighter-corner__record">(26-7) &middot; Former Champ</p>
+        </div>
+      </div>
+
+      <div class="fight-card-row fight-card-row--title">
+        <div class="fighter-corner fighter-corner--left">
+          <div class="fighter-corner__flag">🇺🇸</div>
+          <h3 class="fighter-corner__name">Belal Muhammad</h3>
+          <p class="fighter-corner__record">(23-3) &middot; Champion</p>
+        </div>
+        <div class="fight-card-vs">
+          <span class="fight-card-vs__label">Main Card</span>
+          <span class="fight-card-vs__text">VS</span>
+          <span class="fight-card-vs__division">Welterweight Title</span>
+        </div>
+        <div class="fighter-corner fighter-corner--right">
+          <div class="fighter-corner__flag">🇦🇺</div>
+          <h3 class="fighter-corner__name">Jack Della Maddalena</h3>
+          <p class="fighter-corner__record">(17-2) &middot; #1</p>
+        </div>
+      </div>
+
+      <div class="fight-card-row fight-card-row--title">
+        <div class="fighter-corner fighter-corner--left">
+          <div class="fighter-corner__flag">🇬🇪</div>
+          <h3 class="fighter-corner__name">Merab Dvalishvili</h3>
+          <p class="fighter-corner__record">(18-4) &middot; Champion</p>
+        </div>
+        <div class="fight-card-vs">
+          <span class="fight-card-vs__label">Main Card</span>
+          <span class="fight-card-vs__text">VS</span>
+          <span class="fight-card-vs__division">Bantamweight Title</span>
+        </div>
+        <div class="fighter-corner fighter-corner--right">
+          <div class="fighter-corner__flag">🇺🇸</div>
+          <h3 class="fighter-corner__name">Sean O'Malley</h3>
+          <p class="fighter-corner__record">(18-2) &middot; Former Champ</p>
+        </div>
+      </div>
+
+      <!-- Non-title fight: no gold border, but still big names worth watching -->
+      <div class="fight-card-row">
+        <div class="fighter-corner fighter-corner--left">
+          <div class="fighter-corner__flag">🇧🇷</div>
+          <h3 class="fighter-corner__name">Alex Pereira</h3>
+          <p class="fighter-corner__record">(12-2) &middot; Former Champ</p>
+        </div>
+        <div class="fight-card-vs">
+          <span class="fight-card-vs__label">Main Card</span>
+          <span class="fight-card-vs__text">VS</span>
+          <span class="fight-card-vs__division">Light Heavyweight</span>
+        </div>
+        <div class="fighter-corner fighter-corner--right">
+          <div class="fighter-corner__flag">🇨🇿</div>
+          <h3 class="fighter-corner__name">Jiří Procházka</h3>
+          <p class="fighter-corner__record">(30-4-1) &middot; Former Champ</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ================================================================
+       FOOTER
+       ================================================================ -->
+  <footer class="home-footer">
+    <div>
+      <a href="index.html" class="home-footer__logo">
+        <span class="kf-red">Knockdown</span> Fantasy
+      </a>
+      <p style="color:var(--text-tertiary); font-size:var(--text-caption); margin: var(--space-2) 0 0 0;">
+        Fantasy leagues for fans who watch the prelims.
+      </p>
+    </div>
+
+    <div class="home-footer__links">
+      <a href="#howto">How it works</a>
+      <a href="#fighters">Fighters</a>
+      <a href="login.html">Log in</a>
+      <a href="signup.html">Sign up</a>
+    </div>
+
+    <p class="home-footer__copy">
+      &copy; 2026 Knockdown Fantasy. Not affiliated with UFC or Zuffa LLC.
+      All fighter records and rankings sourced from public UFC data.
+    </p>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase-config.js"></script>
+
+  <script>
+    var DIVISION_LABELS = {
+      'heavyweight':        'Heavyweight · 265',
+      'light_heavyweight':  'Light Heavyweight · 205',
+      'middleweight':       'Middleweight · 185',
+      'welterweight':       'Welterweight · 170',
+      'lightweight':        'Lightweight · 155',
+      'featherweight':      'Featherweight · 145',
+      'bantamweight':       'Bantamweight · 135',
+      'flyweight':          'Flyweight · 125',
+      'bantamweight_w':     'W. Bantamweight · 135',
+      'flyweight_w':        'W. Flyweight · 125',
+      'strawweight':        'W. Strawweight · 115',
+    };
+
+    var DIVISION_ORDER = [
+      'heavyweight', 'light_heavyweight', 'middleweight', 'welterweight',
+      'lightweight', 'featherweight', 'bantamweight', 'flyweight',
+      'bantamweight_w', 'flyweight_w', 'strawweight',
+    ];
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      var div = document.createElement('div');
+      div.textContent = String(str);
+      return div.innerHTML;
+    }
+
+    function buildFighterCardHtml(fighter, tierClass, badge, rankNum) {
+      var divisionLabel = DIVISION_LABELS[fighter.primary_division] || fighter.primary_division;
+      var record = fighter.record_wins + '-' + fighter.record_losses + '-' + fighter.record_draws;
+
+      var photoHtml = fighter.img_url
+        ? '<img src="' + escapeHtml(fighter.img_url) + '" class="fighter-card__photo" alt="' + escapeHtml(fighter.name) + '" loading="lazy">'
+        : '<div class="fighter-card__photo-placeholder"></div>';
+
+      var ratingHtml = (rankNum !== null && rankNum !== undefined)
+        ? '<div class="fighter-card__rating">' + escapeHtml(String(rankNum)) + '</div>'
+        : '';
+
+      var badgeHtml = badge
+        ? '<div class="fighter-card__badge-champ">' + escapeHtml(badge) + '</div>'
+        : '';
+
+      return (
+        '<article class="fighter-card ' + escapeHtml(tierClass) + '">' +
+          ratingHtml +
+          '<div class="fighter-card__photo-wrap">' + photoHtml + '</div>' +
+          badgeHtml +
+          '<div class="fighter-card__info">' +
+            '<span class="fighter-card__division">' + escapeHtml(divisionLabel) + '</span>' +
+            '<h3 class="fighter-card__name">' + escapeHtml(fighter.name) + '</h3>' +
+            '<span class="fighter-card__record">' + escapeHtml(record) + '</span>' +
+          '</div>' +
+        '</article>'
+      );
+    }
+
+    async function loadChampionGallery() {
+      var grid = document.getElementById('championGrid');
+      var WITH    = 'name,primary_division,record_wins,record_losses,record_draws,is_champion,is_sub_champion,sub_title_type,img_url';
+      var WITHOUT = 'name,primary_division,record_wins,record_losses,record_draws,is_champion,is_sub_champion,sub_title_type';
+
+      var result = await supabaseClient.from('fighters').select(WITH).or('is_champion.eq.true,is_sub_champion.eq.true');
+      if (result.error && result.error.message && result.error.message.includes('img_url')) {
+        result = await supabaseClient.from('fighters').select(WITHOUT).or('is_champion.eq.true,is_sub_champion.eq.true');
+      }
+      if (result.error || !result.data) { grid.innerHTML = ''; return; }
+
+      var fighters = result.data.slice().sort(function(a, b) {
+        return DIVISION_ORDER.indexOf(a.primary_division) - DIVISION_ORDER.indexOf(b.primary_division);
+      });
+
+      grid.innerHTML = fighters.map(function(f) {
+        var badge = f.is_sub_champion && !f.is_champion
+          ? (f.sub_title_type === 'bmf' ? 'BMF' : 'INTERIM')
+          : 'CHAMP';
+        return buildFighterCardHtml(f, 'fighter-card--champion', badge, null);
+      }).join('');
+    }
+
+    async function loadDivisionSpotlight() {
+      var grid = document.getElementById('spotlightGrid');
+      var WITH    = 'name,primary_division,current_rank,record_wins,record_losses,record_draws,is_champion,is_sub_champion,sub_title_type,img_url';
+      var WITHOUT = 'name,primary_division,current_rank,record_wins,record_losses,record_draws,is_champion,is_sub_champion,sub_title_type';
+
+      var result = await supabaseClient.from('fighters').select(WITH).eq('primary_division','lightweight').lte('current_rank',5).order('current_rank');
+      if (result.error && result.error.message && result.error.message.includes('img_url')) {
+        result = await supabaseClient.from('fighters').select(WITHOUT).eq('primary_division','lightweight').lte('current_rank',5).order('current_rank');
+      }
+      if (result.error || !result.data) { grid.innerHTML = ''; return; }
+
+      grid.innerHTML = result.data.map(function(f) {
+        var tierClass, badge;
+        var rankDisplay = f.current_rank === 0 ? null : f.current_rank;
+        if (f.is_champion)       { tierClass = 'fighter-card--champion'; badge = 'CHAMP'; }
+        else if (f.is_sub_champion) { tierClass = 'fighter-card--champion'; badge = f.sub_title_type === 'bmf' ? 'BMF' : 'INTERIM'; }
+        else if (f.current_rank <= 2) { tierClass = 'fighter-card--top5'; badge = null; }
+        else                      { tierClass = 'fighter-card--top15'; badge = null; }
+        return buildFighterCardHtml(f, tierClass, badge, rankDisplay);
+      }).join('');
+    }
+
+    // Countdown
+    var eventDate = new Date('2026-05-03T20:00:00-07:00');
+    function updateCountdown() {
+      var diff = eventDate - new Date();
+      if (diff <= 0) {
+        document.querySelector('.hero-card__countdown').innerHTML =
+          '<p style="color:var(--accent-crimson);font-weight:700;font-family:var(--font-display);margin:0">LIVE NOW</p>';
+        return;
+      }
+      document.getElementById('cdDays').textContent  = Math.floor(diff / 86400000);
+      document.getElementById('cdHours').textContent = String(Math.floor((diff % 86400000) / 3600000)).padStart(2,'0');
+      document.getElementById('cdMins').textContent  = String(Math.floor((diff % 3600000) / 60000)).padStart(2,'0');
+    }
+
+    updateCountdown();
+    setInterval(updateCountdown, 60000);
+    loadChampionGallery();
+    loadDivisionSpotlight();
+
+    document.querySelectorAll('.btn-theme').forEach(function(btn) {
+      btn.textContent = document.documentElement.getAttribute('data-theme') === 'light' ? '☀' : '☾';
+    });
+  </script>
+
+</body>
+</html>

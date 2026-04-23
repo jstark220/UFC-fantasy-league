@@ -3,36 +3,89 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dashboard - UFC Fantasy League</title>
-  <link rel="stylesheet" href="css/styles.css">
+
+  <!-- theme.js runs first so data-theme is set before any CSS renders -->
+  <script src="js/theme.js"></script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Design system -->
+  <link rel="stylesheet" href="styles/tokens.css">
+  <link rel="stylesheet" href="styles/components.css">
+
+  <title>Dashboard - Knockdown Fantasy</title>
 </head>
 <body>
 
-  <!-- This entire div starts hidden. dashboard.js checks auth first,
-       then reveals it. This prevents a flash of content before the
+  <!-- The entire page starts hidden. dashboard.js checks auth, then
+       sets display:block. This prevents a flash of content before the
        session check completes and a redirect fires if needed. -->
   <div class="dashboard-page" id="dashboardContent" style="display: none;">
 
-    <div class="dashboard-header">
-      <h1>UFC Fantasy League</h1>
-      <button class="btn-secondary" id="logoutBtn">Log Out</button>
+    <!-- Sticky top nav -->
+    <nav class="top-nav">
+      <a href="index.html" class="top-nav__logo">
+        <span class="kf-red">Knockdown</span> Fantasy
+      </a>
+
+      <div class="top-nav__links">
+        <a href="my-leagues.html" class="btn-ghost">My Leagues</a>
+      </div>
+
+      <div class="top-nav__actions">
+        <!-- Theme toggle -->
+        <button class="btn-theme" onclick="toggleTheme()" aria-label="Toggle theme">☾</button>
+
+        <!-- Pre-placed logout button with the same ID that auth-guard.js
+             checks for. Because this element already exists, auth-guard
+             won't inject a second floating logout button. The onclick
+             calls logOut() which is defined globally in auth-guard.js. -->
+        <button id="globalLogoutBtn" class="btn-secondary" onclick="logOut()"
+                style="padding: 8px 16px; font-size: 14px;">
+          Log out
+        </button>
+      </div>
+    </nav>
+
+    <!-- Page body -->
+    <div class="dashboard-body">
+
+      <div class="dashboard-welcome">
+        <h2>Dashboard</h2>
+        <!-- User email injected here by dashboard.js -->
+        <p id="welcomeMessage"></p>
+      </div>
+
+      <!-- Quick link to leagues -->
+      <p class="section-label">Your leagues</p>
+      <div class="dashboard-cta-card">
+        <div class="dashboard-cta-card__text">
+          <h3>My Leagues</h3>
+          <p>View your leagues, check standings, and manage your roster.</p>
+        </div>
+        <a href="my-leagues.html" class="btn-primary">Go to My Leagues</a>
+      </div>
+
     </div>
-
-    <!-- User's email is injected here by dashboard.js -->
-    <p id="welcomeMessage"></p>
-
-    <!-- Primary navigation -->
-    <a href="my-leagues.html" class="btn-gold">My Leagues</a>
-
-    <!-- Future content (roster, leaderboard, etc.) goes below -->
 
   </div>
 
-  <!-- Load Supabase CDN first, then shared config, then this page's logic -->
+  <!-- Supabase CDN, shared config, auth guard, then page logic -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/supabase-config.js"></script>
   <script src="js/auth-guard.js"></script>
   <script src="js/dashboard.js"></script>
+
+  <!-- Sync theme toggle icon to current theme after page loads -->
+  <script>
+    document.querySelectorAll('.btn-theme').forEach(function(btn) {
+      var theme = document.documentElement.getAttribute('data-theme');
+      btn.textContent = theme === 'light' ? '☀' : '☾';
+    });
+  </script>
 
 </body>
 </html>

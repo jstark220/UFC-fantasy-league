@@ -3,14 +3,32 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Log In - UFC Fantasy League</title>
-  <link rel="stylesheet" href="css/styles.css">
+
+  <!-- theme.js runs first to set data-theme on <html> before any CSS is
+       painted, preventing a flash of the wrong background color -->
+  <script src="js/theme.js"></script>
+
+  <!-- Google Fonts: Archivo Black for headers, Inter for body text -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Design system: tokens first, then component patterns -->
+  <link rel="stylesheet" href="styles/tokens.css">
+  <link rel="stylesheet" href="styles/components.css">
+
+  <title>Log In - Knockdown Fantasy</title>
 </head>
 <body class="auth-page">
 
+  <!-- Wordmark above the form card -->
+  <a href="index.html" class="auth-logo">
+    <span class="auth-logo__mark"><span class="kf-red">Knockdown</span> Fantasy</span>
+  </a>
+
   <div class="card">
-    <h1>Log In</h1>
-    <p class="subtitle">Welcome back</p>
+    <h1>Welcome back</h1>
+    <p class="subtitle">Log in to your account</p>
 
     <!-- Error message; hidden by default, shown by login.js -->
     <div id="message" class="message"></div>
@@ -27,7 +45,9 @@
         <input type="password" id="password" placeholder="Your password" required>
       </div>
 
-      <button type="submit" class="btn-primary" id="submitBtn">Log In</button>
+      <button type="submit" class="btn-primary" id="submitBtn" style="width:100%; margin-top: 8px;">
+        Log in
+      </button>
 
     </form>
 
@@ -41,10 +61,23 @@
     </div>
   </div>
 
-  <!-- Load Supabase CDN first, then shared config, then this page's logic -->
+  <!-- Theme toggle below the card -->
+  <div style="margin-top: 24px;">
+    <button class="btn-theme" onclick="toggleTheme()" aria-label="Toggle theme">☾</button>
+  </div>
+
+  <!-- Supabase CDN, then shared config, then this page's logic -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/supabase-config.js"></script>
   <script src="js/login.js"></script>
+
+  <!-- Set the correct icon for whichever theme is currently active -->
+  <script>
+    document.querySelectorAll('.btn-theme').forEach(function(btn) {
+      var theme = document.documentElement.getAttribute('data-theme');
+      btn.textContent = theme === 'light' ? '☀' : '☾';
+    });
+  </script>
 
 </body>
 </html>

@@ -1,0 +1,106 @@
+/* ========================================================================
+   DESIGN TOKENS — Knockdown Fantasy
+   Single source of truth for all colors, typography, and spacing.
+
+   Dark mode is the default (values declared on :root). Light mode only
+   overrides the neutral palette; accent colors are identical in both
+   themes because they carry semantic meaning, not brightness.
+
+   Load this file first — before components.css and before any page CSS.
+   ======================================================================== */
+
+/* ---- Dark mode defaults (applied to all pages by default) ---- */
+:root {
+
+  /* -- Neutrals --
+     These form the majority of every UI surface. Color is used
+     strategically for emphasis, not decoration. */
+  --bg-primary:    #0E0E10; /* main page background (warm near-black, not pure black) */
+  --bg-secondary:  #17171A; /* card backgrounds, sidebar, nav */
+  --bg-tertiary:   #1F1F23; /* hover states, nested surfaces, row highlight */
+  --border-subtle: #2A2A2F; /* dividers, default card borders */
+  --border-strong: #3A3A40; /* input borders, active states */
+  --text-primary:  #F5F5F0; /* headings, primary body text */
+  --text-secondary:#A8A8A3; /* subheadings, labels, meta info */
+  --text-tertiary: #6A6A65; /* timestamps, hint text, placeholders */
+
+  /* -- Accents --
+     Used sparingly. Max 1-2 accent elements per screen.
+     Crimson = primary action / live moments (never decorative).
+     Gold    = earned/champion moments (never decorative). */
+  --accent-crimson:        #C13B2E;
+  --accent-crimson-hover:  #A82E23;
+  --accent-crimson-subtle: rgba(193, 59, 46, 0.08); /* 8% opacity tint for bg use */
+  --accent-gold:           #D4A84B;
+  --accent-gold-subtle:    rgba(212, 168, 75, 0.08);
+  --accent-success:        #4A9D6F; /* wins, completed actions */
+  --accent-warning:        #D4A84B; /* shared with gold — lineup lock, cap alerts */
+  --accent-error:          #C13B2E; /* errors (same hue as crimson, different context) */
+
+  /* -- Fighter tier border colors (trading card system) -- */
+  --tier-champion: #D4A84B; /* gold */
+  --tier-top5:     #C8C8C8; /* silver */
+  --tier-top15:    #B87333; /* bronze */
+
+  /* -- Font families -- */
+  --font-display: "Archivo Black", system-ui, sans-serif; /* headers, fighter names */
+  --font-body:    "Inter", "SF Pro Text", system-ui, sans-serif; /* all body and UI text */
+
+  /* -- Type scale --
+     Never introduce arbitrary font sizes. Use these tokens only.
+     Defined as rem values for accessibility (respects user's base font size). */
+  --text-display:  3rem;       /* 48px — hero headlines only */
+  --text-h1:       2.25rem;    /* 36px — page titles */
+  --text-h2:       1.75rem;    /* 28px — section headers */
+  --text-h3:       1.25rem;    /* 20px — card titles, subsections */
+  --text-h4:       1rem;       /* 16px — small section labels */
+  --text-body:     1rem;       /* 16px — default paragraph text */
+  --text-body-sm:  0.875rem;   /* 14px — secondary text, meta info */
+  --text-caption:  0.75rem;    /* 12px — timestamps, badges, small labels */
+  --text-overline: 0.6875rem;  /* 11px — table column headers, section overlines */
+
+  /* -- Spacing scale (4px base grid) --
+     Reference these tokens for all margin, padding, and gap values. */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-24: 96px;
+
+  /* -- Layout -- */
+  --nav-height:      64px;
+  --content-max:     1200px;
+  --content-max-wide:1440px; /* for dense tables */
+  --content-max-narrow: 800px; /* for auth forms, articles */
+}
+
+/* ---- Light mode override ------------------------------------------
+   Only neutral tokens change. Accents carry semantic meaning and stay
+   identical so that crimson still means "primary action" in both themes.
+   -------------------------------------------------------------------- */
+[data-theme="light"] {
+  --bg-primary:    #FAFAF7; /* warm off-white, not pure white */
+  --bg-secondary:  #F2F2EE;
+  --bg-tertiary:   #E8E8E3;
+  --border-subtle: #DADAD3;
+  --border-strong: #B8B8B0;
+  --text-primary:  #1A1A1C;
+  --text-secondary:#5A5A55;
+  --text-tertiary: #8A8A82;
+}
+
+/* ---- Reduced motion --------------------------------------------------
+   Users who have set prefers-reduced-motion deserve no animation at all.
+   This blanket override disables the gold-pulse, shimmer, and any other
+   decorative motion we add.
+   ---------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

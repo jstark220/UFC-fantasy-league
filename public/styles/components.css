@@ -1,0 +1,1255 @@
+/* ========================================================================
+   COMPONENT LIBRARY — Knockdown Fantasy
+   Reusable UI patterns built on tokens from tokens.css.
+
+   Load order: tokens.css → components.css
+   This file does NOT touch styles.css. Pages that load components.css
+   get the new design system; pages that only load styles.css are
+   unchanged until they are rebuilt.
+   ======================================================================== */
+
+/* ========================================================================
+   BASE RESET
+   Apply design tokens to the document root. Only pages that load this
+   file are affected — unrebuilt pages still use styles.css as-is.
+   ======================================================================== */
+
+body {
+  font-family: var(--font-body);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  margin: 0;
+  padding: 0;
+  line-height: 1.5;
+  /* Smooth palette transition when the theme is toggled */
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+/* Keyboard focus: visible 2px crimson ring on all interactive elements */
+:focus-visible {
+  outline: 2px solid var(--accent-crimson);
+  outline-offset: 2px;
+}
+
+/* ========================================================================
+   BUTTONS
+   One .btn-primary per screen (the main action).
+   .btn-secondary for alternatives and nav links.
+   .btn-ghost for tertiary / quiet actions.
+   ======================================================================== */
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-crimson);
+  color: #fff;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 15px;
+  padding: 12px 24px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.15s ease;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+.btn-primary:hover    { background: var(--accent-crimson-hover); }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 15px;
+  padding: 12px 24px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+.btn-secondary:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--text-primary);
+}
+.btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 15px;
+  padding: 8px 12px;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+  transition: color 0.15s ease;
+  white-space: nowrap;
+}
+.btn-ghost:hover { color: var(--text-primary); }
+
+/* Small icon button for the theme toggle — sits in the nav */
+.btn-theme {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+  padding: 0;
+  flex-shrink: 0;
+}
+.btn-theme:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+/* Fixed logout button injected by auth-guard.js -- updated to match dark theme */
+.btn-logout {
+  position: fixed;
+  top: var(--space-4);
+  right: var(--space-4);
+  padding: 6px 14px;
+  font-size: var(--text-caption);
+  font-weight: 600;
+  font-family: var(--font-body);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  cursor: pointer;
+  z-index: 1000;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.btn-logout:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+/* ========================================================================
+   CARDS
+   ======================================================================== */
+
+/* Override styles.css .card (white) with dark design-system version */
+.card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: var(--space-6);
+  box-shadow: none; /* remove the box-shadow from styles.css */
+}
+
+.card h1 {
+  font-family: var(--font-display);
+  font-size: var(--text-h2);
+  color: var(--text-primary);
+  margin: 0 0 var(--space-2) 0;
+}
+
+.card .subtitle {
+  color: var(--text-secondary);
+  font-size: var(--text-body-sm);
+  margin: 0 0 var(--space-8) 0;
+}
+
+/* Interactive card — used for league list items, etc. */
+.card-interactive {
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+.card-interactive:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-strong);
+}
+
+/* ========================================================================
+   FIGHTER TRADING CARDS
+   The signature component. 2:3 portrait ratio. Full-bleed photo (top 60%),
+   structured info panel (bottom 40%). Tier variants control border + glow.
+   ======================================================================== */
+
+.fighter-card {
+  position: relative;
+  width: 200px;
+  /* aspect-ratio locks the 2:3 portrait format regardless of container */
+  aspect-ratio: 2 / 3;
+  border-radius: 10px;
+  border: 2px solid var(--border-subtle); /* default: unranked */
+  overflow: hidden;
+  background: var(--bg-secondary);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+/* Photo area: top 60% of the card */
+.fighter-card__photo-wrap {
+  flex: 0 0 60%;
+  /* Dark gradient as the placeholder background when no photo is available */
+  background: linear-gradient(160deg, var(--bg-tertiary) 0%, var(--bg-secondary) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.fighter-card__photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center; /* keep the fighter's face visible */
+}
+
+/* Placeholder silhouette shown when no photo URL is available */
+.fighter-card__photo-placeholder {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--border-strong);
+  opacity: 0.35;
+}
+
+/* OVR rating badge: top-left corner */
+.fighter-card__rating {
+  position: absolute;
+  top: var(--space-2);
+  left: var(--space-2);
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgba(14, 14, 16, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 13px;
+  color: var(--text-primary);
+  border: 1px solid var(--border-strong);
+}
+
+/* Champion / BMF / Interim badge: top-right corner */
+.fighter-card__badge-champ {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--accent-gold);
+  color: #0E0E10; /* dark text on gold background for contrast */
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Info panel: bottom 40% */
+.fighter-card__info {
+  flex: 1;
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  background: var(--bg-secondary);
+}
+
+.fighter-card__division {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-secondary);
+}
+
+.fighter-card__name {
+  font-family: var(--font-display);
+  font-size: 0.8125rem; /* slightly smaller than body to fit long names */
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text-primary);
+  margin: 0;
+  line-height: 1.1;
+  /* Two-line max to prevent layout overflow */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.fighter-card__record {
+  font-variant-numeric: tabular-nums; /* align digits vertically in stat tables */
+  font-size: var(--text-caption);
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+/* "OWNED" label — shown if the user owns this fighter in a league */
+.fighter-card__owned {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--accent-gold);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: auto; /* push to bottom of info panel */
+}
+
+/* ---- Tier variants ---- */
+
+/* Champion: gold border + animated glow */
+.fighter-card--champion {
+  border-color: var(--tier-champion);
+  animation: gold-pulse 3s ease-in-out infinite;
+}
+
+/* Top 5: silver border + subtle static glow */
+.fighter-card--top5 {
+  border-color: var(--tier-top5);
+  box-shadow: 0 0 20px -8px var(--tier-top5);
+}
+
+/* Top 15: bronze border, no glow */
+.fighter-card--top15 {
+  border-color: var(--tier-top15);
+}
+
+/* Gold pulse: subtle breathing effect for champion cards */
+@keyframes gold-pulse {
+  0%, 100% { box-shadow: 0 0 16px -4px var(--accent-gold); }
+  50%       { box-shadow: 0 0 28px -4px var(--accent-gold); }
+}
+
+/* ========================================================================
+   TABLES
+   For leaderboards, rosters, draft boards, and other dense data views.
+   ======================================================================== */
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-body-sm);
+  font-family: var(--font-body);
+}
+
+/* Overline-style column headers */
+.table th {
+  text-align: left;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-weight: 700;
+  font-size: var(--text-overline);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-secondary);
+}
+
+.table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+}
+
+.table tr:hover td { background: var(--bg-tertiary); }
+.table tr:last-child td { border-bottom: none; }
+
+/* ========================================================================
+   FORM ELEMENTS
+   ======================================================================== */
+
+/* Override styles.css label color with token */
+.form-group label {
+  display: block;
+  margin-bottom: var(--space-2);
+  font-size: var(--text-body-sm);
+  font-weight: 600;
+  font-family: var(--font-body);
+  color: var(--text-secondary);
+}
+
+/* Apply to all inputs/selects/textareas inside form-groups,
+   and to any element with the explicit .input class */
+.input,
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 12px 16px;
+  font-family: var(--font-body);
+  font-size: 15px;
+  color: var(--text-primary);
+  box-sizing: border-box;
+  transition: border-color 0.15s ease;
+  /* Remove iOS default styling */
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.input:focus,
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: var(--accent-crimson); /* crimson focus ring matches the CTA */
+}
+
+.input::placeholder,
+.form-group input::placeholder,
+.form-group textarea::placeholder {
+  color: var(--text-tertiary);
+}
+
+/* ========================================================================
+   FEEDBACK MESSAGES
+   ======================================================================== */
+
+/* Base: hidden until JS adds the .error or .success class */
+.message {
+  padding: var(--space-3) var(--space-4);
+  border-radius: 6px;
+  margin-bottom: var(--space-4);
+  font-size: var(--text-body-sm);
+  font-family: var(--font-body);
+  display: none;
+}
+
+/* Error: crimson tint — matches our semantic error color */
+.message.error {
+  background: var(--accent-crimson-subtle);
+  color: #F28B82; /* light red readable on dark bg */
+  border: 1px solid var(--accent-crimson);
+  display: block;
+}
+
+/* Success: green tint */
+.message.success {
+  background: rgba(74, 157, 111, 0.1);
+  color: #6FD6A6; /* light green readable on dark bg */
+  border: 1px solid var(--accent-success);
+  display: block;
+}
+
+/* ========================================================================
+   FORM FOOTER (below auth forms)
+   ======================================================================== */
+
+.form-footer {
+  margin-top: var(--space-6);
+  font-size: var(--text-body-sm);
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.form-footer a {
+  color: var(--text-primary);
+  text-decoration: none;
+  font-weight: 500;
+}
+.form-footer a:hover { text-decoration: underline; }
+
+/* ========================================================================
+   AUTH PAGE LAYOUT
+   Centered card on the dark background. "Spacious" density per design
+   system — generous padding, large typography, discovery feel.
+   ======================================================================== */
+
+/* Override styles.css .auth-page which has a hardcoded light background */
+.auth-page {
+  background: var(--bg-primary);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: var(--space-8) var(--space-4);
+  box-sizing: border-box;
+}
+
+/* Logo / wordmark link above the auth card */
+.auth-logo {
+  display: flex;
+  align-items: center;
+  margin-bottom: var(--space-8);
+  text-decoration: none;
+}
+
+.auth-logo__mark {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+/* "Knockdown" highlighted in crimson, "Fantasy" in default text color */
+.auth-logo__mark .kf-red { color: var(--accent-crimson); }
+
+/* The auth card is wider than the default .card */
+.auth-page .card {
+  max-width: 420px;
+  width: 100%;
+  padding: var(--space-8);
+}
+
+/* ========================================================================
+   SECTION LABEL (overline style heading used above content groups)
+   ======================================================================== */
+
+.section-label {
+  font-size: var(--text-overline);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-4) 0;
+}
+
+/* ========================================================================
+   TOP NAVIGATION
+   64px sticky bar. Logo left, primary links center-left, actions right.
+   ======================================================================== */
+
+.top-nav {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  height: var(--nav-height);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-8);
+  gap: var(--space-4);
+  box-sizing: border-box;
+}
+
+.top-nav__logo {
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  color: var(--text-primary);
+  text-decoration: none;
+  letter-spacing: -0.01em;
+  flex-shrink: 0;
+  margin-right: var(--space-4);
+}
+.top-nav__logo .kf-red { color: var(--accent-crimson); }
+
+/* Primary nav links (center-left) */
+.top-nav__links {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 1;
+}
+
+/* Right side: theme toggle + auth actions */
+.top-nav__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-left: auto;
+}
+
+/* ========================================================================
+   DASHBOARD LAYOUT
+   ======================================================================== */
+
+.dashboard-page {
+  background: var(--bg-primary);
+  min-height: 100vh;
+}
+
+/* Content area below the sticky nav */
+.dashboard-body {
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: var(--space-8);
+}
+
+.dashboard-welcome {
+  margin-bottom: var(--space-8);
+}
+
+.dashboard-welcome h2 {
+  font-family: var(--font-display);
+  font-size: var(--text-h2);
+  color: var(--text-primary);
+  margin: 0 0 var(--space-2) 0;
+}
+
+.dashboard-welcome p {
+  color: var(--text-secondary);
+  font-size: var(--text-body-sm);
+  margin: 0;
+}
+
+/* Quick-access card linked to My Leagues */
+.dashboard-cta-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: var(--space-8);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+  flex-wrap: wrap;
+}
+
+.dashboard-cta-card__text h3 {
+  font-family: var(--font-display);
+  font-size: var(--text-h3);
+  color: var(--text-primary);
+  margin: 0 0 var(--space-2) 0;
+}
+
+.dashboard-cta-card__text p {
+  color: var(--text-secondary);
+  font-size: var(--text-body-sm);
+  margin: 0;
+}
+
+/* ========================================================================
+   HOMEPAGE — PUBLIC LANDING PAGE
+   ======================================================================== */
+
+.home-page {
+  background: var(--bg-primary);
+  min-height: 100vh;
+}
+
+/* ---- Hero ---- */
+
+/* Full-width hero wrapper with cage texture background.
+   Two overlapping effects:
+   1. Crosshatch lines at ±45° simulate the octagon cage mesh (very low opacity).
+   2. Radial crimson glow from the bottom simulates arena floor lighting. */
+.hero {
+  position: relative;
+  background-image:
+    repeating-linear-gradient(
+      -45deg,
+      transparent 0px, transparent 28px,
+      rgba(255, 255, 255, 0.018) 28px, rgba(255, 255, 255, 0.018) 29px
+    ),
+    repeating-linear-gradient(
+      45deg,
+      transparent 0px, transparent 28px,
+      rgba(255, 255, 255, 0.018) 28px, rgba(255, 255, 255, 0.018) 29px
+    ),
+    radial-gradient(ellipse 70% 50% at 50% 110%, rgba(193, 59, 46, 0.09) 0%, transparent 70%);
+  border-bottom: 1px solid var(--border-subtle);
+  padding: var(--space-16) var(--space-8);
+}
+
+/* Inner container: max-width + two-column flex layout */
+.hero__inner {
+  max-width: var(--content-max);
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-16);
+}
+
+/* Left column: eyebrow + headline + subtitle + CTAs */
+.hero__left {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Right column: the fight preview card */
+.hero__right {
+  flex: 0 0 360px;
+  min-width: 0;
+}
+
+.hero__eyebrow {
+  font-size: var(--text-overline);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--accent-crimson);
+  margin: 0 0 var(--space-4) 0;
+}
+
+.hero__title {
+  font-family: var(--font-display);
+  font-size: var(--text-display);
+  color: var(--text-primary);
+  line-height: 1.05;
+  /* Negative tracking on Archivo Black gives it an editorial poster quality
+     instead of the default spacing which reads as auto-generated */
+  letter-spacing: -0.02em;
+  margin: 0 0 var(--space-6) 0;
+}
+
+.hero__title .kf-red { color: var(--accent-crimson); }
+
+.hero__subtitle {
+  font-size: var(--text-h4);
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-8) 0;
+  line-height: 1.6;
+  max-width: 480px;
+}
+
+.hero__actions {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+/* ---- Fight preview card (right column of the hero) ----
+   Shows the next event countdown + main event matchup.
+   Gold accent on the title fight label to match our "earned moment" token. */
+.hero-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  padding: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.hero-card__eyebrow {
+  font-size: var(--text-overline);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  /* Crimson: signals "upcoming/live" — one of the permitted accent uses */
+  color: var(--accent-crimson);
+  margin: 0;
+}
+
+.hero-card__event {
+  font-family: var(--font-display);
+  font-size: var(--text-h2);
+  color: var(--text-primary);
+  margin: 0;
+  line-height: 1;
+}
+
+.hero-card__meta {
+  color: var(--text-secondary);
+  font-size: var(--text-body-sm);
+  margin: 0;
+}
+
+/* Three-unit countdown row */
+.hero-card__countdown {
+  display: flex;
+  gap: var(--space-4);
+  padding: var(--space-4) 0;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.hero-card__countdown .countdown-unit__value {
+  font-size: var(--text-h2);
+}
+
+/* Main event section inside the card */
+.hero-card__main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.hero-card__fight-label {
+  font-size: var(--text-overline);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  /* Gold: title fight = champion/earned context */
+  color: var(--accent-gold);
+  margin: 0;
+}
+
+.hero-card__matchup {
+  font-family: var(--font-display);
+  font-size: var(--text-h3);
+  color: var(--text-primary);
+  line-height: 1.2;
+  margin: 0;
+}
+
+.hero-card__matchup .vs {
+  font-family: var(--font-body);
+  font-size: var(--text-caption);
+  font-weight: 700;
+  color: var(--text-tertiary);
+  letter-spacing: 0.08em;
+  display: block;
+  margin: 2px 0;
+}
+
+/* ---- Stats strip ----
+   Horizontal credibility bar that anchors the hero with real product numbers.
+   Sits between the hero and first content section. */
+.stats-strip {
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-secondary);
+  padding: 14px var(--space-8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-6);
+  flex-wrap: wrap;
+}
+
+.stats-strip__item {
+  font-size: var(--text-body-sm);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.stats-strip__item strong {
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Separator dot between items */
+.stats-strip__dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--border-strong);
+  flex-shrink: 0;
+}
+
+/* ---- Alternating section background ----
+   Every other major section gets bg-secondary so there's visual rhythm
+   instead of one long undifferentiated dark scroll. */
+.home-section--alt {
+  background: var(--bg-secondary);
+}
+
+/* ---- How it works — 3-step explainer ---- */
+.how-it-works {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-6);
+}
+
+.step-card {
+  padding: var(--space-6);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  /* bg-primary on a bg-secondary section = subtle lift */
+  background: var(--bg-primary);
+}
+
+/* Large faint number behind the card — provides context without shouting */
+.step-card__number {
+  font-family: var(--font-display);
+  font-size: 3.5rem;
+  /* Very muted — decorative, not primary reading */
+  color: var(--border-strong);
+  line-height: 1;
+  margin: 0 0 var(--space-4) 0;
+  letter-spacing: -0.03em;
+}
+
+.step-card__title {
+  font-family: var(--font-display);
+  font-size: var(--text-h3);
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+  margin: 0 0 var(--space-3) 0;
+}
+
+.step-card__body {
+  font-size: var(--text-body-sm);
+  color: var(--text-secondary);
+  line-height: 1.65;
+  margin: 0;
+}
+
+/* ---- True fight card layout ----
+   Three-column grid: left fighter (right-aligned) | VS divider | right fighter (left-aligned).
+   Mirrors real fight poster visual language.
+   Main event: larger type and more padding.
+   Title fights: gold top border accent (earned/champion context). */
+
+.fight-card-row {
+  display: grid;
+  grid-template-columns: 1fr 116px 1fr;
+  align-items: center;
+  padding: var(--space-5) var(--space-6);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  gap: var(--space-2);
+}
+
+/* Gold top border marks title fights */
+.fight-card-row--title {
+  border-top: 3px solid var(--accent-gold);
+}
+
+/* Main event: more breathing room, slightly elevated background */
+.fight-card-row--main {
+  padding: var(--space-7) var(--space-8);
+  background: var(--bg-tertiary);
+}
+
+/* Left fighter faces inward — right-aligned so the name reads toward the VS */
+.fighter-corner--left {
+  text-align: right;
+}
+
+/* Right fighter faces inward — left-aligned */
+.fighter-corner--right {
+  text-align: left;
+}
+
+.fighter-corner__flag {
+  font-size: 1.25rem;
+  line-height: 1;
+  margin-bottom: var(--space-1);
+}
+
+.fighter-corner__name {
+  font-family: var(--font-display);
+  font-size: var(--text-h3);
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+  margin: 0;
+}
+
+/* Main event: punch up the name size to match poster hierarchy */
+.fight-card-row--main .fighter-corner__name {
+  font-size: var(--text-h2);
+}
+
+.fighter-corner__record {
+  font-size: var(--text-body-sm);
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  margin: var(--space-1) 0 0 0;
+}
+
+/* VS center divider: slot label, VS text, division stacked */
+.fight-card-vs {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.fight-card-vs__label {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--accent-gold);
+}
+
+.fight-card-vs__text {
+  font-family: var(--font-display);
+  font-size: var(--text-body-sm);
+  color: var(--text-tertiary);
+  letter-spacing: 0.2em;
+}
+
+.fight-card-vs__division {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-tertiary);
+  line-height: 1.4;
+  max-width: 88px;
+}
+
+/* ---- Shared home section wrapper ---- */
+.home-section {
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: var(--space-12) var(--space-8);
+}
+
+.home-section + .home-section {
+  /* Visual breathing room between sections; no full-bleed divider needed */
+  padding-top: 0;
+}
+
+.home-section__header {
+  margin-bottom: var(--space-8);
+}
+
+.home-section__eyebrow {
+  font-size: var(--text-overline);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-2) 0;
+}
+
+.home-section__title {
+  font-family: var(--font-display);
+  font-size: var(--text-h2);
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+  margin: 0 0 var(--space-2) 0;
+}
+
+.home-section__sub {
+  color: var(--text-secondary);
+  font-size: var(--text-body-sm);
+  margin: 0;
+}
+
+/* ---- Upcoming event banner ---- */
+.event-banner {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: var(--space-8);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  flex-wrap: wrap;
+}
+
+.event-banner__eyebrow {
+  font-size: var(--text-overline);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  /* Crimson to signal "upcoming / live context" — one of the permitted uses */
+  color: var(--accent-crimson);
+  margin: 0 0 var(--space-2) 0;
+}
+
+.event-banner__name {
+  font-family: var(--font-display);
+  font-size: var(--text-h2);
+  color: var(--text-primary);
+  margin: 0 0 var(--space-2) 0;
+}
+
+.event-banner__meta {
+  color: var(--text-secondary);
+  font-size: var(--text-body-sm);
+  margin: 0;
+}
+
+/* Countdown cluster (days / hours / mins) */
+.event-banner__countdown {
+  display: flex;
+  gap: var(--space-6);
+  flex-shrink: 0;
+}
+
+.countdown-unit {
+  text-align: center;
+  min-width: 56px;
+}
+
+.countdown-unit__value {
+  font-family: var(--font-display);
+  font-size: var(--text-h1);
+  color: var(--text-primary);
+  line-height: 1;
+  display: block;
+}
+
+.countdown-unit__label {
+  font-size: var(--text-caption);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-top: var(--space-1);
+  display: block;
+}
+
+/* ---- Fighter card grid ---- */
+.card-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+/* ---- Upcoming fights list ---- */
+.fights-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.fight-row {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: var(--space-4) var(--space-6);
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  flex-wrap: wrap;
+}
+
+/* Gold label for main event, co-main, etc. — gold is "earned/champion" context */
+.fight-row__label {
+  font-size: var(--text-caption);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent-gold);
+  width: 80px;
+  flex-shrink: 0;
+}
+
+.fight-row__matchup {
+  flex: 1;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.fight-row__division {
+  font-size: var(--text-body-sm);
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+/* ---- Footer ---- */
+.home-footer {
+  border-top: 1px solid var(--border-subtle);
+  padding: var(--space-8);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.home-footer__logo {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  color: var(--text-primary);
+  text-decoration: none;
+}
+.home-footer__logo .kf-red { color: var(--accent-crimson); }
+
+.home-footer__links {
+  display: flex;
+  gap: var(--space-6);
+}
+
+.home-footer__links a {
+  font-size: var(--text-body-sm);
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+.home-footer__links a:hover { color: var(--text-primary); }
+
+.home-footer__copy {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  width: 100%;
+  margin-top: var(--space-2);
+}
+
+/* ========================================================================
+   RESPONSIVE ADJUSTMENTS
+   ======================================================================== */
+
+@media (max-width: 767px) {
+  .top-nav {
+    padding: 0 var(--space-4);
+    gap: var(--space-2);
+  }
+
+  /* Hide less-important nav links on mobile */
+  .top-nav__links { display: none; }
+
+  /* Stack hero columns vertically on mobile; right card goes below headline */
+  .hero {
+    padding: var(--space-12) var(--space-4);
+  }
+
+  .hero__inner {
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+
+  .hero__right { flex: none; width: 100%; }
+
+  .hero__title { font-size: var(--text-h1); }
+
+  .home-section { padding: var(--space-8) var(--space-4); }
+
+  .how-it-works { grid-template-columns: 1fr; }
+
+  .stats-strip { padding: 12px var(--space-4); gap: var(--space-4); }
+
+  .event-banner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .event-banner__countdown { gap: var(--space-4); }
+
+  /* Fight card rows: collapse to single column on mobile */
+  .fight-card-row {
+    grid-template-columns: 1fr;
+    text-align: center;
+    padding: var(--space-5) var(--space-4);
+  }
+
+  .fighter-corner--left,
+  .fighter-corner--right {
+    text-align: center;
+  }
+
+  .fight-card-vs {
+    flex-direction: row;
+    justify-content: center;
+    gap: var(--space-4);
+    padding: var(--space-2) 0;
+    border-top: 1px solid var(--border-subtle);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  /* Scale back main event name on mobile so it doesn't overflow */
+  .fight-card-row--main .fighter-corner__name {
+    font-size: var(--text-h3);
+  }
+
+  .fight-card-row--main {
+    padding: var(--space-6) var(--space-4);
+  }
+
+  .dashboard-body { padding: var(--space-6) var(--space-4); }
+
+  .home-footer {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: var(--space-6) var(--space-4);
+  }
+}
