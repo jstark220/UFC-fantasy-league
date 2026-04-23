@@ -105,8 +105,9 @@ body {
   cursor: not-allowed;
 }
 
-/* Secondary/outline button (e.g. logout) */
+/* Secondary/outline button (e.g. logout, nav links in page header) */
 .btn-secondary {
+  display: inline-block;
   padding: 0.5rem 1rem;
   background: transparent;
   color: #333;
@@ -114,6 +115,7 @@ body {
   border-radius: 4px;
   font-size: 0.9rem;
   cursor: pointer;
+  text-decoration: none;
   transition: background 0.15s;
 }
 
@@ -968,4 +970,496 @@ tr:hover { background: #f0f0f0; }
 
 .rank-unranked {
   color: #bbb;
+}
+
+/* ========================================================================
+   STANDINGS PAGE (standings.html)
+   ======================================================================== */
+
+/* Narrow rank column */
+.th-rank {
+  width: 40px;
+  text-align: center;
+}
+
+/* Right-aligned numeric columns */
+.th-pts {
+  text-align: right;
+}
+
+.pts-cell {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9rem;
+  color: #333;
+}
+
+/* Circle badge showing rank position (1, 2, 3 get special colors) */
+.rank-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: #e0e0e0;
+  color: #555;
+}
+
+.rank-pos-1 { background: #d4af37; color: white; }
+.rank-pos-2 { background: #aaa;    color: white; }
+.rank-pos-3 { background: #cd7f32; color: white; }
+
+/* Light yellow row highlight for the current user */
+.standings-row-me {
+  background: #fffde7;
+}
+
+.standings-row-me:hover {
+  background: #fff9c4;
+}
+
+/* Team name acts as a link to their roster page */
+.standings-team-link {
+  color: #111;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.standings-team-link:hover {
+  color: #d4af37;
+  text-decoration: underline;
+}
+
+/* Small "(you)" tag next to the current user's team name */
+.standings-you-tag {
+  font-size: 0.75rem;
+  color: #888;
+  font-weight: 400;
+}
+
+/* Empty state shown when no events have been scored yet */
+.standings-empty {
+  color: #888;
+  font-size: 0.875rem;
+  font-style: italic;
+  padding: 0.5rem 0;
+}
+
+/* ========================================================================
+   LINEUP PAGE (lineup.html)
+   ======================================================================== */
+
+/* Dark event banner at the top of the lineup page */
+.event-banner {
+  background: #1e1e2e;
+  color: white;
+  border-radius: 6px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 0;
+}
+
+.event-banner-name {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 0 0 0.25rem;
+}
+
+.event-banner-date {
+  font-size: 0.875rem;
+  color: #aaa;
+  margin: 0;
+}
+
+.event-banner-lock {
+  font-size: 0.8rem;
+  margin: 0.5rem 0 0;
+}
+
+/* Lock open = green, lock closed = red */
+.lock-open   { color: #66bb6a; }
+.lock-closed { color: #ef5350; }
+
+/* "X / 3" counter in the section heading */
+.starter-count {
+  font-size: 0.875rem;
+  font-weight: 400;
+  color: #888;
+  margin-left: 0.5rem;
+}
+
+/* Gold color when all 3 slots are filled */
+.starter-count-full {
+  color: #d4af37;
+  font-weight: 600;
+}
+
+/* Fighter table on the lineup page */
+.lineup-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.lineup-table th {
+  background: #f0f0f0;
+  color: #555;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  padding: 6px 10px;
+}
+
+.lineup-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.lineup-table tr:last-child td {
+  border-bottom: none;
+}
+
+/* Rows that are currently selected as starters get a light gold tint */
+.lineup-row-selected {
+  background: #fffbea;
+}
+
+.lineup-row-selected:hover {
+  background: #fff5c2;
+}
+
+/* Right-align the action column */
+.th-action {
+  text-align: right;
+}
+
+.lineup-table td:last-child {
+  text-align: right;
+}
+
+/* Start toggle button */
+.btn-start {
+  padding: 0.3rem 0.7rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid #d4af37;
+  background: white;
+  color: #d4af37;
+  transition: background 0.15s;
+}
+
+.btn-start:hover {
+  background: #fff8e1;
+}
+
+/* Active (currently a starter) state */
+.btn-start-active {
+  background: #d4af37;
+  color: white;
+}
+
+.btn-start-active:hover {
+  background: #b8962e;
+}
+
+.btn-start:disabled {
+  background: #f5f5f5;
+  border-color: #ddd;
+  color: #ccc;
+  cursor: not-allowed;
+}
+
+/* Read-only state badges shown after lineup locks */
+.starter-badge {
+  display: inline-block;
+  padding: 0.2rem 0.5rem;
+  background: #d4af37;
+  color: white;
+  border-radius: 3px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.bench-badge {
+  display: inline-block;
+  padding: 0.2rem 0.5rem;
+  background: #e0e0e0;
+  color: #666;
+  border-radius: 3px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+/* Yellow notice shown when lineup is locked */
+.lineup-locked-notice {
+  padding: 0.75rem 1rem;
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  color: #856404;
+  margin-bottom: 1rem;
+}
+
+/* Centered empty state for draft-not-started and no-event cases */
+.lineup-empty-state {
+  text-align: center;
+  padding: 2.5rem 1rem;
+  color: #888;
+  font-size: 0.9rem;
+}
+
+/* ========================================================================
+   SCORE EVENT PAGE
+   ======================================================================== */
+
+/* Section header with title on left and action button on right */
+.section-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.section-header-row h2 {
+  margin: 0;
+}
+
+/* Event selector dropdown row */
+.event-selector-group {
+  max-width: 420px;
+}
+
+/* Fight metadata row: card position, weight class, title type, checkboxes */
+.fight-form-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid #eee;
+}
+
+.fight-form-meta .form-group {
+  min-width: 160px;
+  flex: 1;
+}
+
+/* Checkbox group inside the meta row */
+.fight-form-checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.fight-form-checkbox-group label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+/* Fighter A vs Fighter B picker row */
+.fight-form-fighters {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid #eee;
+}
+
+.fighter-pick-col {
+  flex: 1;
+  position: relative;
+}
+
+.fighter-pick-col label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.3rem;
+  font-size: 0.85rem;
+  color: #555;
+}
+
+.fighter-pick-col input[type="text"] {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* "vs" divider between the two fighter columns */
+.fight-vs-divider {
+  padding-top: 2.1rem;
+  font-weight: 700;
+  color: #999;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+/* Autocomplete dropdown */
+.fighter-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #ddd;
+  border-top: none;
+  border-radius: 0 0 4px 4px;
+  max-height: 220px;
+  overflow-y: auto;
+  z-index: 100;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.fighter-dropdown-item {
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.fighter-dropdown-item:hover {
+  background: #f5f5f5;
+}
+
+.fighter-dropdown-div {
+  font-size: 0.75rem;
+  color: #888;
+}
+
+/* Small confirmation text shown after a fighter is selected */
+.fighter-selected {
+  font-size: 0.78rem;
+  color: #888;
+  margin-top: 0.2rem;
+  min-height: 1em;
+}
+
+/* Outcome row: method, round, time */
+.fight-form-outcome {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid #eee;
+}
+
+.fight-form-outcome .form-group {
+  min-width: 120px;
+  flex: 1;
+}
+
+/* Two-column stats grid */
+.fight-form-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  margin-bottom: 1.25rem;
+}
+
+.stats-col-header {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0 0 1rem 0;
+  color: #333;
+}
+
+/* Form action buttons row at the bottom of the fight form */
+.fight-form-actions {
+  display: flex;
+  gap: 0.75rem;
+  padding-top: 0.5rem;
+}
+
+/* Fight card summary table */
+.fight-card-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.fight-card-table th {
+  text-align: left;
+  padding: 8px 10px;
+  background: #f8f8f8;
+  border-bottom: 2px solid #e0e0e0;
+  font-weight: 600;
+  color: #444;
+}
+
+.fight-card-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.fight-card-table tr:last-child td {
+  border-bottom: none;
+}
+
+/* Small variant of btn-secondary used in the fight card table */
+.btn-sm {
+  padding: 0.2rem 0.6rem;
+  font-size: 0.78rem;
+}
+
+/* Score preview */
+.score-preview-note {
+  color: #666;
+  font-size: 0.875rem;
+  margin: 0 0 1rem;
+}
+
+.score-preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  margin-bottom: 1.25rem;
+}
+
+.score-preview-table th {
+  text-align: left;
+  padding: 8px 10px;
+  background: #f8f8f8;
+  border-bottom: 2px solid #e0e0e0;
+  font-weight: 600;
+  color: #444;
+}
+
+.score-preview-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #f0f0f0;
+  vertical-align: top;
+}
+
+.score-preview-starters {
+  font-size: 0.82rem;
+  color: #555;
+  line-height: 1.6;
+}
+
+.score-preview-none {
+  color: #aaa;
+  font-style: italic;
+}
+
+.score-save-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Generic empty state used on score-event page */
+.score-empty {
+  color: #888;
+  font-size: 0.9rem;
+  text-align: center;
+  padding: 1.5rem 0;
 }

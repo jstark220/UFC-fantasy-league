@@ -92,8 +92,14 @@ async function initRoster() {
     return;
   }
 
-  populateManagerSelect();
-  renderRoster(myMemberId);
+  // Allow linking directly to a specific team via ?member=MEMBER_ID (e.g. from standings)
+  const memberParam = new URLSearchParams(window.location.search).get('member');
+  const defaultMemberId = (memberParam && members.find(function(m) { return m.id === memberParam; }))
+    ? memberParam
+    : myMemberId;
+
+  populateManagerSelect(defaultMemberId);
+  renderRoster(defaultMemberId);
 
   document.getElementById('pageContent').style.display = 'block';
 }
@@ -102,14 +108,14 @@ async function initRoster() {
 // MANAGER SELECT DROPDOWN
 // Defaults to the current user's team; changing it re-renders the roster.
 // ========================================================================
-function populateManagerSelect() {
+function populateManagerSelect(defaultMemberId) {
   const select = document.getElementById('managerSelect');
 
   members.forEach(function(m) {
     const opt = document.createElement('option');
     opt.value = m.id;
     opt.textContent = m.team_name + (m.id === myMemberId ? ' (you)' : '');
-    if (m.id === myMemberId) opt.selected = true;
+    if (m.id === defaultMemberId) opt.selected = true;
     select.appendChild(opt);
   });
 

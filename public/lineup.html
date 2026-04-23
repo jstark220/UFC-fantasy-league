@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lineup - UFC Fantasy League</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <!-- Hidden until auth check and data load complete -->
+  <div class="page" id="pageContent" style="display: none;">
+
+    <a href="#" class="back-link" id="leagueLink">&#8592; League</a>
+
+    <div class="page-header">
+      <h1 id="leagueName"></h1>
+    </div>
+
+    <!-- Event banner showing event name, date, and lock status -->
+    <div id="eventBanner"></div>
+
+    <!-- Lineup selection section -->
+    <div class="section">
+      <!-- starterCount updated by lineup.js as selections change -->
+      <h2>My Starters <span id="starterCount" class="starter-count">0 / 3</span></h2>
+      <div id="lineupContent"></div>
+    </div>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/auth-guard.js"></script>
+  <script src="js/lineup.js"></script>
+
+</body>
+</html>

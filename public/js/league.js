@@ -81,11 +81,17 @@ async function initLeague() {
   // ---- Render league name ----
   document.getElementById('leagueName').textContent = league.name;
 
-  // ---- Show Rosters link once the draft has started ----
+  // ---- Render nav links in the page header ----
+  // Standings is always visible. Rosters and Lineup appear once the draft starts.
+  var navHtml = '<a href="standings.html?id=' + leagueId + '" class="btn-secondary">Standings</a>';
   if (league.draft_started) {
-    document.getElementById('headerActions').innerHTML =
-      '<a href="roster.html?id=' + leagueId + '" class="btn-gold">Rosters</a>';
+    navHtml += '<a href="roster.html?id=' + leagueId + '" class="btn-secondary">Rosters</a>';
+    navHtml += '<a href="lineup.html?id=' + leagueId + '" class="btn-gold">Lineup</a>';
   }
+  if (isCommissioner && league.draft_started) {
+    navHtml += '<a href="score-event.html?league=' + leagueId + '" class="btn-secondary">Score Event</a>';
+  }
+  document.getElementById('headerActions').innerHTML = navHtml;
 
   // ---- Render details grid ----
   const formatDisplay    = league.format === 'dynasty' ? 'Dynasty' : 'Season-Long';
