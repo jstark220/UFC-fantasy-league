@@ -92,4 +92,10 @@ Always look at these before starting work:
 
 ---
 
-*Paste this briefing at the start of each Claude Code session so the AI has full context.*
+## Reference Files
+
+Always look at these before starting work:
+- `PRD.md` — Full product requirements (features, scope, out-of-scope)
+- `DESIGN_SYSTEM.md` — Design tokens, components, and voice guidelines (NEW)
+- `connections_test.html` — Canonical HTML/JS pattern to follow
+- `.env` — Database credentials (do NOT include contents in generated code)
