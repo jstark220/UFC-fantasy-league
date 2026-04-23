@@ -10,6 +10,28 @@ body {
   padding: 0;
 }
 
+/* Fixed logout button injected by auth-guard.js on every protected page */
+.btn-logout {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  padding: 0.35rem 0.8rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: white;
+  color: #888;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+  z-index: 1000;
+  transition: background 0.15s, color 0.15s;
+}
+
+.btn-logout:hover {
+  background: #f5f5f5;
+  color: #333;
+}
+
 /* ========================================================================
    AUTH FORM LAYOUT
    Centers the login/signup card vertically and horizontally

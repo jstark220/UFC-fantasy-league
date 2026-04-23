@@ -16,6 +16,22 @@ async function requireAuth() {
     return null;
   }
 
+  // Inject a fixed-position logout button once per page load.
+  // Doing it here means every protected page gets it for free.
+  if (!document.getElementById('globalLogoutBtn')) {
+    const btn = document.createElement('button');
+    btn.id = 'globalLogoutBtn';
+    btn.className = 'btn-logout';
+    btn.textContent = 'Log out';
+    btn.addEventListener('click', logOut);
+    document.body.appendChild(btn);
+  }
+
   // Return the user object so the calling page can use the user's id and email
   return data.session.user;
+}
+
+async function logOut() {
+  await supabaseClient.auth.signOut();
+  window.location.href = 'login.html';
 }
