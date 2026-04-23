@@ -20,6 +20,14 @@
       </div>
     </div>
 
+    <!-- Tab bar: visible only on narrow screens, lets you switch between panels -->
+    <div class="draft-tabs" id="draftTabs">
+      <button class="draft-tab-btn" data-panel="panel-fighters">Fighters</button>
+      <button class="draft-tab-btn tab-active" data-panel="panel-board">Draft Board</button>
+      <button class="draft-tab-btn" data-panel="panel-roster">My Roster</button>
+      <button class="draft-tab-btn" data-panel="split">Split</button>
+    </div>
+
     <!-- Three-panel layout fills the remaining viewport height -->
     <div class="draft-room">
 
@@ -37,11 +45,17 @@
         <div id="fighterPool"></div>
       </div>
 
-      <!-- CENTER: snake draft board showing all picks by round -->
-      <div class="draft-panel panel-board">
+      <!-- Drag handle: resize fighters vs board -->
+      <div class="resize-handle" id="resizeLeft"></div>
+
+      <!-- CENTER: snake draft board showing all picks by round; default active tab on narrow screens -->
+      <div class="draft-panel panel-board tab-active">
         <h2>Draft Board</h2>
         <div id="draftBoard"></div>
       </div>
+
+      <!-- Drag handle: resize board vs roster -->
+      <div class="resize-handle" id="resizeRight"></div>
 
       <!-- RIGHT: your roster slot progress + list of drafted fighters -->
       <div class="draft-panel panel-roster">
@@ -56,6 +70,78 @@
   <script src="js/supabase-config.js"></script>
   <script src="js/auth-guard.js"></script>
   <script src="js/draft.js"></script>
+
+  <script>
+    // Drag-to-resize: left handle controls fighters panel width,
+    // right handle controls roster panel width. Board fills remaining space.
+    // Only active on wide screens (>= 900px).
+    document.querySelectorAll('.resize-handle').forEach(function(handle) {
+      handle.addEventListener('mousedown', function(e) {
+        if (window.innerWidth <= 899) return;
+
+        var isLeft   = handle.id === 'resizeLeft';
+        var panel    = document.querySelector(isLeft ? '.panel-fighters' : '.panel-roster');
+        var startX   = e.clientX;
+        var startW   = panel.getBoundingClientRect().width;
+
+        handle.classList.add('dragging');
+        document.body.style.cursor    = 'col-resize';
+        document.body.style.userSelect = 'none';
+
+        function onMove(e) {
+          // Left handle: drag right = grow fighters. Right handle: drag left = grow roster.
+          var delta    = isLeft ? (e.clientX - startX) : (startX - e.clientX);
+          var newWidth = Math.max(150, Math.min(600, startW + delta));
+          panel.style.width      = newWidth + 'px';
+          panel.style.flexShrink = '0';
+        }
+
+        function onUp() {
+          handle.classList.remove('dragging');
+          document.body.style.cursor    = '';
+          document.body.style.userSelect = '';
+          document.removeEventListener('mousemove', onMove);
+          document.removeEventListener('mouseup', onUp);
+        }
+
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+        e.preventDefault();
+      });
+    });
+
+    // Tab switching for narrow screens. Adds/removes .tab-active on both the
+    // button and the corresponding panel div. The special "split" tab shows
+    // the fighters panel and roster panel side by side.
+    document.getElementById('draftTabs').addEventListener('click', function(e) {
+      var btn = e.target.closest('.draft-tab-btn');
+      if (!btn) return;
+
+      var panelKey = btn.getAttribute('data-panel');
+      var room     = document.querySelector('.draft-room');
+
+      // Update button active states
+      document.querySelectorAll('.draft-tab-btn').forEach(function(b) {
+        b.classList.toggle('tab-active', b === btn);
+      });
+
+      if (panelKey === 'split') {
+        // Show fighters + roster side by side; hide the board
+        room.classList.add('draft-room-split');
+        document.querySelectorAll('.draft-panel').forEach(function(panel) {
+          var isSplit = panel.classList.contains('panel-fighters') ||
+                        panel.classList.contains('panel-roster');
+          panel.classList.toggle('tab-active', isSplit);
+        });
+      } else {
+        // Normal single-panel view
+        room.classList.remove('draft-room-split');
+        document.querySelectorAll('.draft-panel').forEach(function(panel) {
+          panel.classList.toggle('tab-active', panel.classList.contains(panelKey));
+        });
+      }
+    });
+  </script>
 
 </body>
 </html>

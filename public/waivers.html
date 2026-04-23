@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Waivers - UFC Fantasy League</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <div class="page" id="pageContent" style="display: none;">
+
+    <a href="#" class="back-link" id="leagueLink">&#8592; League</a>
+
+    <div class="page-header">
+      <h1 id="leagueName"></h1>
+    </div>
+
+    <!-- Tab bar: Available Fighters vs My Claims -->
+    <div class="waiver-tab-bar">
+      <button class="waiver-tab-btn tab-active" data-tab="available">Available Fighters</button>
+      <button class="waiver-tab-btn" data-tab="my-claims">My Claims</button>
+    </div>
+
+    <!-- Available fighters: all fighters not on any roster in this league -->
+    <div class="section" id="availableSection">
+      <div class="waiver-controls">
+        <input type="text" id="fighterSearch" placeholder="Search by name...">
+        <select id="divisionFilter">
+          <option value="all">All Divisions</option>
+          <option value="strawweight">Women's Strawweight</option>
+          <option value="flyweight_w">Women's Flyweight</option>
+          <option value="bantamweight_w">Women's Bantamweight</option>
+          <option value="flyweight">Men's Flyweight</option>
+          <option value="bantamweight">Men's Bantamweight</option>
+          <option value="featherweight">Men's Featherweight</option>
+          <option value="lightweight">Men's Lightweight</option>
+          <option value="welterweight">Men's Welterweight</option>
+          <option value="middleweight">Men's Middleweight</option>
+          <option value="light_heavyweight">Men's Light Heavyweight</option>
+          <option value="heavyweight">Men's Heavyweight</option>
+        </select>
+      </div>
+      <div id="availableContent"></div>
+    </div>
+
+    <!-- My pending and past claims -->
+    <div class="section" id="myClaimsSection" style="display: none;">
+      <div id="myClaimsContent"></div>
+    </div>
+
+    <!-- Commissioner-only: claim queue and process button -->
+    <div class="section" id="commissionerSection" style="display: none;">
+      <div class="section-header-row">
+        <h2>Waiver Queue</h2>
+        <button class="btn-gold" id="processBtn">Process All Claims</button>
+      </div>
+      <p class="waiver-process-note">
+        Claims are processed in priority order (lower number = higher priority).
+        Approved claimants move to the back of the queue.
+      </p>
+      <div id="processingContent"></div>
+    </div>
+
+  </div>
+
+  <!-- Claim modal: appears when a manager clicks Claim on a fighter -->
+  <div class="modal-overlay" id="claimModal" style="display: none;">
+    <div class="modal">
+      <h2 class="modal-title">Submit Waiver Claim</h2>
+      <div id="claimModalContent"></div>
+      <div class="modal-actions">
+        <button class="btn-gold" id="confirmClaimBtn">Submit Claim</button>
+        <button class="btn-secondary" id="cancelModalBtn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/auth-guard.js"></script>
+  <script src="js/waivers.js"></script>
+
+</body>
+</html>

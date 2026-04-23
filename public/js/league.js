@@ -89,6 +89,7 @@ async function initLeague() {
   }
   if (league.draft_started) {
     navHtml += '<a href="roster.html?id=' + leagueId + '" class="btn-secondary">Rosters</a>';
+    navHtml += '<a href="waivers.html?id=' + leagueId + '" class="btn-secondary">Waivers</a>';
     if (league.draft_completed) {
       navHtml += '<a href="lineup.html?id=' + leagueId + '" class="btn-gold">Lineup</a>';
     }

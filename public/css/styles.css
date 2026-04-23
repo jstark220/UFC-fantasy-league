@@ -630,11 +630,79 @@ tr:hover { background: #f0f0f0; }
   color: white;
 }
 
-/* Three-panel grid: fighter pool | draft board | my roster */
+/* Three-panel flex row: fighter pool | draft board | my roster */
 .draft-room {
-  display: grid;
-  grid-template-columns: 280px 1fr 260px;
+  display: flex;
   height: calc(100vh - 52px);
+}
+
+/* Tab bar sits between the header and the panels; hidden on wide screens */
+.draft-tabs {
+  display: none;
+}
+
+/* ---- Narrow screen: collapse to single-panel with tab switching ---- */
+@media (max-width: 899px) {
+  .draft-tabs {
+    display: flex;
+    background: #2a2a3e;
+    flex-shrink: 0;
+  }
+
+  .draft-tab-btn {
+    flex: 1;
+    padding: 0.65rem 0.5rem;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: #888;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    transition: color 0.15s;
+  }
+
+  .draft-tab-btn.tab-active {
+    color: #d4af37;
+    border-bottom-color: #d4af37;
+  }
+
+  /* Hide drag handles on narrow screens — tabs handle layout instead */
+  .resize-handle {
+    display: none;
+  }
+
+  /* Subtract header (52px) + tab bar (~41px) */
+  .draft-room {
+    height: calc(100vh - 93px);
+  }
+
+  /* Reset fixed widths from wide-screen rules; active panel fills full width */
+  .panel-fighters,
+  .panel-roster {
+    width: 100%;
+  }
+
+  /* Hide all panels by default; only the active one is shown */
+  .draft-panel {
+    display: none;
+    width: 100%;
+    height: 100%;
+  }
+
+  .draft-panel.tab-active {
+    display: block;
+  }
+
+  /* Split view: fighters + roster each at 50% */
+  .draft-room.draft-room-split .panel-fighters,
+  .draft-room.draft-room-split .panel-roster {
+    display: block;
+    width: 50%;
+    height: 100%;
+  }
 }
 
 /* All panels scroll vertically on their own */
@@ -660,8 +728,16 @@ tr:hover { background: #f0f0f0; }
   z-index: 10;
 }
 
-/* Center board uses a slightly off-white background */
+/* Left panel: fixed starting width, user can drag to resize */
+.panel-fighters {
+  width: 280px;
+  flex-shrink: 0;
+}
+
+/* Center board: fills all remaining space; min-width prevents table overflow */
 .panel-board {
+  flex: 1;
+  min-width: 180px;
   background: #f8f8f8;
 }
 
@@ -669,9 +745,26 @@ tr:hover { background: #f0f0f0; }
   background: #f8f8f8;
 }
 
-/* Right panel has no right border (it's the edge of the viewport) */
+/* Right panel: fixed starting width, user can drag to resize */
 .panel-roster {
+  width: 260px;
+  flex-shrink: 0;
   border-right: none;
+}
+
+/* Drag handle between panels */
+.resize-handle {
+  width: 5px;
+  flex-shrink: 0;
+  background: #e0e0e0;
+  cursor: col-resize;
+  transition: background 0.15s;
+  z-index: 5;
+}
+
+.resize-handle:hover,
+.resize-handle.dragging {
+  background: #d4af37;
 }
 
 /* ---- Fighter pool: search and filter controls ---- */
@@ -1484,4 +1577,207 @@ tr:hover { background: #f0f0f0; }
   font-size: 0.9rem;
   text-align: center;
   padding: 1.5rem 0;
+}
+
+/* ========================================================================
+   WAIVERS PAGE
+   ======================================================================== */
+
+/* Tab bar at the top of the waivers page */
+.waiver-tab-bar {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid #e0e0e0;
+  margin-bottom: 1.25rem;
+}
+
+.waiver-tab-btn {
+  padding: 0.6rem 1.25rem;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #888;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.waiver-tab-btn.tab-active {
+  color: #d4af37;
+  border-bottom-color: #d4af37;
+}
+
+/* Search + division filter row */
+.waiver-controls {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.waiver-controls input {
+  flex: 1;
+  min-width: 160px;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 0.875rem;
+}
+
+.waiver-controls select {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 0.875rem;
+}
+
+/* Available fighters + claims table */
+.waiver-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.waiver-table th {
+  text-align: left;
+  padding: 8px 10px;
+  background: #f8f8f8;
+  border-bottom: 2px solid #e0e0e0;
+  font-weight: 600;
+  color: #444;
+}
+
+.waiver-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.waiver-table tr:last-child td {
+  border-bottom: none;
+}
+
+/* Claim button (gold outline, mirrors the Start button from lineup) */
+.btn-claim {
+  padding: 0.3rem 0.7rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid #d4af37;
+  background: white;
+  color: #d4af37;
+  transition: background 0.15s;
+}
+
+.btn-claim:hover {
+  background: #fff8e1;
+}
+
+/* Section labels inside My Claims (Pending / Past) */
+.claims-section-label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #777;
+  margin: 0 0 0.75rem;
+}
+
+/* Status badges in past claims */
+.waiver-status-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 3px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.badge-approved {
+  background: #d4edda;
+  color: #155724;
+}
+
+.badge-rejected {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.badge-cancelled {
+  background: #e2e3e5;
+  color: #555;
+}
+
+/* Commissioner processing note */
+.waiver-process-note {
+  font-size: 0.875rem;
+  color: #666;
+  margin: 0 0 1rem;
+}
+
+/* Empty state inside waiver sections */
+.waiver-empty {
+  color: #888;
+  font-size: 0.9rem;
+  padding: 1.5rem 0;
+  text-align: center;
+}
+
+/* Claim modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 500;
+}
+
+.modal {
+  background: white;
+  border-radius: 8px;
+  padding: 1.75rem 2rem;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+}
+
+.modal-title {
+  margin: 0 0 1.25rem;
+  font-size: 1.1rem;
+}
+
+.claim-fighter-info {
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  background: #f8f8f8;
+  border-radius: 4px;
+}
+
+.claim-fighter-info p {
+  margin: 0 0 0.2rem;
+}
+
+.claim-fighter-div {
+  color: #888;
+  font-size: 0.85rem;
+}
+
+.claim-cap-warning {
+  margin: 0.5rem 0 0;
+  font-size: 0.82rem;
+  color: #856404;
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 4px;
+  padding: 0.4rem 0.6rem;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
 }
