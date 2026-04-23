@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trades - UFC Fantasy League</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <div class="page" id="pageContent" style="display: none;">
+
+    <a href="#" class="back-link" id="leagueLink">&#8592; League</a>
+
+    <div class="page-header">
+      <h1 id="leagueName"></h1>
+    </div>
+
+    <!-- Tab bar -->
+    <div class="trade-tab-bar">
+      <button class="trade-tab-btn tab-active" data-tab="propose">Propose Trade</button>
+      <button class="trade-tab-btn" data-tab="incoming">Incoming <span id="incomingBadge" class="trade-badge" style="display:none;"></span></button>
+      <button class="trade-tab-btn" data-tab="sent">Sent</button>
+    </div>
+
+    <!-- PROPOSE TAB -->
+    <div id="proposeTab">
+      <div class="section">
+        <div class="form-group trade-partner-group">
+          <label for="partnerSelect">Trade with</label>
+          <select id="partnerSelect">
+            <option value="">-- Select a manager --</option>
+          </select>
+        </div>
+
+        <!-- Two-column roster picker (shown once a partner is selected) -->
+        <div id="rosterPicker" style="display:none;">
+          <div class="trade-picker-grid">
+            <div class="trade-picker-col">
+              <h3 class="trade-picker-label">You give <span id="youGiveCount" class="trade-sel-count">(0 selected)</span></h3>
+              <div id="yourRosterList"></div>
+            </div>
+            <div class="trade-picker-col">
+              <h3 class="trade-picker-label">You receive <span id="youReceiveCount" class="trade-sel-count">(0 selected)</span></h3>
+              <div id="theirRosterList"></div>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top:1rem;">
+            <label for="tradeMessage">Message (optional)</label>
+            <input type="text" id="tradeMessage" placeholder="e.g. Looking for a title contender swap" maxlength="200">
+          </div>
+
+          <div class="trade-propose-actions">
+            <button class="btn-gold" id="proposeBtn">Send Trade Offer</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- INCOMING TAB -->
+    <div id="incomingTab" style="display:none;">
+      <div class="section">
+        <div id="incomingContent"></div>
+      </div>
+    </div>
+
+    <!-- SENT TAB -->
+    <div id="sentTab" style="display:none;">
+      <div class="section">
+        <div id="sentContent"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/auth-guard.js"></script>
+  <script src="js/trades.js"></script>
+
+</body>
+</html>
