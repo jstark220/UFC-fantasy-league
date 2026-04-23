@@ -1,10 +1,17 @@
 // ========================================================================
 // LEAGUE PAGE LOGIC
 // Loads and displays a single league by ID (from the URL query param ?id=).
-// Commissioner sees the invite code and remove-member buttons.
+// Commissioner sees the invite code, draft controls, and remove-member buttons.
 // Non-members are redirected to my-leagues.html.
 // Depends on supabaseClient (supabase-config.js) and requireAuth (auth-guard.js).
 // ========================================================================
+
+// Module-level state so all render functions and async handlers can share it
+// without re-fetching from the server.
+let leagueData  = null;
+let membersData = [];
+let userRef     = null;
+let leagueIdRef = null;
 
 // Escapes user-supplied strings before inserting into innerHTML to prevent XSS
 function escapeHtml(str) {
@@ -16,20 +23,21 @@ function escapeHtml(str) {
 async function initLeague() {
   const user = await requireAuth();
   if (!user) return;
+  userRef = user;
 
   // Read the league ID from the URL query string (?id=UUID)
   const leagueId = new URLSearchParams(window.location.search).get('id');
-
   if (!leagueId) {
-    // No ID in the URL - nothing to show, send back to the list
     window.location.href = 'my-leagues.html';
     return;
   }
+  leagueIdRef = leagueId;
 
   // ---- Fetch league data ----
+  // draft_started, draft_completed, draft_order, roster_size added to support draft setup UI
   const { data: league, error: leagueError } = await supabaseClient
     .from('leagues')
-    .select('id, name, format, draft_format, season_start_date, invite_code, commissioner_id, max_managers')
+    .select('id, name, format, draft_format, season_start_date, invite_code, commissioner_id, max_managers, draft_started, draft_completed, draft_order, roster_size')
     .eq('id', leagueId)
     .single();
 
@@ -38,6 +46,7 @@ async function initLeague() {
     window.location.href = 'my-leagues.html';
     return;
   }
+  leagueData = league;
 
   // ---- Fetch member list ----
   // Declared with let so the remove handler can update the local copy without reloading
@@ -59,6 +68,7 @@ async function initLeague() {
     window.location.href = 'my-leagues.html';
     return;
   }
+  membersData = members;
 
   const isCommissioner = league.commissioner_id === user.id;
 
@@ -71,10 +81,16 @@ async function initLeague() {
   // ---- Render league name ----
   document.getElementById('leagueName').textContent = league.name;
 
+  // ---- Show Rosters link once the draft has started ----
+  if (league.draft_started) {
+    document.getElementById('headerActions').innerHTML =
+      '<a href="roster.html?id=' + leagueId + '" class="btn-gold">Rosters</a>';
+  }
+
   // ---- Render details grid ----
-  const formatDisplay     = league.format === 'dynasty' ? 'Dynasty' : 'Season-Long';
-  const draftFmtDisplay   = league.draft_format === 'auction' ? 'Auction Draft' : 'Snake Draft';
-  const startDateDisplay  = league.season_start_date
+  const formatDisplay    = league.format === 'dynasty' ? 'Dynasty' : 'Season-Long';
+  const draftFmtDisplay  = league.draft_format === 'auction' ? 'Auction Draft' : 'Snake Draft';
+  const startDateDisplay = league.season_start_date
     ? new Date(league.season_start_date).toLocaleDateString()
     : 'Not set';
 
@@ -109,6 +125,171 @@ async function initLeague() {
 
   // ---- Render member rows ----
   renderMembers(members, league, user, isCommissioner);
+
+  // ---- Render draft section and subscribe to live league updates ----
+  renderDraftSection();
+  subscribeToLeagueUpdates();
+}
+
+// ========================================================================
+// RENDER DRAFT SECTION
+// Shows different UI based on current draft state. Called on load and again
+// whenever the Realtime subscription delivers a league UPDATE.
+// ========================================================================
+function renderDraftSection() {
+  const el = document.getElementById('draftContent');
+  const isCommissioner = leagueData.commissioner_id === userRef.id;
+
+  if (leagueData.draft_completed) {
+    el.innerHTML =
+      '<p class="draft-status-note">The draft is complete.</p>' +
+      '<a href="draft.html?id=' + leagueIdRef + '" class="btn-gold">View Draft Board</a>';
+    return;
+  }
+
+  if (leagueData.draft_started) {
+    el.innerHTML =
+      '<p class="draft-status-note">Draft is currently in progress.</p>' +
+      '<a href="draft.html?id=' + leagueIdRef + '" class="btn-gold">Enter Draft Room</a>';
+    return;
+  }
+
+  // Draft has not started yet
+  const orderHtml = renderDraftOrderList();
+
+  if (isCommissioner) {
+    // Commissioner controls: randomize order, preview it, then start
+    // Start Draft button is disabled until a draft order has been saved
+    const startDisabled = !leagueData.draft_order ? ' disabled' : '';
+
+    el.innerHTML =
+      '<p class="draft-status-note">Set the draft order, then start the draft when all managers have joined.</p>' +
+      '<div id="draftOrderPreview">' + orderHtml + '</div>' +
+      '<div class="draft-actions">' +
+        '<button class="btn-secondary" id="randomizeBtn">Randomize Order</button>' +
+        '<button class="btn-gold" id="startDraftBtn"' + startDisabled + '>Start Draft</button>' +
+      '</div>';
+
+    document.getElementById('randomizeBtn').addEventListener('click', randomizeDraftOrder);
+    document.getElementById('startDraftBtn').addEventListener('click', startDraft);
+  } else {
+    // Non-commissioner sees the order (if set) and a waiting message
+    el.innerHTML =
+      '<p class="draft-status-note">Waiting for the commissioner to start the draft.</p>' +
+      '<div id="draftOrderPreview">' + orderHtml + '</div>';
+  }
+}
+
+// Returns an HTML string showing the draft pick order as a numbered list,
+// or a placeholder message if no order has been set yet.
+function renderDraftOrderList() {
+  if (!leagueData.draft_order || leagueData.draft_order.length === 0) {
+    return '<p class="draft-empty">Draft order not yet set.</p>';
+  }
+
+  // Map each member ID in the order array to that member's team name
+  const items = leagueData.draft_order.map(function(memberId, idx) {
+    const member = membersData.find(function(m) { return m.id === memberId; });
+    const name = member ? escapeHtml(member.team_name) : '(departed member)';
+    return '<li><span class="draft-order-pos">' + (idx + 1) + '</span>' + name + '</li>';
+  });
+
+  return '<ol class="draft-order-list">' + items.join('') + '</ol>';
+}
+
+// ========================================================================
+// RANDOMIZE DRAFT ORDER
+// Fisher-Yates shuffle of the current member IDs, then saves the result
+// to leagues.draft_order. Re-renders the draft section on success.
+// ========================================================================
+async function randomizeDraftOrder() {
+  const btn = document.getElementById('randomizeBtn');
+  btn.disabled = true;
+  btn.textContent = 'Randomizing...';
+
+  // Build an array of member IDs and shuffle it in place
+  const order = membersData.map(function(m) { return m.id; });
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const temp = order[i];
+    order[i] = order[j];
+    order[j] = temp;
+  }
+
+  const { error } = await supabaseClient
+    .from('leagues')
+    .update({ draft_order: order })
+    .eq('id', leagueIdRef);
+
+  if (error) {
+    alert('Error saving draft order: ' + error.message);
+    btn.disabled = false;
+    btn.textContent = 'Randomize Order';
+    return;
+  }
+
+  // Update local state and re-render so the new order appears immediately
+  leagueData.draft_order = order;
+  renderDraftSection();
+}
+
+// ========================================================================
+// START DRAFT
+// Sets draft_started = true in the DB. The commissioner is redirected here
+// immediately; all other members are redirected via the Realtime subscription.
+// ========================================================================
+async function startDraft() {
+  if (!confirm('Start the draft? This cannot be undone.')) return;
+
+  const btn = document.getElementById('startDraftBtn');
+  btn.disabled = true;
+  btn.textContent = 'Starting...';
+
+  const { error } = await supabaseClient
+    .from('leagues')
+    .update({ draft_started: true })
+    .eq('id', leagueIdRef);
+
+  if (error) {
+    alert('Error starting draft: ' + error.message);
+    btn.disabled = false;
+    btn.textContent = 'Start Draft';
+    return;
+  }
+
+  window.location.href = 'draft.html?id=' + leagueIdRef;
+}
+
+// ========================================================================
+// SUBSCRIBE TO LEAGUE UPDATES
+// Listens for live changes to this league row via Supabase Realtime.
+// Handles two cases: draft_started flip (redirect all members) and
+// draft_order changes (update the order preview without a page reload).
+// Requires the leagues table to be in the supabase_realtime publication.
+// ========================================================================
+function subscribeToLeagueUpdates() {
+  supabaseClient
+    .channel('league_updates_' + leagueIdRef)
+    .on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'leagues',
+      filter: 'id=eq.' + leagueIdRef
+    }, function(payload) {
+      const updated = payload.new;
+
+      // If the draft just flipped to started, go to the draft room right away
+      if (updated.draft_started && !leagueData.draft_started) {
+        window.location.href = 'draft.html?id=' + leagueIdRef;
+        return;
+      }
+
+      // For all other changes (order update, completion), refresh local state
+      // and re-render the draft section so the UI stays in sync
+      leagueData = Object.assign({}, leagueData, updated);
+      renderDraftSection();
+    })
+    .subscribe();
 }
 
 // ========================================================================
@@ -129,9 +310,9 @@ function renderMembers(members, league, user, isCommissioner) {
 
     // Build the row, conditionally adding a Remove button for the commissioner.
     // Commissioner cannot remove themselves (no remove button on their own row).
-    // TODO: disable remove buttons after draft locks (draft system not yet built)
+    // Remove buttons are hidden once the draft starts to prevent mid-draft disruption.
     let actionsCell = '';
-    if (isCommissioner && !memberIsCommissioner) {
+    if (isCommissioner && !memberIsCommissioner && !leagueData.draft_started) {
       actionsCell = '<td><button class="btn-danger" data-member-id="' + member.id + '" data-team-name="' + escapeHtml(member.team_name) + '">Remove</button></td>';
     } else if (isCommissioner) {
       actionsCell = '<td></td>';
@@ -145,7 +326,7 @@ function renderMembers(members, league, user, isCommissioner) {
     tbody.appendChild(row);
   });
 
-  // ---- Wire up remove buttons (only present for commissioner) ----
+  // ---- Wire up remove buttons (only present for commissioner before draft) ----
   tbody.querySelectorAll('.btn-danger').forEach(function(btn) {
     btn.addEventListener('click', async function() {
       const memberId = btn.getAttribute('data-member-id');
@@ -171,6 +352,7 @@ function renderMembers(members, league, user, isCommissioner) {
 
       // Remove the row from the local members array and re-render without a page reload
       members = members.filter(function(m) { return m.id !== memberId; });
+      membersData = members;
       document.getElementById('memberCount').textContent = members.length;
       renderMembers(members, league, user, isCommissioner);
     });

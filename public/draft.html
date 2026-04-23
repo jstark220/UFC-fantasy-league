@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft Room - UFC Fantasy League</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="draft-body">
+
+  <!-- Hidden until auth check and data load complete -->
+  <div id="pageContent" style="display: none;">
+
+    <!-- Sticky top bar: whose turn it is + overall pick counter -->
+    <div class="draft-header">
+      <div id="turnInfo" class="turn-info">Loading draft...</div>
+      <div class="draft-header-right">
+        <span id="pickCounter" class="pick-counter"></span>
+        <a id="leagueLink" href="#" class="back-link-light">&#8592; League</a>
+      </div>
+    </div>
+
+    <!-- Three-panel layout fills the remaining viewport height -->
+    <div class="draft-room">
+
+      <!-- LEFT: available fighter pool with filter and search -->
+      <div class="draft-panel panel-fighters">
+        <h2>Available Fighters</h2>
+        <div class="pool-controls">
+          <select id="divisionFilter">
+            <option value="all">All Divisions</option>
+            <!-- Weight class options added by draft.js -->
+          </select>
+          <input type="text" id="fighterSearch" placeholder="Search by name...">
+        </div>
+        <!-- Fighter rows rendered by draft.js; clickable when it's your turn -->
+        <div id="fighterPool"></div>
+      </div>
+
+      <!-- CENTER: snake draft board showing all picks by round -->
+      <div class="draft-panel panel-board">
+        <h2>Draft Board</h2>
+        <div id="draftBoard"></div>
+      </div>
+
+      <!-- RIGHT: your roster slot progress + list of drafted fighters -->
+      <div class="draft-panel panel-roster">
+        <h2>My Roster (<span id="myPickCount">0</span> / 20)</h2>
+        <div id="myRoster"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/auth-guard.js"></script>
+  <script src="js/draft.js"></script>
+
+</body>
+</html>

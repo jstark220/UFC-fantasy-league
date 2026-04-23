@@ -486,3 +486,486 @@ tr:hover { background: #f0f0f0; }
 .detail-value {
   color: #111;
 }
+
+/* ========================================================================
+   DRAFT SETUP (league.html draft section)
+   Controls and order preview shown before the draft starts.
+   ======================================================================== */
+
+.draft-status-note {
+  font-size: 0.875rem;
+  color: #666;
+  margin: 0 0 1rem 0;
+}
+
+.draft-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* Disabled state for the gold button (used on Start Draft until order is set) */
+.btn-gold:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+/* Numbered list showing the draft pick order */
+.draft-order-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.75rem 0;
+}
+
+.draft-order-list li {
+  display: flex;
+  align-items: center;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 0.9rem;
+}
+
+/* Pick position number (1., 2., etc.) */
+.draft-order-pos {
+  display: inline-block;
+  width: 1.75rem;
+  font-weight: 700;
+  color: #999;
+  font-size: 0.8rem;
+}
+
+/* Placeholder shown when no draft order has been set yet */
+.draft-empty {
+  color: #999;
+  font-size: 0.875rem;
+  font-style: italic;
+  margin: 0.5rem 0;
+}
+
+/* ========================================================================
+   DRAFT ROOM (draft.html)
+   Full-viewport three-panel layout with sticky dark header.
+   ======================================================================== */
+
+/* Locks the page to the viewport so panels scroll independently */
+.draft-body {
+  overflow: hidden;
+  height: 100vh;
+  background: #1e1e2e;
+  margin: 0;
+  padding: 0;
+}
+
+/* Dark sticky bar at the top showing whose turn it is */
+.draft-header {
+  background: #1e1e2e;
+  color: white;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1rem;
+  flex-shrink: 0;
+}
+
+.turn-info {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+/* Highlight when it's the current user's pick */
+.turn-mine {
+  color: #d4af37;
+}
+
+/* Muted text when the draft is complete */
+.turn-complete {
+  color: #aaa;
+}
+
+.draft-header-right {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.pick-counter {
+  font-size: 0.85rem;
+  color: #aaa;
+}
+
+.back-link-light {
+  color: #aaa;
+  text-decoration: none;
+  font-size: 0.85rem;
+}
+
+.back-link-light:hover {
+  color: white;
+}
+
+/* Three-panel grid: fighter pool | draft board | my roster */
+.draft-room {
+  display: grid;
+  grid-template-columns: 280px 1fr 260px;
+  height: calc(100vh - 52px);
+}
+
+/* All panels scroll vertically on their own */
+.draft-panel {
+  overflow-y: auto;
+  border-right: 1px solid #e0e0e0;
+  background: white;
+}
+
+/* Sticky panel headings stay visible while content scrolls */
+.draft-panel h2 {
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #555;
+  padding: 0.75rem 1rem 0.5rem;
+  margin: 0;
+  border-bottom: 1px solid #e8e8e8;
+  position: sticky;
+  top: 0;
+  background: white;
+  z-index: 10;
+}
+
+/* Center board uses a slightly off-white background */
+.panel-board {
+  background: #f8f8f8;
+}
+
+.panel-board h2 {
+  background: #f8f8f8;
+}
+
+/* Right panel has no right border (it's the edge of the viewport) */
+.panel-roster {
+  border-right: none;
+}
+
+/* ---- Fighter pool: search and filter controls ---- */
+
+.pool-controls {
+  padding: 0.5rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  border-bottom: 1px solid #e8e8e8;
+}
+
+.pool-controls select,
+.pool-controls input {
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  font-size: 0.8rem;
+  box-sizing: border-box;
+}
+
+.pool-controls select:focus,
+.pool-controls input:focus {
+  outline: none;
+  border-color: #d4af37;
+}
+
+/* ---- Fighter pool table ---- */
+
+.fighter-pool-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+
+/* Override the global dark th style for this specific table */
+.fighter-pool-table th {
+  background: #f0f0f0;
+  color: #555;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.fighter-pool-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid #f5f5f5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+
+/* Rows you can click to pick (your turn + fighter fits a slot) */
+.row-pickable {
+  cursor: pointer;
+}
+
+.row-pickable:hover {
+  background: #fff8e1;
+}
+
+/* Fighters that don't fit any remaining roster slot */
+.row-invalid {
+  opacity: 0.35;
+}
+
+/* Valid fighters, but it's not your turn */
+.row-watching {
+  opacity: 0.75;
+}
+
+/* ---- Draft board table ---- */
+
+.board-scroll {
+  overflow-x: auto;
+  padding: 0.75rem;
+}
+
+.draft-board-table {
+  border-collapse: collapse;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  background: white;
+}
+
+.draft-board-table th,
+.draft-board-table td {
+  padding: 4px 8px;
+  border: 1px solid #e0e0e0;
+  text-align: center;
+  min-width: 100px;
+}
+
+/* Override the global dark th for the team name header cells */
+.draft-board-table th {
+  background: #f0f0f0;
+  color: #555;
+  font-size: 0.7rem;
+}
+
+/* The leftmost column showing the round number */
+.round-label-th {
+  background: #333;
+  color: white;
+  font-size: 0.7rem;
+  text-align: left;
+  min-width: 50px;
+}
+
+/* Suppress the global tr:hover highlight inside the draft board */
+.draft-board-table tr:hover {
+  background: transparent;
+}
+
+.pick-empty {
+  background: white;
+  color: #ccc;
+  font-style: italic;
+}
+
+.pick-made {
+  background: #f9f9f9;
+  color: #333;
+}
+
+/* Picks in the current user's column get a green tint */
+.col-mine .pick-made {
+  background: #f0f7f0;
+}
+
+/* The cell for the current pick in progress (not yet filled) */
+.pick-current {
+  background: #fffde7;
+  outline: 2px solid #d4af37;
+}
+
+/* ---- My roster panel ---- */
+
+/* Grid of slot rows showing pip progress per slot category */
+.slot-grid {
+  padding: 0.75rem;
+}
+
+.slot-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.slot-label {
+  width: 80px;
+  font-weight: 600;
+  color: #555;
+  font-size: 0.72rem;
+  flex-shrink: 0;
+}
+
+.slot-pips {
+  display: flex;
+  gap: 3px;
+}
+
+/* Individual pip circle representing one roster slot */
+.pip {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.pip-filled {
+  background: #d4af37;
+}
+
+.pip-empty {
+  background: #e0e0e0;
+  border: 1px solid #ccc;
+}
+
+/* List of your drafted fighters below the slot grid */
+.my-picks-list {
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid #e8e8e8;
+}
+
+.my-pick-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid #f5f5f5;
+  font-size: 0.8rem;
+}
+
+.my-pick-name {
+  font-weight: 600;
+  color: #111;
+}
+
+.my-pick-div {
+  font-size: 0.7rem;
+  color: #888;
+}
+
+/* ========================================================================
+   ROSTER PAGE (roster.html)
+   ======================================================================== */
+
+/* Manager selector bar at the top of the roster view */
+.roster-picker {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.4rem;
+}
+
+.roster-picker label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #555;
+  white-space: nowrap;
+}
+
+.roster-picker select {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  min-width: 180px;
+}
+
+.roster-picker select:focus {
+  outline: none;
+  border-color: #d4af37;
+}
+
+/* "X / 20 picks" summary line */
+.roster-summary {
+  font-size: 0.825rem;
+  color: #888;
+}
+
+/* Each slot-category section (Men's Flyweight, Women's Flex, etc.) */
+.roster-section {
+  background: white;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  padding: 0.75rem 1rem 0;
+  margin-bottom: 1rem;
+}
+
+/* Section title + pip dots in a row */
+.roster-section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+}
+
+.roster-section-title {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #333;
+}
+
+.roster-section-pips {
+  display: flex;
+  gap: 3px;
+}
+
+/* Fighter table within a section */
+.roster-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  margin-top: 0;
+}
+
+/* Override the global dark th for this table */
+.roster-table th {
+  background: transparent;
+  color: #888;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  font-weight: 700;
+  padding: 4px 0;
+  border-bottom: 1px solid #eee;
+}
+
+.roster-table td {
+  padding: 7px 0;
+  border-bottom: 1px solid #f5f5f5;
+}
+
+.roster-table tr:last-child td {
+  border-bottom: none;
+}
+
+.roster-table tr:hover {
+  background: #fafafa;
+}
+
+/* Rank display variants */
+.rank-champion {
+  color: #d4af37;
+  font-weight: 700;
+}
+
+.rank-ranked {
+  color: #444;
+}
+
+.rank-unranked {
+  color: #bbb;
+}

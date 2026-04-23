@@ -16,6 +16,8 @@
     <div class="page-header">
       <!-- League name injected by league.js -->
       <h1 id="leagueName"></h1>
+      <!-- Rosters link injected by league.js once draft has started -->
+      <div class="page-header-actions" id="headerActions"></div>
     </div>
 
     <!-- League details grid (format, draft, start date) -->
@@ -32,6 +34,12 @@
         <span class="invite-code-text" id="inviteCodeDisplay"></span>
         <button class="copy-btn" id="copyInviteBtn">Copy</button>
       </div>
+    </div>
+
+    <!-- Draft section - state rendered by league.js based on draft_started / draft_completed -->
+    <div class="section" id="draftSection">
+      <h2>Draft</h2>
+      <div id="draftContent"></div>
     </div>
 
     <!-- Member list - populated by league.js -->
