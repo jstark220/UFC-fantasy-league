@@ -84,9 +84,14 @@ async function initLeague() {
   // ---- Render nav links in the page header ----
   // Standings is always visible. Rosters and Lineup appear once the draft starts.
   var navHtml = '<a href="standings.html?id=' + leagueId + '" class="btn-secondary">Standings</a>';
+  if (league.draft_started && !league.draft_completed) {
+    navHtml += '<a href="draft.html?id=' + leagueId + '" class="btn-gold">Draft Room</a>';
+  }
   if (league.draft_started) {
     navHtml += '<a href="roster.html?id=' + leagueId + '" class="btn-secondary">Rosters</a>';
-    navHtml += '<a href="lineup.html?id=' + leagueId + '" class="btn-gold">Lineup</a>';
+    if (league.draft_completed) {
+      navHtml += '<a href="lineup.html?id=' + leagueId + '" class="btn-gold">Lineup</a>';
+    }
   }
   if (isCommissioner && league.draft_started) {
     navHtml += '<a href="score-event.html?league=' + leagueId + '" class="btn-secondary">Score Event</a>';
