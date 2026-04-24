@@ -3,125 +3,324 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>League - UFC Fantasy League</title>
-  <link rel="stylesheet" href="css/styles.css">
+
+  <script src="js/theme.js"></script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="styles/tokens.css">
+  <link rel="stylesheet" href="styles/components.css">
+
+  <title>League - Knockdown Fantasy</title>
 </head>
 <body>
 
-  <!-- Hidden until auth check and data load complete -->
-  <div class="page" id="pageContent" style="display: none;">
+  <!-- Hidden until auth check and membership verification complete -->
+  <div class="dashboard-page" id="pageContent" style="display: none;">
 
-    <a href="my-leagues.html" class="back-link">← My Leagues</a>
+    <!-- Sticky nav -->
+    <nav class="top-nav">
+      <a href="index.html" class="top-nav__logo">
+        <span class="kf-red">Knockdown</span> Fantasy
+      </a>
+      <div class="top-nav__links">
+        <a href="dashboard.html" class="btn-ghost">← Dashboard</a>
+      </div>
+      <div class="top-nav__actions">
+        <button class="btn-theme" onclick="toggleTheme()" aria-label="Toggle theme">☾</button>
+        <button id="globalLogoutBtn" class="btn-ghost" onclick="logOut()">Log out</button>
+      </div>
+    </nav>
 
-    <div class="page-header">
-      <!-- League name injected by league.js -->
-      <h1 id="leagueName"></h1>
-      <!-- Rosters link injected by league.js once draft has started -->
-      <div class="page-header-actions" id="headerActions"></div>
-    </div>
-
-    <!-- League details grid (format, draft, start date) -->
-    <div class="section">
-      <h2>Details</h2>
-      <div class="detail-grid" id="leagueDetails"></div>
-    </div>
-
-    <!-- Invite code section - only shown to the commissioner by league.js -->
-    <div class="section" id="inviteSection" style="display: none;">
-      <h2>Invite Code</h2>
-      <p style="font-size: 0.9rem; color: #666;">Share this code with managers you want to invite.</p>
-      <div class="invite-code-box">
-        <span class="invite-code-text" id="inviteCodeDisplay"></span>
-        <button class="copy-btn" id="copyInviteBtn">Copy</button>
+    <!-- ================================================================
+         LEAGUE HEADER
+         League name on the left. Contextual action buttons (tab nav)
+         injected by league.js on the right. Kept structurally unchanged.
+         ================================================================ -->
+    <div class="league-header">
+      <div class="league-header__inner">
+        <h1 class="league-header__name" id="leagueName"></h1>
+        <div class="league-header__actions" id="headerActions"></div>
       </div>
     </div>
 
-    <!-- Draft section - state rendered by league.js based on draft_started / draft_completed -->
-    <div class="section" id="draftSection">
-      <h2>Draft</h2>
-      <div id="draftContent"></div>
+    <!-- Page body -->
+    <div class="dashboard-body">
+
+      <!-- ================================================================
+           THIS WEEK CARD
+           Full-width event banner. Cage-grid background. Crimson top border.
+           Hardcoded to UFC 329 for now — will be wired to live event data.
+           ================================================================ -->
+      <div class="this-week-card">
+        <div class="this-week-card__event">
+          <p class="this-week-card__eyebrow">Next Event</p>
+          <p class="this-week-card__name">UFC 329</p>
+          <p class="this-week-card__date">Saturday, May 3 &middot; T-Mobile Arena, Las Vegas</p>
+          <p class="this-week-card__matchup">Makhachev vs. Tsarukyan II</p>
+        </div>
+        <div class="this-week-card__right">
+          <div class="this-week-card__countdown">
+            <div class="countdown-unit">
+              <span class="countdown-unit__value" id="twDays">--</span>
+              <span class="countdown-unit__label">Days</span>
+            </div>
+            <div class="countdown-unit">
+              <span class="countdown-unit__value" id="twHours">--</span>
+              <span class="countdown-unit__label">Hours</span>
+            </div>
+            <div class="countdown-unit">
+              <span class="countdown-unit__value" id="twMins">--</span>
+              <span class="countdown-unit__label">Mins</span>
+            </div>
+          </div>
+          <p class="this-week-card__deadline">Lineup locks at first prelim</p>
+        </div>
+      </div>
+
+      <!-- ================================================================
+           LIVE ROW: TOP PERFORMERS + FREE AGENTS
+           Two-panel half-width layout. Left: compact performer rows for
+           last event's top scorers + roster link. Right: top available
+           free agents + waivers link. Both wired to real data later.
+           ================================================================ -->
+      <div class="league-live-row">
+
+        <!-- Left: top performers -->
+        <div class="league-live-panel">
+          <p class="section-label">Top Performers &middot; UFC 327</p>
+
+          <div class="performer-row performer-row--gold">
+            <span class="performer-row__rank">1</span>
+            <div class="performer-row__photo-wrap">
+              <img class="performer-row__photo" src="https://ufc.com/images/styles/athlete_bio_full_body/s3/2025-01/7/MAKHACHEV_ISLAM_L_BELT_01-18.png?itok=lQCE4AsW" alt="Islam Makhachev" onerror="this.style.display='none'">
+            </div>
+            <div class="performer-row__info">
+              <span class="performer-row__name">Islam Makhachev</span>
+              <span class="performer-row__division">Lightweight</span>
+            </div>
+            <div class="performer-row__right">
+              <span class="performer-row__pts">186</span>
+              <span class="performer-row__owner">Stark 1</span>
+            </div>
+          </div>
+
+          <div class="performer-row performer-row--silver">
+            <span class="performer-row__rank">2</span>
+            <div class="performer-row__photo-wrap">
+              <img class="performer-row__photo" src="https://ufc.com/images/styles/athlete_bio_full_body/s3/2025-03/PEREIRA_ALEX_L.png?itok=bcJxsjY3" alt="Alex Pereira" onerror="this.style.display='none'">
+            </div>
+            <div class="performer-row__info">
+              <span class="performer-row__name">Alex Pereira</span>
+              <span class="performer-row__division">Light Heavyweight</span>
+            </div>
+            <div class="performer-row__right">
+              <span class="performer-row__pts">142</span>
+              <span class="performer-row__owner">Stark 2</span>
+            </div>
+          </div>
+
+          <div class="performer-row performer-row--bronze">
+            <span class="performer-row__rank">3</span>
+            <div class="performer-row__photo-wrap">
+              <img class="performer-row__photo" src="https://ufc.com/images/styles/athlete_bio_full_body/s3/2024-10/TOPURIA_ILIA_L_BELT_10-26.png?itok=63v_RyKk" alt="Ilia Topuria" onerror="this.style.display='none'">
+            </div>
+            <div class="performer-row__info">
+              <span class="performer-row__name">Ilia Topuria</span>
+              <span class="performer-row__division">Lightweight</span>
+            </div>
+            <div class="performer-row__right">
+              <span class="performer-row__pts">124</span>
+              <span class="performer-row__owner">Stark 1</span>
+            </div>
+          </div>
+
+          <div class="performer-row">
+            <span class="performer-row__rank">4</span>
+            <div class="performer-row__photo-wrap">
+              <img class="performer-row__photo" src="https://ufc.com/images/styles/athlete_bio_full_body/s3/2025-10/JONES_JON_L.png?itok=vRjCFFdm" alt="Jon Jones" onerror="this.style.display='none'">
+            </div>
+            <div class="performer-row__info">
+              <span class="performer-row__name">Jon Jones</span>
+              <span class="performer-row__division">Heavyweight</span>
+            </div>
+            <div class="performer-row__right">
+              <span class="performer-row__pts">112</span>
+              <span class="performer-row__owner">Stark 3</span>
+            </div>
+          </div>
+
+          <div class="performer-row">
+            <span class="performer-row__rank">5</span>
+            <div class="performer-row__photo-wrap">
+              <img class="performer-row__photo" src="https://ufc.com/images/styles/athlete_bio_full_body/s3/2025-01/5/POIRIER_DUSTIN_L_06-01.png?itok=-a4s9rA3" alt="Dustin Poirier" onerror="this.style.display='none'">
+            </div>
+            <div class="performer-row__info">
+              <span class="performer-row__name">Dustin Poirier</span>
+              <span class="performer-row__division">Lightweight</span>
+            </div>
+            <div class="performer-row__right">
+              <span class="performer-row__pts">98</span>
+              <span class="performer-row__owner">Stark 2</span>
+            </div>
+          </div>
+
+          <a href="#" class="btn-secondary league-live-panel__cta" id="rosterLink">View my roster &rarr;</a>
+        </div>
+
+        <!-- Right: top free agents -->
+        <div class="league-live-panel">
+          <p class="section-label">Top Free Agents</p>
+
+          <div class="free-agent-row">
+            <div class="free-agent-row__photo-wrap">
+              <img class="free-agent-row__photo" src="https://ufc.com/images/styles/athlete_bio_full_body/s3/2026-01/OMALLEY_SEAN_L_01-24.png?itok=rrhehnzb" alt="Sean O'Malley" onerror="this.style.display='none'">
+            </div>
+            <div class="free-agent-row__info">
+              <span class="free-agent-row__name">Sean O'Malley</span>
+              <span class="free-agent-row__division">Bantamweight</span>
+            </div>
+            <span class="free-agent-row__ovr">91</span>
+            <button class="btn-secondary free-agent-row__add">Add</button>
+          </div>
+
+          <div class="free-agent-row">
+            <div class="free-agent-row__photo-wrap">
+              <img class="free-agent-row__photo" src="https://ufc.com/images/styles/athlete_bio_full_body/s3/2025-08/DU_PLESSIS_DRICUS_L_01-20.png?itok=ci2IaNRH" alt="Dricus du Plessis" onerror="this.style.display='none'">
+            </div>
+            <div class="free-agent-row__info">
+              <span class="free-agent-row__name">Dricus du Plessis</span>
+              <span class="free-agent-row__division">Middleweight</span>
+            </div>
+            <span class="free-agent-row__ovr">90</span>
+            <button class="btn-secondary free-agent-row__add">Add</button>
+          </div>
+
+          <div class="free-agent-row">
+            <div class="free-agent-row__photo-wrap">
+              <img class="free-agent-row__photo" src="https://ufc.com/images/styles/athlete_bio_full_body/s3/2025-10/ASPINALL_TOM_L_BELT_10-25.png?itok=Yf6JFiZI" alt="Tom Aspinall" onerror="this.style.display='none'">
+            </div>
+            <div class="free-agent-row__info">
+              <span class="free-agent-row__name">Tom Aspinall</span>
+              <span class="free-agent-row__division">Heavyweight</span>
+            </div>
+            <span class="free-agent-row__ovr">89</span>
+            <button class="btn-secondary free-agent-row__add">Add</button>
+          </div>
+
+          <div class="free-agent-row">
+            <div class="free-agent-row__photo-wrap">
+              <img class="free-agent-row__photo" src="https://ufc.com/images/styles/athlete_bio_full_body/s3/2022-08/DVALISHVILI_MERAB_L_08-20.png?itok=NSMoEfhc" alt="Merab Dvalishvili" onerror="this.style.display='none'">
+            </div>
+            <div class="free-agent-row__info">
+              <span class="free-agent-row__name">Merab Dvalishvili</span>
+              <span class="free-agent-row__division">Bantamweight</span>
+            </div>
+            <span class="free-agent-row__ovr">87</span>
+            <button class="btn-secondary free-agent-row__add">Add</button>
+          </div>
+
+          <div class="free-agent-row">
+            <div class="free-agent-row__photo-wrap">
+              <img class="free-agent-row__photo" src="https://ufc.com/images/styles/athlete_bio_full_body/s3/2025-11/MUHAMMAD_BELAL_L_11-22.png?itok=GDAHwu0V" alt="Belal Muhammad" onerror="this.style.display='none'">
+            </div>
+            <div class="free-agent-row__info">
+              <span class="free-agent-row__name">Belal Muhammad</span>
+              <span class="free-agent-row__division">Welterweight</span>
+            </div>
+            <span class="free-agent-row__ovr">86</span>
+            <button class="btn-secondary free-agent-row__add">Add</button>
+          </div>
+
+          <a href="#" class="btn-secondary league-live-panel__cta" id="waiverLink">Browse all free agents &rarr;</a>
+        </div>
+
+      </div>
+
+      <!-- ================================================================
+           LEAGUE INFO (secondary — demoted below the live content)
+           Two-column layout: details + draft left, invite + managers right.
+           ================================================================ -->
+      <div class="league-info-row">
+
+        <!-- Left: league details + draft -->
+        <div class="league-info-card">
+          <p class="section-label">League Info</p>
+          <div class="detail-grid" id="leagueDetails"></div>
+          <div id="draftContent"></div>
+          <a href="#" class="btn-secondary" id="settingsLink" style="display: block; margin-top: var(--space-4); text-align: center;">League Settings &rarr;</a>
+        </div>
+
+        <!-- Right: invite code (commissioner only) + managers -->
+        <div class="league-info-card">
+          <p class="section-label">
+            Managers
+            <span class="section-label__count">
+              (<span id="memberCount">0</span> / <span id="maxManagers">8</span>)
+            </span>
+          </p>
+
+          <!-- Invite code: shown by league.js for commissioners -->
+          <div id="inviteSection" style="display: none;">
+            <p class="league-section__sub">Share this code with managers you want to invite.</p>
+            <div class="invite-code-box">
+              <span class="invite-code-text" id="inviteCodeDisplay"></span>
+              <button class="copy-btn" id="copyInviteBtn">Copy</button>
+            </div>
+          </div>
+
+          <table class="league-table" id="memberTable">
+            <thead>
+              <tr>
+                <th>Team Name</th>
+                <th>Role</th>
+                <th id="actionsHeader" style="display: none;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="memberTableBody"></tbody>
+          </table>
+        </div>
+
+      </div>
+
     </div>
-
-    <!-- Member list - populated by league.js -->
-    <div class="section">
-      <h2>Members (<span id="memberCount">0</span> / <span id="maxManagers">8</span>)</h2>
-      <table id="memberTable">
-        <thead>
-          <tr>
-            <th>Team Name</th>
-            <th>Role</th>
-            <!-- Actions column header inserted by JS if user is commissioner -->
-            <th id="actionsHeader" style="display: none;">Actions</th>
-          </tr>
-        </thead>
-        <tbody id="memberTableBody"></tbody>
-      </table>
-    </div>
-
-    <!-- ================================================================
-         SCORING RULES v1.2 (static - these cannot be customized per PRD)
-         ================================================================ -->
-    <div class="section">
-      <h2>Scoring Rules (v1.2)</h2>
-
-      <p style="font-size: 0.85rem; color: #666; margin-bottom: 0.5rem;">Base scoring (applied to every fight)</p>
-      <table>
-        <thead><tr><th>Stat</th><th>Points</th></tr></thead>
-        <tbody>
-          <tr><td>Significant strike landed</td><td>+0.1</td></tr>
-          <tr><td>Takedown</td><td>+1.0</td></tr>
-          <tr><td>Reversal</td><td>+1.0</td></tr>
-          <tr><td>Knockdown</td><td>+2.0</td></tr>
-          <tr><td>Control time (per second)</td><td>+0.01</td></tr>
-        </tbody>
-      </table>
-
-      <p style="font-size: 0.85rem; color: #666; margin: 1.25rem 0 0.5rem;">Win bonuses</p>
-      <table>
-        <thead><tr><th>Outcome</th><th>Points</th></tr></thead>
-        <tbody>
-          <tr><td>Round 1 finish</td><td>+18</td></tr>
-          <tr><td>Round 2 finish</td><td>+14</td></tr>
-          <tr><td>Round 3 finish</td><td>+9</td></tr>
-          <tr><td>Round 4 or 5 finish</td><td>+8</td></tr>
-          <tr><td>Decision win</td><td>+6</td></tr>
-          <tr><td>Quick win bonus (under 60s in R1)</td><td>+5 additional</td></tr>
-        </tbody>
-      </table>
-
-      <p style="font-size: 0.85rem; color: #666; margin: 1.25rem 0 0.5rem;">League bonuses</p>
-      <table>
-        <thead><tr><th>Event</th><th>Points</th></tr></thead>
-        <tbody>
-          <tr><td>Performance of the Night</td><td>+6</td></tr>
-          <tr><td>Fight of the Night (both fighters)</td><td>+4</td></tr>
-          <tr><td>Divisional title win</td><td>+10</td></tr>
-          <tr><td>Successful title defense</td><td>+5</td></tr>
-          <tr><td>BMF or interim title win</td><td>+5</td></tr>
-          <tr><td>Successful BMF or interim defense</td><td>+3</td></tr>
-          <tr><td>Top-5 ranked opponent win</td><td>+4</td></tr>
-          <tr><td>Top-10 ranked opponent win</td><td>+2</td></tr>
-          <tr><td>Top-15 ranked opponent win</td><td>+1</td></tr>
-        </tbody>
-      </table>
-
-      <p style="font-size: 0.85rem; color: #666; margin: 1.25rem 0 0.5rem;">Card position multipliers</p>
-      <table>
-        <thead><tr><th>Position</th><th>Multiplier</th></tr></thead>
-        <tbody>
-          <tr><td>Main event</td><td>1.2x</td></tr>
-          <tr><td>Co-main event</td><td>1.1x</td></tr>
-          <tr><td>All other fights</td><td>1.0x</td></tr>
-        </tbody>
-      </table>
-    </div>
-
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/supabase-config.js"></script>
   <script src="js/auth-guard.js"></script>
   <script src="js/league.js"></script>
+
+  <script>
+    // Theme toggle icon sync
+    document.querySelectorAll('.btn-theme').forEach(function(btn) {
+      var theme = document.documentElement.getAttribute('data-theme');
+      btn.textContent = theme === 'light' ? '☀' : '☾';
+    });
+
+    // Countdown to UFC 329 main card (PDT)
+    (function () {
+      var eventDate = new Date('2026-05-03T20:00:00-07:00');
+
+      function updateCountdown() {
+        var diff = eventDate - Date.now();
+        if (diff <= 0) {
+          document.getElementById('twDays').textContent  = '00';
+          document.getElementById('twHours').textContent = '00';
+          document.getElementById('twMins').textContent  = '00';
+          return;
+        }
+        document.getElementById('twDays').textContent  = Math.floor(diff / 86400000);
+        document.getElementById('twHours').textContent = String(Math.floor((diff % 86400000) / 3600000)).padStart(2, '0');
+        document.getElementById('twMins').textContent  = String(Math.floor((diff % 3600000)  / 60000)).padStart(2, '0');
+      }
+
+      updateCountdown();
+      setInterval(updateCountdown, 60000);
+    }());
+  </script>
 
 </body>
 </html>

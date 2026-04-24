@@ -103,7 +103,7 @@ async function initJoinLeague() {
       if (joinError) throw joinError;
 
       // Joined successfully - go to the league list
-      window.location.href = 'my-leagues.html';
+      window.location.href = 'dashboard.html';
 
     } catch (err) {
       showMessage(err.message, 'error');

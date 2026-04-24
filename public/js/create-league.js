@@ -141,7 +141,7 @@ async function initCreateLeague() {
       if (memberError) throw memberError;
 
       // Both inserts succeeded - go to the league list
-      window.location.href = 'my-leagues.html';
+      window.location.href = 'dashboard.html';
 
     } catch (err) {
       showMessage(err.message, 'error');

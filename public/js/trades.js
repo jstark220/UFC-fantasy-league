@@ -36,7 +36,7 @@ async function initTrades() {
   if (!user) return;
 
   leagueId = new URLSearchParams(window.location.search).get('id');
-  if (!leagueId) { window.location.href = 'my-leagues.html'; return; }
+  if (!leagueId) { window.location.href = 'dashboard.html'; return; }
 
   document.getElementById('leagueLink').href = 'league.html?id=' + leagueId;
 
@@ -53,13 +53,13 @@ async function initTrades() {
       .order('proposed_at', { ascending: false })
   ]);
 
-  if (leagueRes.error || !leagueRes.data) { window.location.href = 'my-leagues.html'; return; }
+  if (leagueRes.error || !leagueRes.data) { window.location.href = 'dashboard.html'; return; }
 
   league  = leagueRes.data;
   members = membersRes.data || [];
 
   const myMember = members.find(function(m) { return m.user_id === user.id; });
-  if (!myMember) { window.location.href = 'my-leagues.html'; return; }
+  if (!myMember) { window.location.href = 'dashboard.html'; return; }
   myMemberId = myMember.id;
 
   // Build fighter lookup map

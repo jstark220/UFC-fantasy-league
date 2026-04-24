@@ -9,7 +9,7 @@
 //   3. Review the computed score preview per manager.
 //   4. Click "Save Scores" to upsert rows into the scores table.
 //
-// URL params: ?league=LEAGUE_UUID  (redirects to my-leagues.html if missing)
+// URL params: ?league=LEAGUE_UUID  (redirects to dashboard.html if missing)
 // Depends on supabaseClient (supabase-config.js) and requireAuth (auth-guard.js).
 // ========================================================================
 
@@ -52,7 +52,7 @@ async function initScoreEvent() {
   if (!user) return;
 
   leagueId = new URLSearchParams(window.location.search).get('league');
-  if (!leagueId) { window.location.href = 'my-leagues.html'; return; }
+  if (!leagueId) { window.location.href = 'dashboard.html'; return; }
 
   document.getElementById('leagueLink').href = 'league.html?id=' + leagueId;
 
@@ -74,7 +74,7 @@ async function initScoreEvent() {
   ]);
 
   if (leagueRes.error || !leagueRes.data) {
-    window.location.href = 'my-leagues.html';
+    window.location.href = 'dashboard.html';
     return;
   }
 

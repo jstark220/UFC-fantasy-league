@@ -2,7 +2,7 @@
 // LEAGUE PAGE LOGIC
 // Loads and displays a single league by ID (from the URL query param ?id=).
 // Commissioner sees the invite code, draft controls, and remove-member buttons.
-// Non-members are redirected to my-leagues.html.
+// Non-members are redirected to dashboard.html.
 // Depends on supabaseClient (supabase-config.js) and requireAuth (auth-guard.js).
 // ========================================================================
 
@@ -28,7 +28,7 @@ async function initLeague() {
   // Read the league ID from the URL query string (?id=UUID)
   const leagueId = new URLSearchParams(window.location.search).get('id');
   if (!leagueId) {
-    window.location.href = 'my-leagues.html';
+    window.location.href = 'dashboard.html';
     return;
   }
   leagueIdRef = leagueId;
@@ -43,7 +43,7 @@ async function initLeague() {
 
   if (leagueError || !league) {
     // RLS returned nothing, meaning this user is not a member (or the league doesn't exist)
-    window.location.href = 'my-leagues.html';
+    window.location.href = 'dashboard.html';
     return;
   }
   leagueData = league;
@@ -56,7 +56,7 @@ async function initLeague() {
     .eq('league_id', leagueId);
 
   if (membersError) {
-    window.location.href = 'my-leagues.html';
+    window.location.href = 'dashboard.html';
     return;
   }
 
@@ -65,7 +65,7 @@ async function initLeague() {
   // This client-side check is an extra safety layer.
   const isMember = members.some(function(m) { return m.user_id === user.id; });
   if (!isMember) {
-    window.location.href = 'my-leagues.html';
+    window.location.href = 'dashboard.html';
     return;
   }
   membersData = members;
@@ -76,23 +76,28 @@ async function initLeague() {
   document.getElementById('pageContent').style.display = 'block';
 
   // Update the browser tab title
-  document.title = league.name + ' - UFC Fantasy League';
+  document.title = league.name + ' - Knockdown Fantasy';
 
   // ---- Render league name ----
   document.getElementById('leagueName').textContent = league.name;
+
+  // ---- Wire roster, free agents, and stats links ----
+  document.getElementById('rosterLink').href  = 'roster.html?id='    + leagueId;
+  document.getElementById('waiverLink').href  = 'waivers.html?id='   + leagueId;
+  document.getElementById('settingsLink').href = 'league-settings.html?id=' + leagueId;
 
   // ---- Render nav links in the page header ----
   // Standings is always visible. Rosters and Lineup appear once the draft starts.
   var navHtml = '<a href="standings.html?id=' + leagueId + '" class="btn-secondary">Standings</a>';
   if (league.draft_started && !league.draft_completed) {
-    navHtml += '<a href="draft.html?id=' + leagueId + '" class="btn-gold">Draft Room</a>';
+    navHtml += '<a href="draft.html?id=' + leagueId + '" class="btn-primary">Draft Room</a>';
   }
   if (league.draft_started) {
     navHtml += '<a href="roster.html?id=' + leagueId + '" class="btn-secondary">Rosters</a>';
     navHtml += '<a href="waivers.html?id=' + leagueId + '" class="btn-secondary">Waivers</a>';
     navHtml += '<a href="trades.html?id=' + leagueId + '" class="btn-secondary">Trades</a>';
     if (league.draft_completed) {
-      navHtml += '<a href="lineup.html?id=' + leagueId + '" class="btn-gold">Lineup</a>';
+      navHtml += '<a href="lineup.html?id=' + leagueId + '" class="btn-primary">Lineup</a>';
     }
   }
   if (isCommissioner && league.draft_started) {
@@ -156,14 +161,14 @@ function renderDraftSection() {
   if (leagueData.draft_completed) {
     el.innerHTML =
       '<p class="draft-status-note">The draft is complete.</p>' +
-      '<a href="draft.html?id=' + leagueIdRef + '" class="btn-gold">View Draft Board</a>';
+      '<a href="draft.html?id=' + leagueIdRef + '" class="btn-secondary">View Draft Board</a>';
     return;
   }
 
   if (leagueData.draft_started) {
     el.innerHTML =
       '<p class="draft-status-note">Draft is currently in progress.</p>' +
-      '<a href="draft.html?id=' + leagueIdRef + '" class="btn-gold">Enter Draft Room</a>';
+      '<a href="draft.html?id=' + leagueIdRef + '" class="btn-primary">Enter Draft Room</a>';
     return;
   }
 
@@ -180,7 +185,7 @@ function renderDraftSection() {
       '<div id="draftOrderPreview">' + orderHtml + '</div>' +
       '<div class="draft-actions">' +
         '<button class="btn-secondary" id="randomizeBtn">Randomize Order</button>' +
-        '<button class="btn-gold" id="startDraftBtn"' + startDisabled + '>Start Draft</button>' +
+        '<button class="btn-primary" id="startDraftBtn"' + startDisabled + '>Start Draft</button>' +
       '</div>';
 
     document.getElementById('randomizeBtn').addEventListener('click', randomizeDraftOrder);

@@ -46,7 +46,7 @@ async function initLineup() {
   if (!user) return;
 
   leagueId = new URLSearchParams(window.location.search).get('id');
-  if (!leagueId) { window.location.href = 'my-leagues.html'; return; }
+  if (!leagueId) { window.location.href = 'dashboard.html'; return; }
 
   document.getElementById('leagueLink').href = 'league.html?id=' + leagueId;
 
@@ -72,7 +72,7 @@ async function initLineup() {
   ]);
 
   if (leagueRes.error || !leagueRes.data) {
-    window.location.href = 'my-leagues.html';
+    window.location.href = 'dashboard.html';
     return;
   }
 
@@ -81,7 +81,7 @@ async function initLineup() {
 
   // Verify the current user is a member
   const myMember = members.find(function(m) { return m.user_id === user.id; });
-  if (!myMember) { window.location.href = 'my-leagues.html'; return; }
+  if (!myMember) { window.location.href = 'dashboard.html'; return; }
   myMemberId = myMember.id;
 
   document.title = 'Lineup - ' + league.name;

@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <script src="js/theme.js"></script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="styles/tokens.css">
+  <link rel="stylesheet" href="styles/components.css">
+
+  <title>League Settings - Knockdown Fantasy</title>
+</head>
+<body>
+
+  <div class="dashboard-page" id="pageContent" style="display: none;">
+
+    <nav class="top-nav">
+      <a href="index.html" class="top-nav__logo">
+        <span class="kf-red">Knockdown</span> Fantasy
+      </a>
+      <div class="top-nav__links">
+        <a href="#" class="btn-ghost" id="backToLeague">← Back to League</a>
+      </div>
+      <div class="top-nav__actions">
+        <button class="btn-theme" onclick="toggleTheme()" aria-label="Toggle theme">☾</button>
+        <button id="globalLogoutBtn" class="btn-ghost" onclick="logOut()">Log out</button>
+      </div>
+    </nav>
+
+    <div class="league-header">
+      <div class="league-header__inner">
+        <h1 class="league-header__name" id="leagueName"></h1>
+        <p class="league-settings__subtitle">League Settings</p>
+      </div>
+    </div>
+
+    <div class="dashboard-body">
+
+      <!-- Status message (save confirmation or error) -->
+      <div id="settingsMessage" class="settings-message" style="display: none;"></div>
+
+      <div class="settings-grid">
+
+        <!-- Left: editable league settings -->
+        <div class="league-info-card">
+          <p class="section-label">General</p>
+
+          <form id="settingsForm">
+
+            <div class="form-group">
+              <label class="form-label" for="inputName">League Name</label>
+              <input class="form-input" type="text" id="inputName" maxlength="60" required>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="inputFormat">Format</label>
+              <select class="form-input" id="inputFormat">
+                <option value="season">Season-Long</option>
+                <option value="dynasty">Dynasty</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="inputDraftFormat">Draft Format</label>
+              <select class="form-input" id="inputDraftFormat">
+                <option value="snake">Snake Draft</option>
+                <option value="auction">Auction Draft</option>
+              </select>
+              <!-- Locked once the draft has started -->
+              <p class="form-hint" id="draftFormatHint" style="display: none;">Locked after the draft starts.</p>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="inputStartDate">Season Start Date</label>
+              <input class="form-input" type="date" id="inputStartDate">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="inputMaxManagers">Max Managers</label>
+              <input class="form-input" type="number" id="inputMaxManagers" min="2" max="16">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="inputRosterSize">Roster Size</label>
+              <input class="form-input" type="number" id="inputRosterSize" min="5" max="30">
+              <p class="form-hint" id="rosterSizeHint" style="display: none;">Locked after the draft starts.</p>
+            </div>
+
+            <!-- Save button: visible to commissioner only, hidden by JS for members -->
+            <div id="saveSection">
+              <button type="submit" class="btn-primary" id="saveBtn">Save Changes</button>
+            </div>
+
+          </form>
+        </div>
+
+        <!-- Right: invite code + danger zone -->
+        <div class="league-info-card">
+
+          <!-- Invite code: commissioner only -->
+          <div id="inviteSection" style="display: none;">
+            <p class="section-label">Invite Code</p>
+            <p class="form-hint">Share this with managers you want to invite.</p>
+            <div class="invite-code-box">
+              <span class="invite-code-text" id="inviteCodeDisplay"></span>
+              <button type="button" class="copy-btn" id="copyInviteBtn">Copy</button>
+            </div>
+          </div>
+
+          <!-- Danger zone: commissioner only, shown after invite section -->
+          <div id="dangerSection" style="display: none;">
+            <p class="section-label" style="margin-top: var(--space-6); color: var(--accent-crimson);">Danger Zone</p>
+            <p class="form-hint">Deleting the league is permanent and cannot be undone.</p>
+            <button type="button" class="btn-danger" id="deleteLeagueBtn">Delete League</button>
+          </div>
+
+          <!-- Members see a read-only note -->
+          <div id="memberNote" style="display: none;">
+            <p class="section-label">Info</p>
+            <p class="form-hint">Only the commissioner can change league settings.</p>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/auth-guard.js"></script>
+  <script src="js/league-settings.js"></script>
+
+  <script>
+    document.querySelectorAll('.btn-theme').forEach(function(btn) {
+      var theme = document.documentElement.getAttribute('data-theme');
+      btn.textContent = theme === 'light' ? '☀' : '☾';
+    });
+  </script>
+
+</body>
+</html>

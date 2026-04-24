@@ -52,7 +52,7 @@ async function initDraft() {
   if (!user) return;
 
   leagueId = new URLSearchParams(window.location.search).get('id');
-  if (!leagueId) { window.location.href = 'my-leagues.html'; return; }
+  if (!leagueId) { window.location.href = 'dashboard.html'; return; }
 
   // Set back link before data arrives so it's ready immediately
   document.getElementById('leagueLink').href = 'league.html?id=' + leagueId;
@@ -81,7 +81,7 @@ async function initDraft() {
   ]);
 
   if (leagueRes.error || !leagueRes.data) {
-    window.location.href = 'my-leagues.html';
+    window.location.href = 'dashboard.html';
     return;
   }
 
@@ -105,7 +105,7 @@ async function initDraft() {
 
   // Identify the current user's league_member_id
   const myMember = members.find(function(m) { return m.user_id === user.id; });
-  if (!myMember) { window.location.href = 'my-leagues.html'; return; }
+  if (!myMember) { window.location.href = 'dashboard.html'; return; }
   myMemberId = myMember.id;
 
   // Populate the division filter dropdown before first render

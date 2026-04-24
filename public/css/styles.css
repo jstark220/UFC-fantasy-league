@@ -268,7 +268,7 @@ tr:hover { background: #f0f0f0; }
 
 /* ========================================================================
    GENERIC PAGE LAYOUT
-   Used by my-leagues.html, league.html, and future interior pages
+   Used by dashboard.html, league.html, and future interior pages
    ======================================================================== */
 
 .page {
@@ -352,7 +352,7 @@ tr:hover { background: #f0f0f0; }
 }
 
 /* ========================================================================
-   LEAGUE LIST (my-leagues.html)
+   LEAGUE LIST (dashboard.html)
    ======================================================================== */
 
 .league-list {

@@ -59,6 +59,36 @@ body {
 .btn-primary:hover    { background: var(--accent-crimson-hover); }
 .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 
+/* Nav Sign Up: resting glow so it reads as the primary action at a glance */
+.top-nav__actions .btn-primary {
+  padding: 10px 20px;
+  box-shadow: 0 0 18px -4px rgba(193, 59, 46, 0.55);
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+.top-nav__actions .btn-primary:hover {
+  box-shadow: 0 0 26px -2px rgba(193, 59, 46, 0.75);
+}
+
+/* Destructive action button — used for remove/delete operations */
+.btn-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--accent-crimson);
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 14px;
+  padding: 6px 14px;
+  border: 1px solid var(--accent-crimson);
+  border-radius: 6px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.15s ease;
+}
+.btn-danger:hover    { background: var(--accent-crimson-subtle); }
+.btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
+
 .btn-secondary {
   display: inline-flex;
   align-items: center;
@@ -97,8 +127,26 @@ body {
   text-decoration: none;
   transition: color 0.15s ease;
   white-space: nowrap;
+  position: relative;
 }
 .btn-ghost:hover { color: var(--text-primary); }
+
+/* Animated underline for nav ghost links — grows from center on hover */
+.top-nav__links .btn-ghost::after {
+  content: '';
+  position: absolute;
+  bottom: 2px;
+  left: 50%;
+  right: 50%;
+  height: 2px;
+  background: var(--accent-crimson);
+  border-radius: 1px;
+  transition: left 0.2s ease, right 0.2s ease;
+}
+.top-nav__links .btn-ghost:hover::after {
+  left: 12px;
+  right: 12px;
+}
 
 /* Small icon button for the theme toggle — sits in the nav */
 .btn-theme {
@@ -159,14 +207,17 @@ body {
 
 .card h1 {
   font-family: var(--font-display);
-  font-size: var(--text-h2);
+  font-size: var(--text-h1);
   color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  line-height: 1;
   margin: 0 0 var(--space-2) 0;
 }
 
 .card .subtitle {
   color: var(--text-secondary);
-  font-size: var(--text-body-sm);
+  font-size: var(--text-body);
   margin: 0 0 var(--space-8) 0;
 }
 
@@ -233,16 +284,33 @@ body {
   top: var(--space-2);
   left: var(--space-2);
   width: 38px;
-  height: 38px;
-  border-radius: 50%;
+  height: 44px;
+  border-radius: 5px;
   background: rgba(14, 14, 16, 0.85);
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  font-family: var(--font-display);
-  font-size: 13px;
-  color: var(--text-primary);
+  gap: 1px;
   border: 1px solid var(--border-strong);
+}
+
+.fighter-card__rating-num {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 400;
+  color: #F5F5F0; /* always white — badge has a dark background in both themes */
+  line-height: 1;
+}
+
+.fighter-card__rating-label {
+  font-family: var(--font-display);
+  font-size: 7px;
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  color: var(--text-tertiary);
+  line-height: 1;
+  text-transform: uppercase;
 }
 
 /* Champion / BMF / Interim badge: top-right corner */
@@ -373,6 +441,10 @@ body {
    FORM ELEMENTS
    ======================================================================== */
 
+.form-group {
+  margin-bottom: var(--space-4);
+}
+
 /* Override styles.css label color with token */
 .form-group label {
   display: block;
@@ -475,13 +547,38 @@ body {
 /* Override styles.css .auth-page which has a hardcoded light background */
 .auth-page {
   background: var(--bg-primary);
+  background-image:
+    repeating-linear-gradient(
+      -45deg,
+      transparent 0px, transparent 28px,
+      rgba(255, 255, 255, 0.02) 28px, rgba(255, 255, 255, 0.02) 29px
+    ),
+    repeating-linear-gradient(
+      45deg,
+      transparent 0px, transparent 28px,
+      rgba(255, 255, 255, 0.02) 28px, rgba(255, 255, 255, 0.02) 29px
+    );
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   padding: var(--space-8) var(--space-4);
   box-sizing: border-box;
+}
+
+[data-theme="light"] .auth-page {
+  background-image:
+    repeating-linear-gradient(
+      -45deg,
+      transparent 0px, transparent 28px,
+      rgba(0, 0, 0, 0.035) 28px, rgba(0, 0, 0, 0.035) 29px
+    ),
+    repeating-linear-gradient(
+      45deg,
+      transparent 0px, transparent 28px,
+      rgba(0, 0, 0, 0.035) 28px, rgba(0, 0, 0, 0.035) 29px
+    );
 }
 
 /* Logo / wordmark link above the auth card */
@@ -496,7 +593,9 @@ body {
   font-family: var(--font-display);
   font-size: 1.25rem;
   color: var(--text-primary);
-  letter-spacing: -0.01em;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  line-height: 1;
 }
 
 /* "Knockdown" highlighted in crimson, "Fantasy" in default text color */
@@ -507,6 +606,19 @@ body {
   max-width: 420px;
   width: 100%;
   padding: var(--space-8);
+  border-top: 2px solid var(--accent-crimson);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.4);
+}
+
+/* Full-width submit button — scoped to auth forms so other btn-primaries are untouched */
+.auth-page form .btn-primary {
+  width: 100%;
+  margin-top: var(--space-2);
+}
+
+/* Theme toggle wrapper below the card */
+.auth-footer {
+  margin-top: var(--space-6);
 }
 
 /* ========================================================================
@@ -543,14 +655,28 @@ body {
 
 .top-nav__logo {
   font-family: var(--font-display);
-  font-size: 1.125rem;
+  font-size: 1.25rem;
   color: var(--text-primary);
   text-decoration: none;
-  letter-spacing: -0.01em;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  line-height: 1;
   flex-shrink: 0;
   margin-right: var(--space-4);
 }
 .top-nav__logo .kf-red { color: var(--accent-crimson); }
+
+/* Thin separator between logo and nav links */
+.top-nav__logo::after {
+  content: '';
+  display: inline-block;
+  width: 1px;
+  height: 16px;
+  background: var(--border-strong);
+  margin-left: var(--space-4);
+  vertical-align: middle;
+  opacity: 0.6;
+}
 
 /* Primary nav links (center-left) */
 .top-nav__links {
@@ -577,36 +703,125 @@ body {
   min-height: 100vh;
 }
 
-/* Content area below the sticky nav */
+/* Welcome header strip — sits between nav and body, slightly elevated bg */
+.dashboard-header {
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+  padding: var(--space-8);
+}
+
+.dashboard-header__inner {
+  max-width: var(--content-max);
+  margin: 0 auto;
+}
+
+.dashboard-welcome__eyebrow {
+  font-size: var(--text-overline);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--accent-crimson);
+  margin: 0 0 var(--space-2) 0;
+}
+
+.dashboard-welcome__name {
+  font-family: var(--font-display);
+  font-size: var(--text-h1);
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  margin: 0 0 var(--space-2) 0;
+}
+
+.dashboard-welcome__sub {
+  color: var(--text-secondary);
+  font-size: var(--text-body-sm);
+  margin: 0;
+}
+
+/* Content area below the header strip */
 .dashboard-body {
   max-width: var(--content-max);
   margin: 0 auto;
   padding: var(--space-8);
 }
 
-.dashboard-welcome {
+/* Three-column stat strip */
+.dashboard-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-4);
   margin-bottom: var(--space-8);
 }
 
-.dashboard-welcome h2 {
+.dashboard-stat {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.dashboard-stat__value {
   font-family: var(--font-display);
   font-size: var(--text-h2);
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  line-height: 1;
+}
+
+.dashboard-stat__label {
+  font-size: var(--text-body-sm);
+  color: var(--text-secondary);
+}
+
+/* Empty state for the leagues section */
+.dashboard-empty {
+  background: var(--bg-secondary);
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  padding: var(--space-12);
+  text-align: center;
+}
+
+.dashboard-empty__title {
+  font-size: var(--text-body);
+  font-weight: 600;
   color: var(--text-primary);
   margin: 0 0 var(--space-2) 0;
 }
 
-.dashboard-welcome p {
-  color: var(--text-secondary);
+.dashboard-empty__sub {
   font-size: var(--text-body-sm);
-  margin: 0;
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-6) 0;
 }
 
-/* Quick-access card linked to My Leagues */
-.dashboard-cta-card {
+.dashboard-empty__actions {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+/* ========================================================================
+   LEAGUE PAGE
+   ======================================================================== */
+
+/* Full-width header strip below the nav: league name + action buttons */
+.league-header {
   background: var(--bg-secondary);
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  padding: var(--space-8);
+  border-bottom: 1px solid var(--border-subtle);
+  padding: var(--space-6) var(--space-8);
+}
+
+.league-header__inner {
+  max-width: var(--content-max);
+  margin: 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -614,16 +829,614 @@ body {
   flex-wrap: wrap;
 }
 
-.dashboard-cta-card__text h3 {
+.league-header__name {
   font-family: var(--font-display);
-  font-size: var(--text-h3);
+  font-size: var(--text-h1);
   color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  margin: 0;
+}
+
+.league-header__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+/* Generic content section inside the league page body */
+.league-section {
+  margin-bottom: var(--space-8);
+}
+
+.league-section__sub {
+  font-size: var(--text-body-sm);
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-4) 0;
+}
+
+/* Details + invite code side by side on desktop */
+.league-meta-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-6);
+  margin-bottom: var(--space-8);
+}
+
+/* Detail key/value pairs rendered by league.js */
+.detail-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-2) var(--space-6);
+  align-items: baseline;
+}
+
+.detail-label {
+  font-size: var(--text-body-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.detail-value {
+  font-size: var(--text-body-sm);
+  color: var(--text-primary);
+}
+
+/* Invite code display */
+.invite-code-box {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: var(--space-3) var(--space-4);
+}
+
+.invite-code-text {
+  font-family: monospace;
+  font-size: var(--text-body);
+  color: var(--accent-gold);
+  letter-spacing: 0.08em;
+  flex: 1;
+}
+
+.copy-btn {
+  font-family: var(--font-body);
+  font-size: var(--text-body-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  padding: 4px 12px;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+  flex-shrink: 0;
+}
+.copy-btn:hover { color: var(--text-primary); border-color: var(--text-secondary); }
+
+/* Draft section content */
+.draft-status-note {
+  font-size: var(--text-body-sm);
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-4) 0;
+}
+
+.draft-empty {
+  font-size: var(--text-body-sm);
+  color: var(--text-tertiary);
+  font-style: italic;
+  margin: 0 0 var(--space-4) 0;
+}
+
+.draft-actions {
+  display: flex;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.draft-order-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 var(--space-4) 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.draft-order-list li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--text-body-sm);
+  color: var(--text-primary);
+}
+
+.draft-order-pos {
+  font-family: var(--font-display);
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  width: 20px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* Members table */
+.league-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.league-table th {
+  font-size: var(--text-overline);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-tertiary);
+  text-align: left;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.league-table td {
+  font-size: var(--text-body-sm);
+  color: var(--text-primary);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+  vertical-align: middle;
+}
+
+.league-table tr:last-child td { border-bottom: none; }
+
+/* Role badges in the member table */
+.badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: 3px;
+}
+
+.badge-commissioner {
+  background: var(--accent-gold-subtle);
+  color: var(--accent-gold);
+  border: 1px solid rgba(212, 168, 75, 0.3);
+}
+
+.badge-member {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+}
+
+/* Count shown inline in the section label */
+.section-label__count {
+  font-weight: 400;
+  color: var(--text-tertiary);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* ========================================================================
+   THIS WEEK CARD
+   Full-width event banner on the league page. Cage-grid background,
+   crimson top border, left = event info, right = countdown.
+   ======================================================================== */
+
+.this-week-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  min-height: 140px;
+  padding: var(--space-6) var(--space-8);
+  margin-bottom: var(--space-8);
+  background: var(--bg-secondary);
+  background-image:
+    repeating-linear-gradient(
+      -45deg,
+      transparent 0px, transparent 28px,
+      rgba(255, 255, 255, 0.025) 28px, rgba(255, 255, 255, 0.025) 29px
+    ),
+    repeating-linear-gradient(
+      45deg,
+      transparent 0px, transparent 28px,
+      rgba(255, 255, 255, 0.025) 28px, rgba(255, 255, 255, 0.025) 29px
+    );
+  border: 1px solid var(--border-subtle);
+  border-top: 2px solid var(--accent-crimson);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+[data-theme="light"] .this-week-card {
+  background-image:
+    repeating-linear-gradient(
+      -45deg,
+      transparent 0px, transparent 28px,
+      rgba(0, 0, 0, 0.03) 28px, rgba(0, 0, 0, 0.03) 29px
+    ),
+    repeating-linear-gradient(
+      45deg,
+      transparent 0px, transparent 28px,
+      rgba(0, 0, 0, 0.03) 28px, rgba(0, 0, 0, 0.03) 29px
+    );
+}
+
+.this-week-card__event {
+  flex: 0 0 60%;
+  min-width: 0;
+}
+
+.this-week-card__eyebrow {
+  font-size: var(--text-overline);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--accent-crimson);
+  margin: 0 0 var(--space-1) 0;
+}
+
+.this-week-card__name {
+  font-family: var(--font-display);
+  font-size: var(--text-h1);
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  line-height: 1;
   margin: 0 0 var(--space-2) 0;
 }
 
-.dashboard-cta-card__text p {
-  color: var(--text-secondary);
+.this-week-card__date {
   font-size: var(--text-body-sm);
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-2) 0;
+}
+
+.this-week-card__matchup {
+  font-family: var(--font-display);
+  font-size: var(--text-h3);
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  margin: 0;
+}
+
+.this-week-card__right {
+  flex: 0 0 40%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+.this-week-card__countdown {
+  display: flex;
+  gap: var(--space-6);
+}
+
+.this-week-card__deadline {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0;
+  text-align: right;
+}
+
+/* ========================================================================
+   LIVE ROW: TOP PERFORMERS + FREE AGENTS
+   Two equal-width panels side by side. Stacks vertically on small screens.
+   ======================================================================== */
+
+.league-live-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-6);
+  margin-top: var(--space-6);
+}
+
+.league-live-panel {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.league-live-panel .section-label {
+  margin: 0 0 var(--space-3) 0;
+}
+
+/* CTA sits below the last row with a separator line */
+.league-live-panel__cta {
+  display: block;
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+  text-align: center;
+  font-size: var(--text-caption);
+}
+
+/* ---- Compact performer rows ---- */
+.performer-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.performer-row:last-of-type { border-bottom: none; }
+
+.performer-row__rank {
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  font-weight: 700;
+  width: 16px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.performer-row--gold   .performer-row__rank { color: var(--accent-gold); }
+.performer-row--silver .performer-row__rank { color: #C8C8C8; }
+.performer-row--bronze .performer-row__rank { color: #B87333; }
+
+.performer-row__photo-wrap {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--bg-tertiary);
+  flex-shrink: 0;
+}
+
+.performer-row__photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+}
+
+.performer-row__info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.performer-row__name {
+  font-size: var(--text-body);
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.performer-row__division {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-weight: 600;
+}
+
+.performer-row__right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.performer-row__pts {
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  font-weight: 700;
+  color: var(--accent-gold);
+}
+
+.performer-row__owner {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+}
+
+/* ---- Free agent rows ---- */
+.free-agent-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.free-agent-row:last-of-type { border-bottom: none; }
+
+.free-agent-row__photo-wrap {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--bg-tertiary);
+  flex-shrink: 0;
+}
+
+.free-agent-row__photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+}
+
+.free-agent-row__info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.free-agent-row__name {
+  font-size: var(--text-body);
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.free-agent-row__division {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-weight: 600;
+}
+
+.free-agent-row__ovr {
+  font-family: var(--font-body);
+  font-size: var(--text-caption);
+  font-weight: 700;
+  color: #F5F5F0;
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+  padding: 2px 7px;
+  flex-shrink: 0;
+}
+
+.free-agent-row__add {
+  flex-shrink: 0;
+  padding: 3px 10px;
+  font-size: var(--text-caption);
+  line-height: 1.4;
+}
+
+/* ========================================================================
+   LEAGUE INFO (secondary, bottom section)
+   Two-column layout: details + draft left, invite + managers right.
+   ======================================================================== */
+
+.league-info-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-6);
+  margin-top: var(--space-8);
+}
+
+.league-info-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: var(--space-6);
+}
+
+.league-info-card .section-label {
+  margin-bottom: var(--space-4);
+}
+
+.league-info-card .detail-grid {
+  margin-bottom: var(--space-6);
+}
+
+.league-info-card .invite-code-box {
+  margin-bottom: var(--space-6);
+}
+
+/* ========================================================================
+   LEAGUE SETTINGS PAGE
+   ======================================================================== */
+
+/* Subtitle under the league name in the header */
+.league-settings__subtitle {
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  color: var(--text-tertiary);
+  margin: var(--space-1) 0 0 0;
+}
+
+/* Two-column layout matching league-info-row but without the top margin */
+.settings-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-6);
+}
+
+/* Small hint text below form inputs */
+.form-hint {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  margin: var(--space-1) 0 0 0;
+}
+
+/* Inline status banner (save confirmation or error) */
+.settings-message {
+  padding: var(--space-3) var(--space-4);
+  border-radius: 6px;
+  font-size: var(--text-body-sm);
+  font-weight: 600;
+  margin-bottom: var(--space-4);
+}
+
+.settings-message--success {
+  background: rgba(34, 197, 94, 0.12);
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  color: #4ade80;
+}
+
+.settings-message--error {
+  background: rgba(193, 59, 46, 0.12);
+  border: 1px solid rgba(193, 59, 46, 0.35);
+  color: var(--accent-crimson);
+}
+
+/* League rows shown on the dashboard when the user has leagues */
+.dashboard-league-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.dashboard-league-row {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: var(--space-6);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+  flex-wrap: wrap;
+  transition: border-color 0.15s ease;
+}
+
+.dashboard-league-row:hover { border-color: var(--border-strong); }
+
+.dashboard-league-row__name {
+  font-family: var(--font-display);
+  font-size: var(--text-h3);
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  margin: 0 0 var(--space-2) 0;
+}
+
+.dashboard-league-row__meta {
+  font-size: var(--text-body-sm);
+  color: var(--text-secondary);
   margin: 0;
 }
 
@@ -648,16 +1461,35 @@ body {
     repeating-linear-gradient(
       -45deg,
       transparent 0px, transparent 28px,
-      rgba(255, 255, 255, 0.018) 28px, rgba(255, 255, 255, 0.018) 29px
+      rgba(255, 255, 255, 0.045) 28px, rgba(255, 255, 255, 0.045) 29px
     ),
     repeating-linear-gradient(
       45deg,
       transparent 0px, transparent 28px,
-      rgba(255, 255, 255, 0.018) 28px, rgba(255, 255, 255, 0.018) 29px
+      rgba(255, 255, 255, 0.045) 28px, rgba(255, 255, 255, 0.045) 29px
     ),
-    radial-gradient(ellipse 70% 50% at 50% 110%, rgba(193, 59, 46, 0.09) 0%, transparent 70%);
+    radial-gradient(ellipse 70% 50% at 50% 110%, rgba(193, 59, 46, 0.14) 0%, transparent 70%);
   border-bottom: 1px solid var(--border-subtle);
-  padding: var(--space-16) var(--space-8);
+  display: flex;
+  flex-direction: column;
+  min-height: 80vh;
+}
+
+/* Light mode: swap white lines for dark lines so the cage mesh is visible
+   against the warm off-white background */
+[data-theme="light"] .hero {
+  background-image:
+    repeating-linear-gradient(
+      -45deg,
+      transparent 0px, transparent 28px,
+      rgba(0, 0, 0, 0.055) 28px, rgba(0, 0, 0, 0.055) 29px
+    ),
+    repeating-linear-gradient(
+      45deg,
+      transparent 0px, transparent 28px,
+      rgba(0, 0, 0, 0.055) 28px, rgba(0, 0, 0, 0.055) 29px
+    ),
+    radial-gradient(ellipse 70% 50% at 50% 110%, rgba(193, 59, 46, 0.08) 0%, transparent 70%);
 }
 
 /* Inner container: max-width + two-column flex layout */
@@ -675,9 +1507,9 @@ body {
   min-width: 0;
 }
 
-/* Right column: the fight preview card */
+/* Right column: carousel frame — wider to give slides room to breathe */
 .hero__right {
-  flex: 0 0 360px;
+  flex: 0 0 500px;
   min-width: 0;
 }
 
@@ -693,18 +1525,19 @@ body {
 .hero__title {
   font-family: var(--font-display);
   font-size: var(--text-display);
+  font-weight: 400; /* Bebas Neue has only one weight; forcing 700 renders fake-bold */
   color: var(--text-primary);
-  line-height: 1.05;
-  /* Negative tracking on Archivo Black gives it an editorial poster quality
-     instead of the default spacing which reads as auto-generated */
-  letter-spacing: -0.02em;
+  line-height: 0.95;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
   margin: 0 0 var(--space-6) 0;
 }
 
 .hero__title .kf-red { color: var(--accent-crimson); }
 
 .hero__subtitle {
-  font-size: var(--text-h4);
+  font-family: var(--font-body);
+  font-size: 1.125rem;
   color: var(--text-secondary);
   margin: 0 0 var(--space-8) 0;
   line-height: 1.6;
@@ -716,6 +1549,378 @@ body {
   gap: var(--space-3);
   flex-wrap: wrap;
 }
+
+/* ========================================================================
+   HERO CAROUSEL
+   Full-layout crossfade carousel. Each slide has its own two-column
+   content (left = copy, right = product visual). Slides are stacked
+   absolutely inside a flex-filling viewport.
+   ======================================================================== */
+
+/* Viewport fills the hero section's flex space and clips slide overflow */
+.hero-carousel__viewport {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* Each slide fills the full viewport via absolute inset.
+   Inactive slides are invisible; only the active one fades in. */
+.hero-carousel__slide {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  display: flex;
+  align-items: center;
+  padding: var(--space-12) var(--space-8);
+  box-sizing: border-box;
+  opacity: 0;
+  transition: opacity 0.65s ease;
+  pointer-events: none;
+}
+
+.hero-carousel__slide--active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Inner two-column layout: constrained to content-max, same as the rest of the site */
+.hero-carousel__inner {
+  max-width: var(--content-max);
+  width: 100%;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+}
+
+/* Left column (~42%): headline, copy, CTAs */
+.hero-slide__left {
+  flex: 0 0 42%;
+  min-width: 0;
+}
+
+/* Right column (~58%): product visual centered within the column */
+.hero-slide__right {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Arrow buttons: absolutely positioned inside the viewport, appear on hover */
+.hero-carousel__arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  background: rgba(14, 14, 16, 0.75);
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-primary);
+  opacity: 0;
+  transition: opacity 0.2s ease, background 0.2s ease;
+  padding: 0;
+}
+
+.hero:hover .hero-carousel__arrow,
+.hero-carousel__arrow:focus-visible { opacity: 1; }
+
+.hero-carousel__arrow:hover { background: rgba(28, 28, 32, 0.95); }
+
+.hero-carousel__arrow--prev { left: var(--space-4); }
+.hero-carousel__arrow--next { right: var(--space-4); }
+
+/* Pagination dots at the bottom of the hero section */
+.hero-carousel__nav {
+  position: absolute;
+  bottom: var(--space-6);
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--space-3);
+  pointer-events: none; /* let clicks through except on the dots themselves */
+}
+
+.hero-carousel__nav .hero-carousel__dot {
+  pointer-events: auto;
+}
+
+.hero-carousel__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border-strong);
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.hero-carousel__dot--active {
+  background: var(--accent-crimson);
+  transform: scale(1.35);
+}
+
+/* ---- Slide 1: Featured trading card ---- */
+
+/* Larger size, 6-degree rotation, and a stronger drop shadow + glow.
+   Height is explicit (not aspect-ratio) so the info panel has enough room
+   for division + name + record + sparkline without overflow clipping. */
+.fighter-card--featured {
+  width: 260px;
+  height: 440px;
+  transform: rotate(6deg);
+  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.55);
+}
+
+/* 55% photo / 45% info — gives info panel ~175px of content space */
+.fighter-card--featured .fighter-card__photo-wrap { flex: 0 0 55%; }
+
+.fighter-card--featured.fighter-card--champion {
+  animation: gold-pulse-featured 3s ease-in-out infinite;
+}
+
+@keyframes gold-pulse-featured {
+  0%, 100% { box-shadow: 0 32px 80px rgba(0, 0, 0, 0.55), 0 0 30px -4px var(--accent-gold); }
+  50%       { box-shadow: 0 32px 80px rgba(0, 0, 0, 0.55), 0 0 52px  4px var(--accent-gold); }
+}
+
+/* Wrapper that centers the card and gives the rotation room to breathe */
+.roster-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-5);
+}
+
+.roster-preview__card-zone {
+  padding: 20px 32px;
+}
+
+/* ---- Performance sparkline (below the featured card) ---- */
+
+.perf-viz { text-align: center; }
+
+.perf-viz__label {
+  font-size: var(--text-caption);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-tertiary);
+  margin: 0 0 var(--space-2) 0;
+}
+
+/* Bars are DIRECT flex children so height:% resolves against the container's 64px */
+.perf-viz__bars {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 6px;
+  height: 64px;
+}
+
+.perf-viz__bar {
+  width: 28px;
+  background: var(--accent-crimson);
+  border-radius: 3px 3px 0 0;
+  min-height: 4px;
+  opacity: 0.6;
+}
+
+/* Peak bar: gold to highlight the best event */
+.perf-viz__bar--peak {
+  background: var(--accent-gold);
+  opacity: 1;
+}
+
+/* Values row sits directly below the bars, widths match so numbers align */
+.perf-viz__vals {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.perf-viz__val {
+  width: 28px;
+  text-align: center;
+  font-size: 10px;
+  font-family: var(--font-body);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-tertiary);
+  line-height: 1;
+}
+
+/* ---- Card fantasy-points table (replaces bar chart in featured card) ---- */
+
+.card-fp {
+  margin-top: auto;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border-subtle);
+  width: 100%;
+}
+
+.card-fp__label {
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent-crimson);
+  margin: 0 0 4px 0;
+  line-height: 1;
+}
+
+.card-fp__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 5px;
+}
+
+.card-fp__row {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 8.5px;
+  font-family: var(--font-body);
+}
+
+.card-fp__event {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-secondary);
+  font-weight: 400;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card-fp__method {
+  color: var(--text-primary);
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.card-fp__pts {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent-gold);
+  white-space: nowrap;
+  flex-shrink: 0;
+  min-width: 22px;
+  text-align: right;
+}
+
+/* Peak row: points slightly larger and full-brightness gold */
+.card-fp__row--peak .card-fp__pts {
+  font-size: 14px;
+}
+
+.card-fp__summary {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 3px;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 8px;
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+  line-height: 1;
+}
+
+/* ---- Slide 2: League standings mockup ---- */
+
+.standings-mockup {
+  width: 100%;
+  max-width: 580px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+}
+
+/* League name + event context header bar (below the browser chrome) */
+.standings-mockup__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.standings-mockup__league {
+  font-family: var(--font-display);
+  font-size: var(--text-body-sm);
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.standings-mockup__context {
+  font-size: var(--text-caption);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent-crimson);
+}
+
+/* Compact standings table inside the product frame */
+.standings-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-body);
+}
+
+.standings-table th {
+  text-align: left;
+  padding: 8px var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+  font-weight: 700;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+}
+
+.standings-table td {
+  padding: 10px var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: var(--text-body-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.standings-table tr:last-child td { border-bottom: none; }
+
+/* "Your Team" row: subtle crimson tint so the user's position pops */
+.standings-table__row--you td { background: rgba(193, 59, 46, 0.07); }
+
+/* Point delta column: secondary color since it's supporting data */
+.st-delta { color: var(--text-secondary); }
+
+/* Trend arrows: gold=up, crimson=down, tertiary=flat */
+.st-trend        { font-weight: 700; }
+.st-trend--up    { color: var(--accent-gold); }
+.st-trend--flat  { color: var(--text-tertiary); }
+.st-trend--down  { color: var(--accent-crimson); }
 
 /* ---- Fight preview card (right column of the hero) ----
    Shows the next event countdown + main event matchup.
@@ -802,6 +2007,25 @@ body {
   margin: 2px 0;
 }
 
+/* ---- Next event strip ----
+   Full-width horizontal band between the hero and stats strip.
+   Resets the inner event-banner to transparent/borderless so it reads
+   as structured content rather than a floating card. */
+.next-event-strip {
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+  padding: var(--space-6) var(--space-8);
+}
+
+.next-event-strip .event-banner {
+  max-width: var(--content-max);
+  margin: 0 auto;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+}
+
 /* ---- Stats strip ----
    Horizontal credibility bar that anchors the hero with real product numbers.
    Sits between the hero and first content section. */
@@ -864,18 +2088,19 @@ body {
 .step-card__number {
   font-family: var(--font-display);
   font-size: 3.5rem;
-  /* Very muted — decorative, not primary reading */
   color: var(--border-strong);
   line-height: 1;
-  margin: 0 0 var(--space-4) 0;
-  letter-spacing: -0.03em;
+  margin: 0 0 var(--space-3) 0;
+  letter-spacing: 0.02em;
 }
 
 .step-card__title {
   font-family: var(--font-display);
   font-size: var(--text-h3);
   color: var(--text-primary);
-  letter-spacing: -0.01em;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  line-height: 1;
   margin: 0 0 var(--space-3) 0;
 }
 
@@ -934,8 +2159,9 @@ body {
   font-family: var(--font-display);
   font-size: var(--text-h3);
   color: var(--text-primary);
-  letter-spacing: -0.01em;
-  line-height: 1.1;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  line-height: 1.05;
   margin: 0;
 }
 
@@ -969,8 +2195,9 @@ body {
 }
 
 .fight-card-vs__text {
-  font-family: var(--font-display);
+  font-family: var(--font-body);
   font-size: var(--text-body-sm);
+  font-weight: 700;
   color: var(--text-tertiary);
   letter-spacing: 0.2em;
 }
@@ -985,16 +2212,25 @@ body {
   max-width: 88px;
 }
 
-/* ---- Shared home section wrapper ---- */
+/* ---- Shared home section wrapper ----
+   Sections are full-bleed so alt backgrounds form proper color bands.
+   Content inside is constrained to --content-max via inner elements. */
 .home-section {
-  max-width: var(--content-max);
-  margin: 0 auto;
-  padding: var(--space-12) var(--space-8);
+  padding: var(--space-16) var(--space-8);
+  box-sizing: border-box;
 }
 
-.home-section + .home-section {
-  /* Visual breathing room between sections; no full-bleed divider needed */
-  padding-top: 0;
+/* Inner content blocks are all constrained to content-max and centered */
+.home-section__header,
+.how-it-works,
+.scoring-grid,
+.format-stats,
+.format-schedule,
+.fights-list,
+.card-grid {
+  max-width: var(--content-max);
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .home-section__header {
@@ -1014,8 +2250,10 @@ body {
   font-family: var(--font-display);
   font-size: var(--text-h2);
   color: var(--text-primary);
-  letter-spacing: -0.01em;
-  margin: 0 0 var(--space-2) 0;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  margin: 0 0 var(--space-3) 0;
 }
 
 .home-section__sub {
@@ -1051,6 +2289,9 @@ body {
   font-family: var(--font-display);
   font-size: var(--text-h2);
   color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  line-height: 1;
   margin: 0 0 var(--space-2) 0;
 }
 
@@ -1058,6 +2299,36 @@ body {
   color: var(--text-secondary);
   font-size: var(--text-body-sm);
   margin: 0;
+}
+
+/* Gold overline above the main event matchup name */
+.event-banner__fight-label {
+  font-size: var(--text-overline);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--accent-gold);
+  margin: 0 0 var(--space-1) 0;
+}
+
+/* Fighter name line in the next-event strip */
+.event-banner__matchup {
+  font-family: var(--font-display);
+  font-size: var(--text-h3);
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  margin: 0;
+  line-height: 1.1;
+}
+
+/* Inline "vs" — small and tertiary so the names dominate */
+.vs-small {
+  font-family: var(--font-body);
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  font-weight: 600;
+  letter-spacing: 0.06em;
 }
 
 /* Countdown cluster (days / hours / mins) */
@@ -1137,6 +2408,548 @@ body {
   flex-shrink: 0;
 }
 
+/* ---- Scoring breakdown ----
+   Four-card grid: base scoring, win bonuses, event bonuses, multipliers.
+   Each card has an overline title and a list of label/value rows. */
+
+.scoring-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-4);
+}
+
+.scoring-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: var(--space-6);
+}
+
+.scoring-card__title {
+  font-size: var(--text-overline);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-4) 0;
+}
+
+.scoring-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.scoring-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.scoring-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.scoring-row:first-child {
+  padding-top: 0;
+}
+
+/* Visual divider inside a scoring card (separates logical groups) */
+.scoring-row--divider {
+  border-bottom: none;
+  padding: 4px 0;
+}
+
+.scoring-row__label {
+  font-size: var(--text-body-sm);
+  color: var(--text-secondary);
+}
+
+.scoring-row__value {
+  font-family: var(--font-body);
+  font-size: var(--text-body-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Gold: title bonuses and high-value finishes */
+.scoring-row__value--gold {
+  color: var(--accent-gold);
+}
+
+/* Crimson: special one-off bonuses (sub-60s KO) */
+.scoring-row__value--crimson {
+  color: var(--accent-crimson);
+}
+
+/* ---- League format stats ----
+   Four large Archivo Black numbers anchoring the format section. */
+
+.format-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-4);
+  margin-bottom: var(--space-8);
+}
+
+.format-stat {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: var(--space-6);
+  text-align: center;
+}
+
+.format-stat__value {
+  display: block;
+  font-family: var(--font-display);
+  font-size: var(--text-h1);
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  margin-bottom: var(--space-2);
+}
+
+.format-stat__label {
+  display: block;
+  font-size: var(--text-body-sm);
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+/* ---- Weekly schedule ----
+   Compact table-like list: day name (fixed width) + action text. */
+
+.format-schedule {
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.format-schedule__title {
+  font-size: var(--text-overline);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-secondary);
+  padding: var(--space-4) var(--space-6);
+  margin: 0;
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.format-schedule__rows {
+  background: var(--bg-primary);
+}
+
+.schedule-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-6);
+  padding: var(--space-4) var(--space-6);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.schedule-row:last-child {
+  border-bottom: none;
+}
+
+.schedule-row__day {
+  font-size: var(--text-body-sm);
+  font-weight: 700;
+  color: var(--text-primary);
+  width: 80px;
+  flex-shrink: 0;
+}
+
+.schedule-row__action {
+  font-size: var(--text-body-sm);
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* ========================================================================
+   FEATURE CAROUSEL — Homepage showcase
+   Full-bleed section. Track translates on slide change.
+   ======================================================================== */
+
+.feature-carousel {
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.feature-carousel__viewport {
+  overflow: hidden;
+}
+
+.feature-carousel__track {
+  display: flex;
+  transition: transform 0.55s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  will-change: transform;
+}
+
+/* Each slide is 100% of the viewport, flex-centered */
+.feature-slide {
+  min-width: 100%;
+  box-sizing: border-box;
+  padding: var(--space-12) var(--space-8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Navigation dots centered below the track */
+.carousel-nav {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) 0 var(--space-6);
+}
+
+.carousel-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border-strong);
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.carousel-dot--active {
+  background: var(--accent-crimson);
+  transform: scale(1.35);
+}
+
+/* ---- Slide 1: Fight poster ---- */
+
+.fight-poster {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-6);
+  max-width: 860px;
+  width: 100%;
+  /* Cage mesh + arena glow reused from the hero for brand consistency */
+  background-image:
+    repeating-linear-gradient(-45deg, transparent 0px, transparent 28px, rgba(255,255,255,0.013) 28px, rgba(255,255,255,0.013) 29px),
+    repeating-linear-gradient( 45deg, transparent 0px, transparent 28px, rgba(255,255,255,0.013) 28px, rgba(255,255,255,0.013) 29px),
+    radial-gradient(ellipse 70% 90% at 50% 50%, rgba(193,59,46,0.06) 0%, transparent 70%);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: var(--space-8);
+}
+
+/* Three-column row: left fighter | VS | right fighter */
+.fight-poster__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  width: 100%;
+}
+
+.fight-poster__corner {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+/* Left = crimson (red corner / champion) */
+.fight-poster__corner--left  { color: var(--accent-crimson); }
+
+/* Right = muted silver (challenger) */
+.fight-poster__corner--right { color: var(--text-secondary); }
+
+.fighter-svg {
+  width: 110px;
+  height: auto;
+}
+
+.fight-poster__name {
+  font-family: var(--font-display);
+  font-size: var(--text-h3);
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+  margin: var(--space-3) 0 0 0;
+}
+
+.fight-poster__record {
+  font-size: var(--text-caption);
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  margin: var(--space-1) 0 0 0;
+}
+
+.fight-poster__vs-col {
+  flex: 0 0 auto;
+  text-align: center;
+  padding: 0 var(--space-4);
+}
+
+.fight-poster__event {
+  font-size: var(--text-overline);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--accent-crimson);
+  margin: 0 0 var(--space-2) 0;
+}
+
+.fight-poster__vs {
+  font-family: var(--font-display);
+  font-size: var(--text-display);
+  color: var(--text-primary);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.fight-poster__division {
+  font-size: var(--text-caption);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--accent-gold);
+  margin: var(--space-2) 0 0 0;
+  line-height: 1.5;
+}
+
+/* Pill badges showing scoring context */
+.fight-poster__hints {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.score-hint {
+  font-size: var(--text-caption);
+  font-weight: 600;
+  color: var(--text-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 20px;
+  padding: 4px 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* ---- Slides 2 & 3: App mockup frame ---- */
+
+.app-mockup {
+  width: 100%;
+  max-width: 720px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+}
+
+/* macOS-style window chrome */
+.app-mockup__chrome {
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 10px var(--space-4);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.app-mockup__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.app-mockup__url {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-left: var(--space-3);
+}
+
+/* Tab bar below chrome */
+.app-mockup__tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-secondary);
+}
+
+.app-tab {
+  padding: 10px var(--space-4);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.app-tab--active {
+  color: var(--text-primary);
+  border-bottom: 2px solid var(--accent-crimson);
+  margin-bottom: -1px;
+}
+
+/* Compact standings table */
+.app-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-body);
+}
+
+.app-table th {
+  text-align: left;
+  padding: 8px var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+  font-weight: 700;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+}
+
+.app-table td {
+  padding: 9px var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  font-size: var(--text-body-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.app-table tr:last-child td { border-bottom: none; }
+
+/* Gold tint on the manager's own row */
+.app-table__row--you td {
+  background: rgba(212, 168, 75, 0.06);
+}
+
+.app-you-badge {
+  display: inline-block;
+  font-size: 8px;
+  font-weight: 700;
+  background: var(--accent-gold);
+  color: #0E0E10;
+  border-radius: 3px;
+  padding: 1px 5px;
+  letter-spacing: 0.06em;
+  margin-right: 5px;
+  vertical-align: middle;
+}
+
+/* Draft board header */
+.draft-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.draft-label {
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-tertiary);
+  display: block;
+  line-height: 1;
+}
+
+.draft-pick-num {
+  font-family: var(--font-display);
+  font-size: var(--text-h3);
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.draft-your-turn {
+  font-size: var(--text-caption);
+  font-weight: 700;
+  color: var(--accent-crimson);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  animation: blink 1.5s ease-in-out infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+.draft-timer {
+  font-family: var(--font-display);
+  font-size: var(--text-h3);
+  color: var(--accent-gold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 8-column snake draft grid */
+.draft-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 1px;
+  background: var(--border-subtle);
+}
+
+.draft-cell {
+  background: var(--bg-primary);
+  padding: 6px var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 52px;
+}
+
+.draft-cell--taken { background: var(--bg-tertiary); }
+
+/* Active pick: crimson outline + subtle tint */
+.draft-cell--yours {
+  background: var(--accent-crimson-subtle);
+  outline: 1px solid var(--accent-crimson);
+  outline-offset: -1px;
+}
+
+.draft-cell--empty { background: var(--bg-primary); }
+
+.dc-pick {
+  font-size: 8px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.dc-name {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.3;
+}
+
+/* Blinking "Picking..." text in the active cell */
+.dc-name--active {
+  color: var(--accent-crimson);
+  animation: blink 1.5s ease-in-out infinite;
+}
+
+.dc-mgr {
+  font-size: 8px;
+  color: var(--text-tertiary);
+}
+
 /* ---- Footer ---- */
 .home-footer {
   border-top: 1px solid var(--border-subtle);
@@ -1188,19 +3001,47 @@ body {
   /* Hide less-important nav links on mobile */
   .top-nav__links { display: none; }
 
-  /* Stack hero columns vertically on mobile; right card goes below headline */
-  .hero {
-    padding: var(--space-12) var(--space-4);
+  /* Hero carousel: switch from absolute stacking to block show/hide on mobile
+     so the section height is driven by content instead of a fixed min-height */
+  .hero { min-height: 0; }
+
+  .hero-carousel__viewport {
+    position: static;
+    overflow: visible;
   }
 
-  .hero__inner {
+  .hero-carousel__slide {
+    position: static;
+    display: none;
+    opacity: 1;
+    pointer-events: auto;
+    padding: var(--space-8) var(--space-4);
+  }
+
+  .hero-carousel__slide--active { display: flex; align-items: flex-start; }
+
+  .hero-carousel__inner {
     flex-direction: column;
-    gap: var(--space-8);
+    gap: var(--space-6);
   }
 
-  .hero__right { flex: none; width: 100%; }
+  .hero-slide__left,
+  .hero-slide__right { flex: none; width: 100%; }
 
-  .hero__title { font-size: var(--text-h1); }
+  .hero__title { font-size: 3rem; } /* Bebas Neue at 48px still reads large on mobile */
+
+  /* Scale down the featured card to fit a phone screen */
+  .fighter-card--featured { width: 200px; transform: rotate(4deg); }
+
+  /* Hide perf bars on small screens — too cramped */
+  .perf-viz { display: none; }
+  .card-fp  { display: none; } /* too cramped on phone screens */
+
+  /* Full-width standings mockup */
+  .standings-mockup { max-width: 100%; }
+
+  /* Arrows replaced by swipe on mobile */
+  .hero-carousel__arrow { display: none; }
 
   .home-section { padding: var(--space-8) var(--space-4); }
 
@@ -1208,12 +3049,61 @@ body {
 
   .stats-strip { padding: 12px var(--space-4); gap: var(--space-4); }
 
+  /* Next event strip: tighter padding on mobile */
+  .next-event-strip { padding: var(--space-4) var(--space-4); }
+
   .event-banner {
     flex-direction: column;
     align-items: flex-start;
   }
 
   .event-banner__countdown { gap: var(--space-4); }
+
+  /* Carousel: tighter padding, scale down poster elements */
+  .feature-slide {
+    padding: var(--space-8) var(--space-4);
+  }
+
+  .fight-poster {
+    padding: var(--space-6) var(--space-4);
+    gap: var(--space-4);
+  }
+
+  .fight-poster__row {
+    gap: var(--space-3);
+  }
+
+  .fighter-svg { width: 72px; }
+
+  .fight-poster__vs { font-size: var(--text-h1); }
+
+  .fight-poster__hints { display: none; }
+
+  .app-mockup { max-width: 100%; }
+
+  /* Draft board: 4 columns on mobile, hide round 3+ picks */
+  .draft-grid { grid-template-columns: repeat(4, 1fr); }
+
+  .draft-cell:nth-child(n+17) { display: none; }
+
+  /* Scoring grid: single column on mobile */
+  .scoring-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Format stats: 2x2 grid on mobile (4 across is too cramped) */
+  .format-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .schedule-row {
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .schedule-row__day {
+    width: auto;
+  }
 
   /* Fight card rows: collapse to single column on mobile */
   .fight-card-row {

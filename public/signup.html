@@ -8,10 +8,10 @@
        painted, preventing a flash of the wrong background color -->
   <script src="js/theme.js"></script>
 
-  <!-- Google Fonts: Archivo Black for headers, Inter for body text -->
+  <!-- Google Fonts: Bebas Neue for display, Space Grotesk for body -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <!-- Design system: tokens first, then component patterns -->
   <link rel="stylesheet" href="styles/tokens.css">
@@ -50,7 +50,7 @@
         <input type="password" id="confirmPassword" placeholder="Repeat your password" required>
       </div>
 
-      <button type="submit" class="btn-primary" id="submitBtn" style="width:100%; margin-top: 8px;">
+      <button type="submit" class="btn-primary" id="submitBtn">
         Create account
       </button>
 
@@ -62,7 +62,7 @@
   </div>
 
   <!-- Theme toggle button at the bottom of the auth card area -->
-  <div style="margin-top: 24px;">
+  <div class="auth-footer">
     <button class="btn-theme" onclick="toggleTheme()" aria-label="Toggle theme">☾</button>
   </div>
 

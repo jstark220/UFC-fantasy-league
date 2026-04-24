@@ -7,10 +7,10 @@
   <!-- theme.js runs first so data-theme is set before any CSS renders -->
   <script src="js/theme.js"></script>
 
-  <!-- Google Fonts -->
+  <!-- Google Fonts: Bebas Neue for display, Space Grotesk for body -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <!-- Design system -->
   <link rel="stylesheet" href="styles/tokens.css">
@@ -20,9 +20,7 @@
 </head>
 <body>
 
-  <!-- The entire page starts hidden. dashboard.js checks auth, then
-       sets display:block. This prevents a flash of content before the
-       session check completes and a redirect fires if needed. -->
+  <!-- Page starts hidden. dashboard.js checks auth, then reveals it. -->
   <div class="dashboard-page" id="dashboardContent" style="display: none;">
 
     <!-- Sticky top nav -->
@@ -31,42 +29,62 @@
         <span class="kf-red">Knockdown</span> Fantasy
       </a>
 
-      <div class="top-nav__links">
-        <a href="my-leagues.html" class="btn-ghost">My Leagues</a>
-      </div>
+      <div class="top-nav__links"></div>
 
       <div class="top-nav__actions">
-        <!-- Theme toggle -->
         <button class="btn-theme" onclick="toggleTheme()" aria-label="Toggle theme">☾</button>
-
-        <!-- Pre-placed logout button with the same ID that auth-guard.js
-             checks for. Because this element already exists, auth-guard
-             won't inject a second floating logout button. The onclick
-             calls logOut() which is defined globally in auth-guard.js. -->
-        <button id="globalLogoutBtn" class="btn-secondary" onclick="logOut()"
-                style="padding: 8px 16px; font-size: 14px;">
-          Log out
-        </button>
+        <!-- Pre-placed so auth-guard.js won't inject a second floating button -->
+        <button id="globalLogoutBtn" class="btn-ghost" onclick="logOut()">Log out</button>
       </div>
     </nav>
+
+    <!-- Welcome header: crimson eyebrow + Bebas Neue username + next-event sub -->
+    <div class="dashboard-header">
+      <div class="dashboard-header__inner">
+        <p class="dashboard-welcome__eyebrow">Welcome back</p>
+        <h1 class="dashboard-welcome__name" id="welcomeName">--</h1>
+        <p class="dashboard-welcome__sub" id="welcomeSub">Next card locks Saturday &middot; UFC 329</p>
+      </div>
+    </div>
 
     <!-- Page body -->
     <div class="dashboard-body">
 
-      <div class="dashboard-welcome">
-        <h2>Dashboard</h2>
-        <!-- User email injected here by dashboard.js -->
-        <p id="welcomeMessage"></p>
+      <!-- Quick stat strip: three at-a-glance numbers -->
+      <div class="dashboard-stats">
+        <div class="dashboard-stat">
+          <span class="dashboard-stat__value" id="statLeagues">0</span>
+          <span class="dashboard-stat__label">Active Leagues</span>
+        </div>
+        <div class="dashboard-stat">
+          <span class="dashboard-stat__value">UFC 329</span>
+          <span class="dashboard-stat__label">Next Event</span>
+        </div>
+        <div class="dashboard-stat">
+          <span class="dashboard-stat__value">Sat May 3</span>
+          <span class="dashboard-stat__label">Lineup Locks</span>
+        </div>
       </div>
 
-      <!-- Quick link to leagues -->
-      <p class="section-label">Your leagues</p>
-      <div class="dashboard-cta-card">
-        <div class="dashboard-cta-card__text">
-          <h3>My Leagues</h3>
-          <p>View your leagues, check standings, and manage your roster.</p>
+      <!-- Leagues section: toggled by dashboard.js based on whether leagues exist -->
+      <p class="section-label">Your Leagues</p>
+
+      <!-- Empty state: shown when the user has no leagues -->
+      <div class="dashboard-empty" id="leaguesEmpty" style="display: none;">
+        <p class="dashboard-empty__title">You're not in any leagues yet.</p>
+        <p class="dashboard-empty__sub">Create a new league or ask a friend to invite you.</p>
+        <div class="dashboard-empty__actions">
+          <a href="create-league.html" class="btn-primary">Create a league</a>
+          <a href="join-league.html"   class="btn-secondary">Join a league</a>
         </div>
-        <a href="my-leagues.html" class="btn-primary">Go to My Leagues</a>
+      </div>
+
+      <!-- League list: shown when the user has at least one league -->
+      <div id="leaguesList"></div>
+
+      <!-- Always-visible create button below the league list -->
+      <div style="margin-top: var(--space-4);">
+        <a href="create-league.html" class="btn-secondary">+ Create a league</a>
       </div>
 
     </div>

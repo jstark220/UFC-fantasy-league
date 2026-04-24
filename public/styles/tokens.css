@@ -43,13 +43,13 @@
   --tier-top15:    #B87333; /* bronze */
 
   /* -- Font families -- */
-  --font-display: "Archivo Black", system-ui, sans-serif; /* headers, fighter names */
-  --font-body:    "Inter", "SF Pro Text", system-ui, sans-serif; /* all body and UI text */
+  --font-display: "Bebas Neue", "Archivo Black", system-ui, sans-serif; /* headers, fighter names */
+  --font-body:    "Space Grotesk", "Inter", "SF Pro Text", system-ui, sans-serif; /* all body and UI text */
 
   /* -- Type scale --
      Never introduce arbitrary font sizes. Use these tokens only.
      Defined as rem values for accessibility (respects user's base font size). */
-  --text-display:  3rem;       /* 48px — hero headlines only */
+  --text-display:  5rem;       /* 80px — hero headlines only (Bebas Neue is condensed, needs larger sizing) */
   --text-h1:       2.25rem;    /* 36px — page titles */
   --text-h2:       1.75rem;    /* 28px — section headers */
   --text-h3:       1.25rem;    /* 20px — card titles, subsections */
