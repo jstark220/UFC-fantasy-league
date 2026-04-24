@@ -12,6 +12,21 @@ let leagueData  = null;
 let membersData = [];
 let userRef     = null;
 let leagueIdRef = null;
+let myMemberId  = null;  // current user's league_members.id, needed for roster inserts
+
+const DIVISION_LABELS = {
+  strawweight:       "Women's Strawweight",
+  flyweight_w:       "Women's Flyweight",
+  bantamweight_w:    "Women's Bantamweight",
+  flyweight:         "Men's Flyweight",
+  bantamweight:      "Men's Bantamweight",
+  featherweight:     "Men's Featherweight",
+  lightweight:       "Men's Lightweight",
+  welterweight:      "Men's Welterweight",
+  middleweight:      "Men's Middleweight",
+  light_heavyweight: "Men's Light Heavyweight",
+  heavyweight:       "Men's Heavyweight"
+};
 
 // Escapes user-supplied strings before inserting into innerHTML to prevent XSS
 function escapeHtml(str) {
@@ -63,12 +78,13 @@ async function initLeague() {
   // ---- Verify the current user is actually a member ----
   // RLS may allow reading the league row without being a member in some policies.
   // This client-side check is an extra safety layer.
-  const isMember = members.some(function(m) { return m.user_id === user.id; });
-  if (!isMember) {
+  const myMember = members.find(function(m) { return m.user_id === user.id; });
+  if (!myMember) {
     window.location.href = 'dashboard.html';
     return;
   }
   membersData = members;
+  myMemberId  = myMember.id;
 
   const isCommissioner = league.commissioner_id === user.id;
 
@@ -147,6 +163,9 @@ async function initLeague() {
   // ---- Render draft section and subscribe to live league updates ----
   renderDraftSection();
   subscribeToLeagueUpdates();
+
+  // ---- Load real free agents into the panel ----
+  loadFreeAgents();
 }
 
 // ========================================================================
@@ -373,6 +392,121 @@ function renderMembers(members, league, user, isCommissioner) {
       membersData = members;
       document.getElementById('memberCount').textContent = members.length;
       renderMembers(members, league, user, isCommissioner);
+    });
+  });
+}
+
+// ========================================================================
+// LOAD FREE AGENTS
+// Fetches fighters not on any roster in this league (sorted by rank) and
+// renders them into #freeAgentList with working Add buttons.
+// Called on page load and again after each successful add so the list
+// stays current without a full page reload.
+// ========================================================================
+async function loadFreeAgents() {
+  const el = document.getElementById('freeAgentList');
+
+  // Fetch all roster rows for this league and all fighters in parallel
+  const [rostersRes, fightersRes] = await Promise.all([
+    supabaseClient
+      .from('rosters')
+      .select('fighter_id, league_member_id')
+      .eq('league_id', leagueIdRef),
+    supabaseClient
+      .from('fighters')
+      .select('id, name, primary_division, current_rank, is_champion, photo_url')
+      .order('is_champion', { ascending: false })
+      .order('current_rank', { ascending: true, nullsFirst: false })
+      .order('name')
+  ]);
+
+  if (rostersRes.error || fightersRes.error) {
+    el.innerHTML = '<p class="draft-empty">Could not load free agents.</p>';
+    return;
+  }
+
+  // Which fighters are already owned by someone in this league?
+  const ownedIds = new Set(rostersRes.data.map(function(r) { return r.fighter_id; }));
+
+  // How many fighters is the current user already carrying?
+  const myRosterCount = rostersRes.data.filter(function(r) {
+    return r.league_member_id === myMemberId;
+  }).length;
+
+  const available = fightersRes.data.filter(function(f) { return !ownedIds.has(f.id); });
+
+  if (available.length === 0) {
+    el.innerHTML = '<p class="draft-empty">No free agents available.</p>';
+    return;
+  }
+
+  // Show top 5 available fighters
+  el.innerHTML = available.slice(0, 5).map(function(fighter) {
+    // Show "C" for champion, "#N" for ranked, "NR" for unranked
+    const badge = fighter.is_champion ? 'C'
+                : fighter.current_rank ? '#' + fighter.current_rank
+                : 'NR';
+    const divLabel = DIVISION_LABELS[fighter.primary_division] || fighter.primary_division;
+
+    return (
+      '<div class="free-agent-row">' +
+        '<div class="free-agent-row__photo-wrap">' +
+          (fighter.photo_url
+            ? '<img class="free-agent-row__photo" src="' + fighter.photo_url + '" alt="' + escapeHtml(fighter.name) + '" onerror="this.style.display=\'none\'">'
+            : '') +
+        '</div>' +
+        '<div class="free-agent-row__info">' +
+          '<span class="free-agent-row__name">'     + escapeHtml(fighter.name)   + '</span>' +
+          '<span class="free-agent-row__division">' + escapeHtml(divLabel)        + '</span>' +
+        '</div>' +
+        '<span class="free-agent-row__ovr">' + badge + '</span>' +
+        '<button class="btn-secondary free-agent-row__add" ' +
+          'data-fighter-id="'   + fighter.id                    + '" ' +
+          'data-fighter-name="' + escapeHtml(fighter.name)      + '">' +
+          'Add' +
+        '</button>' +
+      '</div>'
+    );
+  }).join('');
+
+  // Wire each Add button
+  el.querySelectorAll('.free-agent-row__add').forEach(function(btn) {
+    btn.addEventListener('click', async function() {
+      const fighterId   = btn.getAttribute('data-fighter-id');
+      const fighterName = btn.getAttribute('data-fighter-name');
+      const rosterMax   = leagueData.roster_size || 20;
+
+      // If the roster is already full, send them to the full waivers flow
+      if (myRosterCount >= rosterMax) {
+        if (confirm(
+          'Your roster is full (' + myRosterCount + '/' + rosterMax + ').\n' +
+          'Go to the Waivers page to drop a player first?'
+        )) {
+          window.location.href = 'waivers.html?id=' + leagueIdRef;
+        }
+        return;
+      }
+
+      btn.disabled    = true;
+      btn.textContent = 'Adding...';
+
+      const { error } = await supabaseClient
+        .from('rosters')
+        .insert({
+          league_id:        leagueIdRef,
+          league_member_id: myMemberId,
+          fighter_id:       fighterId
+        });
+
+      if (error) {
+        alert('Error adding ' + fighterName + ': ' + error.message);
+        btn.disabled    = false;
+        btn.textContent = 'Add';
+        return;
+      }
+
+      // Refresh the list so the newly-added fighter disappears
+      await loadFreeAgents();
     });
   });
 }

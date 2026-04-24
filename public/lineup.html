@@ -3,36 +3,76 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Lineup - UFC Fantasy League</title>
-  <link rel="stylesheet" href="css/styles.css">
+
+  <script src="js/theme.js"></script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="styles/tokens.css">
+  <link rel="stylesheet" href="styles/components.css">
+
+  <title>Lineup - Knockdown Fantasy</title>
 </head>
 <body>
 
-  <!-- Hidden until auth check and data load complete -->
-  <div class="page" id="pageContent" style="display: none;">
+  <div class="dashboard-page" id="pageContent" style="display: none;">
 
-    <a href="#" class="back-link" id="leagueLink">&#8592; League</a>
+    <nav class="top-nav">
+      <a href="index.html" class="top-nav__logo">
+        <span class="kf-red">Knockdown</span> Fantasy
+      </a>
+      <div class="top-nav__links">
+        <a href="#" class="btn-ghost" id="leagueLink">← League</a>
+      </div>
+      <div class="top-nav__actions">
+        <button class="btn-theme" onclick="toggleTheme()" aria-label="Toggle theme">☾</button>
+        <button id="globalLogoutBtn" class="btn-ghost" onclick="logOut()">Log out</button>
+      </div>
+    </nav>
 
-    <div class="page-header">
-      <h1 id="leagueName"></h1>
+    <div class="league-header">
+      <div class="league-header__inner">
+        <h1 class="league-header__name" id="leagueName"></h1>
+        <div class="league-header__actions" id="headerActions"></div>
+      </div>
     </div>
 
-    <!-- Event banner showing event name, date, and lock status -->
-    <div id="eventBanner"></div>
+    <div class="dashboard-body">
 
-    <!-- Lineup selection section -->
-    <div class="section">
-      <!-- starterCount updated by lineup.js as selections change -->
-      <h2>My Starters <span id="starterCount" class="starter-count">0 / 3</span></h2>
-      <div id="lineupContent"></div>
+      <!-- Event banner: rendered by lineup.js -->
+      <div id="eventBanner"></div>
+
+      <!-- Starter card slots -->
+      <div class="lineup-section">
+        <p class="section-label">
+          My Starters
+          <span class="section-label__count" id="starterCount">(0 / 3)</span>
+        </p>
+        <div class="lineup-starters" id="starterSlots"></div>
+      </div>
+
+      <!-- Full roster list -->
+      <div class="lineup-section">
+        <p class="section-label">My Roster</p>
+        <div class="lineup-roster-list" id="rosterList"></div>
+      </div>
+
     </div>
-
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/supabase-config.js"></script>
   <script src="js/auth-guard.js"></script>
   <script src="js/lineup.js"></script>
+
+  <script>
+    document.querySelectorAll('.btn-theme').forEach(function(btn) {
+      var theme = document.documentElement.getAttribute('data-theme');
+      btn.textContent = theme === 'light' ? '☀' : '☾';
+    });
+  </script>
 
 </body>
 </html>

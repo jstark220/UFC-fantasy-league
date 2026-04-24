@@ -1115,7 +1115,7 @@ body {
   flex: 0 0 40%;
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: center;
   gap: var(--space-3);
 }
 
@@ -1130,7 +1130,7 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   margin: 0;
-  text-align: right;
+  text-align: center;
 }
 
 /* ========================================================================
@@ -1359,12 +1359,85 @@ body {
    LEAGUE SETTINGS PAGE
    ======================================================================== */
 
-/* Subtitle under the league name in the header */
-.league-settings__subtitle {
-  font-family: var(--font-body);
-  font-size: var(--text-body);
-  color: var(--text-tertiary);
-  margin: var(--space-1) 0 0 0;
+/* Full-page cage texture: subtler than the header, just enough to feel textured */
+.settings-page {
+  background-color: var(--bg-primary);
+  background-image:
+    repeating-linear-gradient(
+      -45deg,
+      transparent 0px, transparent 34px,
+      rgba(255, 255, 255, 0.012) 34px, rgba(255, 255, 255, 0.012) 35px
+    ),
+    repeating-linear-gradient(
+      45deg,
+      transparent 0px, transparent 34px,
+      rgba(255, 255, 255, 0.012) 34px, rgba(255, 255, 255, 0.012) 35px
+    );
+}
+
+[data-theme="light"] .settings-page {
+  background-image:
+    repeating-linear-gradient(
+      -45deg,
+      transparent 0px, transparent 34px,
+      rgba(0, 0, 0, 0.022) 34px, rgba(0, 0, 0, 0.022) 35px
+    ),
+    repeating-linear-gradient(
+      45deg,
+      transparent 0px, transparent 34px,
+      rgba(0, 0, 0, 0.022) 34px, rgba(0, 0, 0, 0.022) 35px
+    );
+}
+
+/* Settings page header: cage crosshatch + crimson glow bleeding down from the top border */
+.league-header--settings {
+  background-color: var(--bg-secondary);
+  background-image:
+    radial-gradient(ellipse 80% 180% at 50% -10%, rgba(193, 59, 46, 0.14) 0%, transparent 65%),
+    repeating-linear-gradient(
+      -45deg,
+      transparent 0px, transparent 28px,
+      rgba(255, 255, 255, 0.028) 28px, rgba(255, 255, 255, 0.028) 29px
+    ),
+    repeating-linear-gradient(
+      45deg,
+      transparent 0px, transparent 28px,
+      rgba(255, 255, 255, 0.028) 28px, rgba(255, 255, 255, 0.028) 29px
+    );
+  border-top: 3px solid var(--accent-crimson);
+  border-bottom: 1px solid var(--border-subtle);
+  padding: var(--space-8) var(--space-8) var(--space-8);
+}
+
+[data-theme="light"] .league-header--settings {
+  background-image:
+    radial-gradient(ellipse 80% 180% at 50% -10%, rgba(193, 59, 46, 0.10) 0%, transparent 65%),
+    repeating-linear-gradient(
+      -45deg,
+      transparent 0px, transparent 28px,
+      rgba(0, 0, 0, 0.03) 28px, rgba(0, 0, 0, 0.03) 29px
+    ),
+    repeating-linear-gradient(
+      45deg,
+      transparent 0px, transparent 28px,
+      rgba(0, 0, 0, 0.03) 28px, rgba(0, 0, 0, 0.03) 29px
+    );
+}
+
+.league-header--settings .league-header__inner {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+}
+
+/* Crimson "LEAGUE SETTINGS" overline above the league name */
+.league-header__eyebrow {
+  font-size: var(--text-overline);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--accent-crimson);
+  margin: 0;
 }
 
 /* Two-column layout matching league-info-row but without the top margin */
@@ -1372,6 +1445,11 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--space-6);
+}
+
+/* Crimson top accent on the general settings card */
+.settings-grid > .league-info-card:first-child {
+  border-top: 2px solid var(--accent-crimson);
 }
 
 /* Small hint text below form inputs */
@@ -2989,6 +3067,635 @@ body {
 }
 
 /* ========================================================================
+   MOVE TO FLEX MODAL
+   A compact action dialog for moving a fighter to the Any-Division Flex slot.
+   ======================================================================== */
+
+.move-flex-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  padding: var(--space-4);
+  animation: fadeIn 0.15s ease;
+}
+
+.move-flex-modal {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 420px;
+  overflow: hidden;
+  animation: slideUp 0.2s ease;
+}
+
+.move-flex-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.move-flex-modal__title {
+  font-family: var(--font-display);
+  font-size: var(--text-h3);
+  color: var(--accent-gold);
+  letter-spacing: 0.04em;
+  margin: 0;
+}
+
+.move-flex-modal__close {
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+  transition: color 0.15s ease;
+}
+
+.move-flex-modal__close:hover { color: var(--text-primary); }
+
+.move-flex-modal__body {
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* Fighter name + origin → destination */
+.move-flex-fighter-name {
+  font-weight: 700;
+  font-size: var(--text-body);
+  color: var(--text-primary);
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.move-flex-fighter-div {
+  font-size: var(--text-caption);
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.move-flex-body-text {
+  font-size: var(--text-body-sm);
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* Swap option rows — radio-style selection */
+.flex-swap-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.flex-swap-option {
+  display: flex;
+  align-items: center;
+  padding: 10px var(--space-3);
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.flex-swap-option:hover {
+  border-color: var(--accent-gold);
+  background: rgba(212, 175, 55, 0.06);
+}
+
+.flex-swap-option--selected {
+  border-color: var(--accent-gold);
+  background: rgba(212, 175, 55, 0.1);
+}
+
+.flex-swap-option__info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.flex-swap-option__name {
+  font-size: var(--text-body-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.flex-swap-option__div {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-weight: 600;
+}
+
+.move-flex-modal__actions {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: flex-end;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* ========================================================================
+   FIGHT CARD MODAL
+   ======================================================================== */
+
+/* Full-screen dimmed overlay */
+.fight-card-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: var(--space-4);
+  box-sizing: border-box;
+  animation: fadeIn 0.15s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Modal card */
+.fight-card-modal {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  width: 100%;
+  max-width: 540px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideUp 0.18s ease;
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Header: cage background + crimson top border */
+.fight-card-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-6);
+  border-top: 3px solid var(--accent-crimson);
+  border-bottom: 1px solid var(--border-subtle);
+  background-color: var(--bg-tertiary);
+  background-image:
+    radial-gradient(ellipse 80% 200% at 50% -20%, rgba(193, 59, 46, 0.12) 0%, transparent 60%),
+    repeating-linear-gradient(-45deg, transparent 0px, transparent 28px, rgba(255,255,255,0.022) 28px, rgba(255,255,255,0.022) 29px),
+    repeating-linear-gradient( 45deg, transparent 0px, transparent 28px, rgba(255,255,255,0.022) 28px, rgba(255,255,255,0.022) 29px);
+  flex-shrink: 0;
+}
+
+[data-theme="light"] .fight-card-modal__header {
+  background-image:
+    radial-gradient(ellipse 80% 200% at 50% -20%, rgba(193, 59, 46, 0.08) 0%, transparent 60%),
+    repeating-linear-gradient(-45deg, transparent 0px, transparent 28px, rgba(0,0,0,0.025) 28px, rgba(0,0,0,0.025) 29px),
+    repeating-linear-gradient( 45deg, transparent 0px, transparent 28px, rgba(0,0,0,0.025) 28px, rgba(0,0,0,0.025) 29px);
+}
+
+.fight-card-modal__eyebrow {
+  font-size: var(--text-overline);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--accent-crimson);
+  margin: 0 0 2px 0;
+}
+
+.fight-card-modal__title {
+  font-family: var(--font-display);
+  font-size: var(--text-h2);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.fight-card-modal__close {
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  line-height: 1;
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.fight-card-modal__close:hover {
+  border-color: var(--accent-crimson);
+  color: var(--accent-crimson);
+}
+
+/* Scrollable fight list */
+.fight-card-modal__body {
+  overflow-y: auto;
+  padding: var(--space-3) var(--space-6) var(--space-6);
+}
+
+/* Section group (Main Card / Prelims / Early Prelims) */
+.fight-card-section {
+  margin-top: var(--space-4);
+}
+
+.fight-card-section__label {
+  font-size: var(--text-overline);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-tertiary);
+  margin: 0 0 var(--space-3) 0;
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* Individual fight row */
+.fight-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.fight-row:last-child { border-bottom: none; }
+
+.fight-row__fighter {
+  font-size: var(--text-body-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.3;
+  min-width: 0;           /* allows the grid cell to shrink below content size */
+  overflow-wrap: break-word;
+}
+
+.fight-row__fighter--red  { text-align: right; }
+.fight-row__fighter--blue { text-align: left;  }
+
+/* Center column: badge (optional) + weight class + "vs" */
+.fight-row__center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  width: 90px;
+}
+
+.fight-row__badge {
+  font-size: 7px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent-gold);
+  background: rgba(212, 175, 55, 0.12);
+  border: 1px solid rgba(212, 175, 55, 0.3);
+  border-radius: 3px;
+  padding: 1px 5px;
+  white-space: nowrap;
+}
+
+.fight-row__weight {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-tertiary);
+  text-align: center;
+  line-height: 1.3;
+}
+
+.fight-row__vs {
+  font-family: var(--font-display);
+  font-size: 0.875rem;
+  color: var(--accent-crimson);
+  letter-spacing: 0.04em;
+  line-height: 1;
+}
+
+/* "View fight card" ghost button inside the event banner */
+.fight-card-btn {
+  margin-top: var(--space-3);
+  padding-left: 0;
+  font-size: var(--text-body-sm);
+}
+
+/* ========================================================================
+   LINEUP PAGE
+   ======================================================================== */
+
+.lineup-section {
+  margin-bottom: var(--space-8);
+}
+
+/* Three starter card slots in a row */
+.lineup-starters {
+  display: flex;
+  gap: var(--space-6);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* Empty slot: dashed placeholder the same size as .fighter-card */
+.lineup-slot--empty {
+  width: 200px;
+  aspect-ratio: 2 / 3;
+  border-radius: 10px;
+  border: 2px dashed var(--border-strong);
+  background: var(--bg-secondary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  opacity: 0.5;
+}
+
+.lineup-slot__number {
+  font-family: var(--font-display);
+  font-size: 4rem;
+  color: var(--text-tertiary);
+  line-height: 1;
+  letter-spacing: 0.02em;
+}
+
+.lineup-slot__label {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+  margin: 0;
+}
+
+/* Bench button inside a starter card — full width, sits at bottom of info panel */
+.lineup-bench-btn {
+  display: block;
+  width: 100%;
+  margin-top: auto;
+  padding: 5px 0;
+  background: transparent;
+  border: 1px solid var(--accent-crimson);
+  border-radius: 4px;
+  color: var(--accent-crimson);
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.lineup-bench-btn:hover {
+  background: rgba(193, 59, 46, 0.12);
+}
+
+/* "STARTER" read-only badge inside locked cards */
+.lineup-starter-badge {
+  display: block;
+  margin-top: auto;
+  padding: 3px 0;
+  text-align: center;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent-gold);
+}
+
+/* "BENCH" read-only badge for locked non-starters in the roster list */
+.lineup-bench-badge {
+  font-size: var(--text-caption);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+/* Lock status label in the event banner right column */
+.lineup-lock-status {
+  font-size: var(--text-h3);
+  font-weight: 700;
+  margin: 0;
+}
+
+/* ---- Roster list rows ---- */
+
+.lineup-roster-list {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.lineup-roster-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 10px var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background 0.1s ease;
+}
+
+.lineup-roster-row:last-child { border-bottom: none; }
+
+/* Crimson left accent for currently-started fighters */
+.lineup-roster-row--started {
+  border-left: 3px solid var(--accent-crimson);
+  background: rgba(193, 59, 46, 0.05);
+  padding-left: calc(var(--space-4) - 3px);
+}
+
+.lineup-roster-row__photo-wrap {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--bg-tertiary);
+  flex-shrink: 0;
+}
+
+.lineup-roster-row__photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+}
+
+.lineup-roster-row__rank {
+  font-size: var(--text-caption);
+  font-weight: 700;
+  width: 28px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.lineup-roster-row__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lineup-roster-row__name {
+  font-size: var(--text-body);
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lineup-roster-row__division {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-weight: 600;
+}
+
+.lineup-roster-row__record {
+  font-size: var(--text-caption);
+  color: var(--text-secondary);
+  font-weight: 600;
+  flex-shrink: 0;
+  min-width: 52px;
+  text-align: right;
+}
+
+.lineup-row-btn {
+  flex-shrink: 0;
+  padding: 5px 14px;
+  font-size: var(--text-caption);
+}
+
+/* "→ Flex" button — gold-tinted so it reads as a special/upgrade action */
+.lineup-flex-btn {
+  flex-shrink: 0;
+  padding: 5px 10px;
+  background: transparent;
+  border: 1px solid var(--accent-gold);
+  border-radius: 4px;
+  color: var(--accent-gold);
+  font-family: var(--font-body);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  opacity: 0.75;
+}
+
+.lineup-flex-btn:hover {
+  background: rgba(212, 175, 55, 0.12);
+  opacity: 1;
+}
+
+/* Drop button — muted danger style so it's available but doesn't compete with Start/Bench */
+.lineup-drop-btn {
+  flex-shrink: 0;
+  padding: 5px 10px;
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  color: var(--text-tertiary);
+  font-family: var(--font-body);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.lineup-drop-btn:hover {
+  border-color: var(--accent-crimson);
+  color: var(--accent-crimson);
+}
+
+/* Section header inside the grouped roster list — shows slot category + pip fill indicator */
+.lineup-slot-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px var(--space-4);
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* Not the very first header — add a top border so sections are visually separated */
+.lineup-slot-header + .lineup-roster-row + .lineup-slot-header,
+.lineup-roster-row ~ .lineup-slot-header {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.lineup-slot-header__title {
+  font-size: var(--text-caption);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-secondary);
+}
+
+.lineup-slot-header__pips {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+/* Pip dots — filled = slot occupied, empty = slot available */
+.pip {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.pip-filled {
+  background: var(--accent-crimson);
+}
+
+.pip-empty {
+  background: var(--border-strong);
+  opacity: 0.5;
+}
+
+/* ========================================================================
    RESPONSIVE ADJUSTMENTS
    ======================================================================== */
 
@@ -3136,6 +3843,9 @@ body {
   }
 
   .dashboard-body { padding: var(--space-6) var(--space-4); }
+
+  /* Lineup: stack card slots vertically on mobile */
+  .lineup-starters { flex-direction: column; align-items: center; }
 
   .home-footer {
     flex-direction: column;
