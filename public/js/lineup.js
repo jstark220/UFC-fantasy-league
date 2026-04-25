@@ -167,11 +167,15 @@ async function initLineup() {
 
   document.getElementById('leagueLink').href = 'league.html?id=' + leagueId;
 
-  // TODO: swap this Promise.all for the real Phase 1 query from the original
-  // lineup.js once event data is seeded (league, members, ufc_events).
-  const [leagueRes, membersRes] = await Promise.all([
+  const [leagueRes, membersRes, eventRes] = await Promise.all([
     supabaseClient.from('leagues').select('id, name, draft_started').eq('id', leagueId).single(),
-    supabaseClient.from('league_members').select('id, user_id, team_name').eq('league_id', leagueId)
+    supabaseClient.from('league_members').select('id, user_id, team_name').eq('league_id', leagueId),
+    // Fetch the next upcoming event (soonest event_date >= today)
+    supabaseClient.from('ufc_events')
+      .select('id, name, full_name, event_date, venue, lineup_lock_time, is_completed')
+      .gte('event_date', new Date().toISOString().split('T')[0])
+      .order('event_date')
+      .limit(1)
   ]);
 
   if (leagueRes.error || !leagueRes.data) {
@@ -185,6 +189,12 @@ async function initLineup() {
   if (!myMember) { window.location.href = 'dashboard.html'; return; }
   myMemberId = myMember.id;
 
+  // Store the upcoming event and check lock status
+  nextEvent = (eventRes.data && eventRes.data[0]) || null;
+  if (nextEvent && nextEvent.lineup_lock_time) {
+    isLocked = new Date() >= new Date(nextEvent.lineup_lock_time);
+  }
+
   document.title   = 'Lineup - ' + league.name;
   document.getElementById('leagueName').textContent = league.name;
 
@@ -195,14 +205,24 @@ async function initLineup() {
   nav += '<a href="lineup.html?id='   + leagueId + '" class="btn-primary">Lineup</a>';
   document.getElementById('headerActions').innerHTML = nav;
 
-  // Fetch this user's roster for the league, joined with full fighter details.
-  // slot_override stores manual flex moves the user has made (e.g. 'any_flex').
-  const rostersRes = await supabaseClient
-    .from('rosters')
-    .select('id, draft_pick, slot_override, fighters(id, name, primary_division, current_rank, is_champion, record_wins, record_losses, record_draws, photo_url)')
-    .eq('league_id', leagueId)
-    .eq('league_member_id', myMemberId)
-    .order('draft_pick');
+  // Fetch this user's roster and existing starter selections in parallel
+  const [rostersRes, selectionsRes] = await Promise.all([
+    supabaseClient
+      .from('rosters')
+      .select('id, draft_pick, slot_override, fighters(id, name, primary_division, current_rank, is_champion, record_wins, record_losses, record_draws, photo_url)')
+      .eq('league_id', leagueId)
+      .eq('league_member_id', myMemberId)
+      .order('draft_pick'),
+
+    nextEvent
+      ? supabaseClient
+          .from('starter_selections')
+          .select('id, fighter_id, slot_position')
+          .eq('league_member_id', myMemberId)
+          .eq('event_id', nextEvent.id)
+          .order('slot_position')
+      : Promise.resolve({ data: [] })
+  ]);
 
   if (rostersRes.error) {
     console.error('Failed to load roster:', rostersRes.error.message);
@@ -212,8 +232,14 @@ async function initLineup() {
   rosterRowIds = {};
   myRoster = (rostersRes.data || []).filter(function(r) { return r.fighters; }).map(function(r) {
     rosterRowIds[r.fighters.id] = r.id;
-    // Spread fighter fields and attach slot_override from the roster row
     return Object.assign({}, r.fighters, { slot_override: r.slot_override || null });
+  });
+
+  // Restore any starters the user already picked for this event
+  selectionRowIds = {};
+  (selectionsRes.data || []).forEach(function(s) {
+    selections.add(s.fighter_id);
+    selectionRowIds[s.fighter_id] = s.id;
   });
 
   document.getElementById('pageContent').style.display = 'block';
@@ -225,8 +251,7 @@ async function initLineup() {
 
 // ========================================================================
 // RENDER EVENT BANNER
-// Uses the this-week-card CSS. Hardcoded to UFC 329 for the placeholder;
-// TODO: replace nextEvent with the real ufc_events query result.
+// Uses the this-week-card CSS. Pulls name, date, and venue from nextEvent.
 // ========================================================================
 function renderEventBanner() {
   const el = document.getElementById('eventBanner');
@@ -235,13 +260,27 @@ function renderEventBanner() {
     ? '<span style="color: var(--text-tertiary);">&#128274; Lineup locked</span>'
     : '<span style="color: #4ade80;">&#128275; Lineup open</span>';
 
+  var eventName = 'TBD';
+  var eventDate = '';
+  var eventMatchup = '';
+  if (nextEvent) {
+    eventName = nextEvent.name;
+    var dateObj = new Date(nextEvent.event_date + 'T12:00:00');
+    eventDate = dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    if (nextEvent.venue) eventDate += ' &middot; ' + escapeHtml(nextEvent.venue);
+    // Pull the matchup from "UFC 314: Volkanovski vs. Lopes" format
+    if (nextEvent.full_name && nextEvent.full_name.indexOf(':') !== -1) {
+      eventMatchup = nextEvent.full_name.split(':')[1].trim();
+    }
+  }
+
   el.innerHTML =
     '<div class="this-week-card" style="margin-bottom: var(--space-8);">' +
       '<div class="this-week-card__event">' +
         '<p class="this-week-card__eyebrow">Set Your Lineup</p>' +
-        '<p class="this-week-card__name">UFC 329</p>' +
-        '<p class="this-week-card__date">Saturday, May 3 &middot; T-Mobile Arena, Las Vegas</p>' +
-        '<p class="this-week-card__matchup">Makhachev vs. Tsarukyan II</p>' +
+        '<p class="this-week-card__name">' + escapeHtml(eventName) + '</p>' +
+        (eventDate    ? '<p class="this-week-card__date">'    + eventDate + '</p>' : '') +
+        (eventMatchup ? '<p class="this-week-card__matchup">' + escapeHtml(eventMatchup) + '</p>' : '') +
         '<button class="btn-ghost fight-card-btn" id="viewFightCardBtn">View fight card &rarr;</button>' +
       '</div>' +
       '<div class="this-week-card__right">' +
@@ -364,22 +403,33 @@ function renderRosterList() {
     }
   });
 
+  // Build the render context once so all row renderers share the same derived data
+  const ctx = {
+    isFull:        selections.size >= MAX_STARTERS,
+    // How many any_flex slots are currently occupied
+    flexCount:     groups['any_flex'].length,
+    // Divisions already represented in any_flex (used for eligibility gating)
+    flexDivisions: groups['any_flex'].map(function(f) { return f.primary_division; }),
+    // Full division groups so "← Out" modal can see who is in a fighter's division
+    divisionGroups: groups
+  };
+
   let html = '';
 
   // Men's divisions — only render sections that have at least one fighter
   MENS_DIVISIONS.forEach(function(div) {
     if (groups[div].length === 0) return;
-    html += renderSlotSection(DIVISION_LABELS[div], groups[div], 2, isFull, div);
+    html += renderSlotSection(DIVISION_LABELS[div], groups[div], 2, ctx, div);
   });
 
   // Women's flex section
   if (groups['women_flex'].length > 0) {
-    html += renderSlotSection("Women's Flex", groups['women_flex'], 2, isFull, 'women_flex');
+    html += renderSlotSection("Women's Flex", groups['women_flex'], 2, ctx, 'women_flex');
   }
 
-  // Any-division flex section (no "Move to Flex" button shown here — already in flex)
+  // Any-division flex section
   if (groups['any_flex'].length > 0) {
-    html += renderSlotSection('Any-Division Flex', groups['any_flex'], 2, isFull, 'any_flex');
+    html += renderSlotSection('Any-Division Flex', groups['any_flex'], 2, ctx, 'any_flex');
   }
 
   el.innerHTML = html;
@@ -404,11 +454,24 @@ function renderRosterList() {
       showMoveToFlexModal(btn.getAttribute('data-flex-id'));
     });
   });
+
+  // Wire Move out of Flex buttons
+  el.querySelectorAll('[data-unflex-id]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      showMoveOutOfFlexModal(btn.getAttribute('data-unflex-id'));
+    });
+  });
+
+  // Wire fighter name buttons to open the profile modal
+  el.querySelectorAll('[data-open-fighter]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      showFighterModal(btn.getAttribute('data-open-fighter'));
+    });
+  });
 }
 
 // Renders one slot category: a header row (title + pip dots) followed by fighter rows.
-// slotType is passed through so each row knows whether to show the "→ Flex" button.
-function renderSlotSection(title, fighters, totalSlots, isFull, slotType) {
+function renderSlotSection(title, fighters, totalSlots, ctx, slotType) {
   const pipsHtml = renderPips(fighters.length, totalSlots);
   let html = '<div class="lineup-slot-header">';
   html += '<span class="lineup-slot-header__title">' + escapeHtml(title) + '</span>';
@@ -424,15 +487,14 @@ function renderSlotSection(title, fighters, totalSlots, isFull, slotType) {
   });
 
   sorted.forEach(function(fighter) {
-    html += renderRosterRow(fighter, isFull, slotType);
+    html += renderRosterRow(fighter, ctx, slotType);
   });
 
   return html;
 }
 
 // Returns the HTML for a single roster row.
-// slotType is this fighter's current slot category (used to decide whether to show flex button).
-function renderRosterRow(fighter, isFull, slotType) {
+function renderRosterRow(fighter, ctx, slotType) {
   const isStarted  = selections.has(fighter.id);
   const rankLabel  = fighter.is_champion ? 'C' : (fighter.current_rank ? '#' + fighter.current_rank : 'NR');
   const rankClass  = fighter.is_champion ? 'rank-champion' : (fighter.current_rank ? 'rank-ranked' : 'rank-unranked');
@@ -450,19 +512,32 @@ function renderRosterRow(fighter, isFull, slotType) {
       : '<span class="lineup-bench-badge">Bench</span>';
   } else if (isStarted) {
     btnHtml = '<button class="btn-ghost lineup-row-btn" data-fighter-id="' + fighter.id + '">Bench</button>';
-  } else if (isFull) {
+  } else if (ctx.isFull) {
     btnHtml = '<button class="btn-secondary lineup-row-btn" disabled>Start</button>';
   } else {
     btnHtml = '<button class="btn-secondary lineup-row-btn" data-fighter-id="' + fighter.id + '">Start</button>';
   }
 
-  // "Move to Flex" button: only for fighters not already in the any_flex slot,
-  // and only when the lineup isn't locked
-  const flexBtn = (!isLocked && slotType !== 'any_flex')
+  // "→ Flex": only when not already in any_flex, lineup isn't locked, AND either a
+  // flex slot is open OR a valid swap partner exists in flex.
+  // Men: swap partner must share division (so they can return to that slot).
+  // Women: any woman in flex can swap back to women_flex, regardless of specific division.
+  var fighterIsWoman = WOMENS_DIVISIONS.indexOf(fighter.primary_division) !== -1;
+  var flexSwapExists = fighterIsWoman
+    ? ctx.flexDivisions.some(function(d) { return WOMENS_DIVISIONS.indexOf(d) !== -1; })
+    : ctx.flexDivisions.indexOf(fighter.primary_division) !== -1;
+  var flexEligible = !isLocked && slotType !== 'any_flex' &&
+    (ctx.flexCount < 2 || flexSwapExists);
+  var flexBtn = flexEligible
     ? '<button class="lineup-flex-btn" data-flex-id="' + fighter.id + '" title="Move to Any-Division Flex">&rarr; Flex</button>'
     : '';
 
-  // Drop button is hidden while the lineup is locked (can't change roster mid-event)
+  // "← Out": shown only on any_flex fighters when lineup isn't locked
+  var unflexBtn = (!isLocked && slotType === 'any_flex')
+    ? '<button class="lineup-flex-btn" data-unflex-id="' + fighter.id + '" title="Move back to division slot">&larr; Out</button>'
+    : '';
+
+  // Drop button is hidden while the lineup is locked
   const dropBtn = isLocked
     ? ''
     : '<button class="lineup-drop-btn" data-drop-id="' + fighter.id + '" title="Drop from roster">Drop</button>';
@@ -472,12 +547,13 @@ function renderRosterRow(fighter, isFull, slotType) {
       '<div class="lineup-roster-row__photo-wrap">' + photoHtml + '</div>' +
       '<span class="lineup-roster-row__rank ' + rankClass + '">' + rankLabel + '</span>' +
       '<div class="lineup-roster-row__info">' +
-        '<span class="lineup-roster-row__name">' + escapeHtml(fighter.name) + '</span>' +
+        '<button class="lineup-roster-row__name" data-open-fighter="' + fighter.id + '">' + escapeHtml(fighter.name) + '</button>' +
         '<span class="lineup-roster-row__division">' + escapeHtml(divLabel) + '</span>' +
       '</div>' +
       '<span class="lineup-roster-row__record">' + record + '</span>' +
       btnHtml +
       flexBtn +
+      unflexBtn +
       dropBtn +
     '</div>'
   );
@@ -490,13 +566,38 @@ function renderRosterRow(fighter, isFull, slotType) {
 // TODO: once wired to real data, call the Supabase insert/delete here
 // (see the original toggleStarter in the git history for the exact queries).
 // ========================================================================
-function toggleStarter(fighterId) {
+async function toggleStarter(fighterId) {
   if (isLocked) return;
+  if (!nextEvent) { alert('No upcoming event found. Cannot save starters.'); return; }
 
   if (selections.has(fighterId)) {
+    // Bench: delete from DB first, then update local state
+    const rowId = selectionRowIds[fighterId];
+    if (rowId) {
+      const { error } = await supabaseClient
+        .from('starter_selections')
+        .delete()
+        .eq('id', rowId);
+      if (error) { alert('Error removing starter: ' + error.message); return; }
+      delete selectionRowIds[fighterId];
+    }
     selections.delete(fighterId);
   } else {
     if (selections.size >= MAX_STARTERS) return;
+    // Start: insert into DB, store the new row id for future deletes
+    const slotPos = selections.size + 1;
+    const { data, error } = await supabaseClient
+      .from('starter_selections')
+      .insert({
+        league_member_id: myMemberId,
+        event_id:         nextEvent.id,
+        fighter_id:       fighterId,
+        slot_position:    slotPos
+      })
+      .select('id')
+      .single();
+    if (error) { alert('Error saving starter: ' + error.message); return; }
+    selectionRowIds[fighterId] = data.id;
     selections.add(fighterId);
   }
 
@@ -535,6 +636,13 @@ async function dropFighter(fighterId) {
     return;
   }
 
+  // If the dropped fighter was a starter, clean up their starter_selection row too
+  const selRowId = selectionRowIds[fighterId];
+  if (selRowId) {
+    await supabaseClient.from('starter_selections').delete().eq('id', selRowId);
+    delete selectionRowIds[fighterId];
+  }
+
   // Update local state so the UI refreshes instantly without a full page reload
   myRoster = myRoster.filter(function(f) { return f.id !== fighterId; });
   delete rosterRowIds[fighterId];
@@ -557,27 +665,37 @@ function showMoveToFlexModal(fighterId) {
   const mover = myRoster.find(function(f) { return f.id === fighterId; });
   if (!mover) return;
 
-  // Find the current any_flex fighters by re-running slot assignment
-  const assigned   = assignSlots(myRoster);
-  const flexFighters = assigned
+  // Recompute slot assignments to get the current any_flex fighters
+  const assigned     = assignSlots(myRoster);
+  const allFlexFighters = assigned
     .filter(function(item) { return item.slotType === 'any_flex'; })
     .map(function(item) { return item.fighter; });
 
-  const flexOpen = flexFighters.length < 2;
+  const flexOpen = allFlexFighters.length < 2;
 
-  // Remove any existing modal
+  // When flex is full, valid swap partners are fighters who can cleanly return to a
+  // non-flex slot once the mover takes their place.
+  // Men: must share the mover's division. Women: any woman can return to women_flex.
+  var moverIsWoman = WOMENS_DIVISIONS.indexOf(mover.primary_division) !== -1;
+  const swappableFlex = allFlexFighters.filter(function(f) {
+    if (moverIsWoman) return WOMENS_DIVISIONS.indexOf(f.primary_division) !== -1;
+    return f.primary_division === mover.primary_division;
+  });
+
   var existing = document.getElementById('moveFlexModal');
   if (existing) existing.remove();
 
   const divLabel = DIVISION_LABELS[mover.primary_division] || mover.primary_division;
 
-  // Build swap option rows (only shown when flex is full)
   let swapOptionsHtml = '';
   if (!flexOpen) {
+    var swapDesc = moverIsWoman
+      ? 'Both flex slots are taken. Choose which woman to swap out (she will return to Women\'s Flex):'
+      : 'Both flex slots are taken. Choose who to swap out (must share your division so they can take your slot):';
     swapOptionsHtml =
-      '<p class="move-flex-body-text">Both flex slots are taken. Choose who to swap out:</p>' +
+      '<p class="move-flex-body-text">' + swapDesc + '</p>' +
       '<div class="flex-swap-options" id="flexSwapOptions">' +
-        flexFighters.map(function(f, i) {
+        swappableFlex.map(function(f, i) {
           const fDiv = DIVISION_LABELS[f.primary_division] || f.primary_division;
           const selected = i === 0 ? ' flex-swap-option--selected' : '';
           return (
@@ -636,6 +754,8 @@ function showMoveToFlexModal(fighterId) {
     var swapPartnerId = null;
     if (!flexOpen) {
       var selected = modal.querySelector('.flex-swap-option--selected');
+      // If flex is full but no same-division swap partner exists the button shouldn't
+      // be reachable, but guard anyway
       if (!selected) return;
       swapPartnerId = selected.getAttribute('data-swap-id');
     }
@@ -698,6 +818,145 @@ async function moveToFlex(moverId, swapPartnerId) {
 }
 
 // ========================================================================
+// MOVE OUT OF FLEX MODAL
+// For fighters currently in any_flex, lets the user move them back to their
+// division slot. If the division is full (2 fighters already there), the user
+// picks one of those division fighters to bump to flex in exchange.
+// ========================================================================
+function showMoveOutOfFlexModal(fighterId) {
+  if (isLocked) return;
+
+  const mover = myRoster.find(function(f) { return f.id === fighterId; });
+  if (!mover) return;
+
+  // Find fighters currently occupying the target slot.
+  // Women in any_flex return to women_flex, not a division-specific slot.
+  const assigned = assignSlots(myRoster);
+  var moverIsWoman = WOMENS_DIVISIONS.indexOf(mover.primary_division) !== -1;
+  const divFighters = assigned
+    .filter(function(item) {
+      return moverIsWoman
+        ? item.slotType === 'women_flex'
+        : item.slotType === mover.primary_division;
+    })
+    .map(function(item) { return item.fighter; });
+
+  const divHasRoom = divFighters.length < 2;
+
+  var existing = document.getElementById('moveFlexModal');
+  if (existing) existing.remove();
+
+  const divLabel  = DIVISION_LABELS[mover.primary_division] || mover.primary_division;
+  // Label for the target slot shown in the modal
+  const targetSlotLabel = moverIsWoman ? "Women's Flex" : divLabel;
+
+  let swapOptionsHtml = '';
+  if (divHasRoom) {
+    swapOptionsHtml =
+      '<p class="move-flex-body-text">There\'s an open ' + escapeHtml(targetSlotLabel) +
+      ' slot. ' + escapeHtml(mover.name) + ' will move there.</p>';
+  } else {
+    swapOptionsHtml =
+      '<p class="move-flex-body-text">' + escapeHtml(targetSlotLabel) + ' is full. Choose who to send to flex:</p>' +
+      '<div class="flex-swap-options">' +
+        divFighters.map(function(f, i) {
+          const fDiv = DIVISION_LABELS[f.primary_division] || f.primary_division;
+          const selected = i === 0 ? ' flex-swap-option--selected' : '';
+          return (
+            '<div class="flex-swap-option' + selected + '" data-swap-id="' + f.id + '">' +
+              '<div class="flex-swap-option__info">' +
+                '<span class="flex-swap-option__name">' + escapeHtml(f.name) + '</span>' +
+                '<span class="flex-swap-option__div">' + escapeHtml(fDiv) + '</span>' +
+              '</div>' +
+            '</div>'
+          );
+        }).join('') +
+      '</div>';
+  }
+
+  var modal = document.createElement('div');
+  modal.id = 'moveFlexModal';
+  modal.className = 'move-flex-modal-overlay';
+  modal.innerHTML =
+    '<div class="move-flex-modal" role="dialog" aria-modal="true">' +
+      '<div class="move-flex-modal__header">' +
+        '<p class="move-flex-modal__title">Move Out of Flex</p>' +
+        '<button class="move-flex-modal__close" id="closeMoveFlexBtn" aria-label="Close">&times;</button>' +
+      '</div>' +
+      '<div class="move-flex-modal__body">' +
+        '<p class="move-flex-fighter-name">' +
+          escapeHtml(mover.name) +
+          '<span class="move-flex-fighter-div">Any-Division Flex &rarr; ' + escapeHtml(targetSlotLabel) + '</span>' +
+        '</p>' +
+        swapOptionsHtml +
+        '<div class="move-flex-modal__actions">' +
+          '<button class="btn-ghost" id="cancelMoveFlexBtn">Cancel</button>' +
+          '<button class="btn-primary" id="confirmMoveFlexBtn">Move Out</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+  document.body.appendChild(modal);
+
+  modal.querySelectorAll('.flex-swap-option').forEach(function(opt) {
+    opt.addEventListener('click', function() {
+      modal.querySelectorAll('.flex-swap-option').forEach(function(o) {
+        o.classList.remove('flex-swap-option--selected');
+      });
+      opt.classList.add('flex-swap-option--selected');
+    });
+  });
+
+  document.getElementById('confirmMoveFlexBtn').addEventListener('click', function() {
+    var swapPartnerId = null;
+    if (!divHasRoom) {
+      var selected = modal.querySelector('.flex-swap-option--selected');
+      if (!selected) return;
+      swapPartnerId = selected.getAttribute('data-swap-id');
+    }
+    closeMoveToFlexModal();
+    moveOutOfFlex(fighterId, swapPartnerId);
+  });
+
+  document.getElementById('cancelMoveFlexBtn').addEventListener('click', closeMoveToFlexModal);
+  document.getElementById('closeMoveFlexBtn').addEventListener('click', closeMoveToFlexModal);
+  modal.addEventListener('click', function(e) { if (e.target === modal) closeMoveToFlexModal(); });
+  document.addEventListener('keydown', handleFlexModalEscape);
+}
+
+// Persists moving a fighter out of any_flex back to their division slot.
+// If swapPartnerId is given, that division fighter gets bumped to flex.
+async function moveOutOfFlex(moverId, swapPartnerId) {
+  const updates = [
+    supabaseClient.from('rosters').update({ slot_override: null }).eq('id', rosterRowIds[moverId])
+  ];
+
+  if (swapPartnerId) {
+    updates.push(
+      supabaseClient.from('rosters').update({ slot_override: 'any_flex' }).eq('id', rosterRowIds[swapPartnerId])
+    );
+  }
+
+  const results = await Promise.all(updates);
+  const failed  = results.find(function(r) { return r.error; });
+  if (failed) {
+    alert('Error updating flex slot: ' + failed.error.message);
+    return;
+  }
+
+  var moverFighter = myRoster.find(function(f) { return f.id === moverId; });
+  if (moverFighter) moverFighter.slot_override = null;
+
+  if (swapPartnerId) {
+    var swapFighter = myRoster.find(function(f) { return f.id === swapPartnerId; });
+    if (swapFighter) swapFighter.slot_override = 'any_flex';
+  }
+
+  renderStarterSlots();
+  renderRosterList();
+}
+
+// ========================================================================
 // FIGHT CARD MODAL
 // Injects a full-screen overlay showing all fights grouped by section.
 // Clicking the overlay or the close button dismisses it.
@@ -737,11 +996,11 @@ function showFightCardModal() {
   modal.id = 'fightCardModal';
   modal.className = 'fight-card-modal-overlay';
   modal.innerHTML =
-    '<div class="fight-card-modal" role="dialog" aria-modal="true" aria-label="UFC 329 Fight Card">' +
+    '<div class="fight-card-modal" role="dialog" aria-modal="true" aria-label="Fight Card">' +
       '<div class="fight-card-modal__header">' +
         '<div>' +
           '<p class="fight-card-modal__eyebrow">Fight Card</p>' +
-          '<p class="fight-card-modal__title">UFC 329</p>' +
+          '<p class="fight-card-modal__title">' + escapeHtml(nextEvent ? nextEvent.name : 'TBD') + '</p>' +
         '</div>' +
         '<button class="fight-card-modal__close" id="closeFightCardBtn" aria-label="Close">&times;</button>' +
       '</div>' +

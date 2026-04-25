@@ -1,0 +1,341 @@
+// ========================================================================
+// FIGHTER MODAL
+// Shows a fighter's profile in an overlay modal. Can be included on any
+// page that needs it. Call showFighterModal(fighterId) to open.
+//
+// Depends on: supabaseClient (supabase-config.js), escapeHtml if already
+// defined on the page (falls back to an inline version if not).
+// ========================================================================
+
+// Card position multipliers — must match score-event.js
+var FIGHTER_MODAL_MULTIPLIERS = {
+  main_event:   1.2,
+  co_main:      1.1,
+  prelim:       1.0,
+  early_prelim: 1.0
+};
+
+var FIGHTER_MODAL_DIVISION_LABELS = {
+  strawweight:       "Women's Strawweight",
+  flyweight_w:       "Women's Flyweight",
+  bantamweight_w:    "Women's Bantamweight",
+  flyweight:         "Men's Flyweight",
+  bantamweight:      "Men's Bantamweight",
+  featherweight:     "Men's Featherweight",
+  lightweight:       "Men's Lightweight",
+  welterweight:      "Men's Welterweight",
+  middleweight:      "Men's Middleweight",
+  light_heavyweight: "Men's Light Heavyweight",
+  heavyweight:       "Men's Heavyweight"
+};
+
+var FIGHTER_MODAL_OUTCOME_LABELS = {
+  ko_tko:     'KO/TKO',
+  submission: 'Submission',
+  decision_u: 'Decision (U)',
+  decision_s: 'Decision (S)',
+  decision_m: 'Decision (M)',
+  dq:         'DQ',
+  no_contest: 'No Contest',
+  draw:       'Draw'
+};
+
+// ========================================================================
+// OPEN MODAL
+// ========================================================================
+async function showFighterModal(fighterId) {
+  // Remove any existing instance
+  var existing = document.getElementById('fighterModal');
+  if (existing) existing.remove();
+
+  // Create a loading state overlay immediately so the user gets feedback
+  var overlay = document.createElement('div');
+  overlay.id = 'fighterModal';
+  overlay.className = 'fighter-modal-overlay';
+  overlay.innerHTML =
+    '<div class="fighter-modal" role="dialog" aria-modal="true">' +
+      '<div class="fighter-modal__loading">Loading fighter...</div>' +
+    '</div>';
+  document.body.appendChild(overlay);
+
+  // Close on overlay click
+  overlay.addEventListener('click', function(e) {
+    if (e.target === overlay) closeFighterModal();
+  });
+  document.addEventListener('keydown', _fighterModalEscapeHandler);
+
+  // Fetch fighter + fights in parallel
+  var results = await Promise.all([
+    supabaseClient
+      .from('fighters')
+      .select('id, name, nickname, primary_division, current_rank, is_champion, record_wins, record_losses, record_draws, photo_url, country')
+      .eq('id', fighterId)
+      .single(),
+
+    supabaseClient
+      .from('fight_results')
+      .select('*, event:ufc_events(id, name, event_date)')
+      .or('fighter_a_id.eq.' + fighterId + ',fighter_b_id.eq.' + fighterId)
+      .order('created_at', { ascending: false })
+  ]);
+
+  var fighterRes = results[0];
+  var fightsRes  = results[1];
+
+  if (fighterRes.error || !fighterRes.data) {
+    document.querySelector('#fighterModal .fighter-modal').innerHTML =
+      '<div class="fighter-modal__loading">Fighter not found.' +
+      '<br><button class="btn-ghost" style="margin-top:1rem" onclick="closeFighterModal()">Close</button></div>';
+    return;
+  }
+
+  var fighter = fighterRes.data;
+  var fights  = fightsRes.data || [];
+
+  // Fetch opponent names
+  var opponentMap = {};
+  if (fights.length > 0) {
+    var opponentIds = fights.map(function(f) {
+      return f.fighter_a_id === fighterId ? f.fighter_b_id : f.fighter_a_id;
+    }).filter(function(id, i, arr) { return arr.indexOf(id) === i; });
+
+    var opRes = await supabaseClient.from('fighters').select('id, name').in('id', opponentIds);
+    (opRes.data || []).forEach(function(o) { opponentMap[o.id] = o.name; });
+  }
+
+  // Replace loading state with real content
+  document.querySelector('#fighterModal .fighter-modal').outerHTML =
+    buildFighterModalHtml(fighter, fights, fighterId, opponentMap);
+
+  // Re-query since we replaced the element
+  document.getElementById('closeFighterModalBtn').addEventListener('click', closeFighterModal);
+}
+
+function closeFighterModal() {
+  var modal = document.getElementById('fighterModal');
+  if (modal) modal.remove();
+  document.removeEventListener('keydown', _fighterModalEscapeHandler);
+}
+
+function _fighterModalEscapeHandler(e) {
+  if (e.key === 'Escape') closeFighterModal();
+}
+
+// ========================================================================
+// BUILD MODAL HTML
+// ========================================================================
+function buildFighterModalHtml(fighter, fights, fighterId, opponentMap) {
+  var divLabel  = FIGHTER_MODAL_DIVISION_LABELS[fighter.primary_division] || fighter.primary_division;
+  var record    = fighter.record_wins + '-' + fighter.record_losses +
+                  (fighter.record_draws ? '-' + fighter.record_draws : '');
+  var rankLabel = fighter.is_champion ? 'C'
+                : (fighter.current_rank ? '#' + fighter.current_rank : 'NR');
+  var rankSub   = fighter.is_champion ? 'CHAMP' : 'RANK';
+  var tierClass = fighter.is_champion                                  ? 'fighter-card--champion'
+                : (fighter.current_rank && fighter.current_rank <= 5)  ? 'fighter-card--top5'
+                : (fighter.current_rank && fighter.current_rank <= 15) ? 'fighter-card--top15' : '';
+
+  // Career stats
+  var careerPts = fights.reduce(function(sum, f) {
+    return sum + _modalComputeScore(f, f.fighter_a_id === fighterId).total;
+  }, 0);
+  var finishes = fights.filter(function(f) {
+    return f.winner_id === fighterId &&
+           (f.outcome === 'ko_tko' || f.outcome === 'submission');
+  }).length;
+
+  // Full fighter card (same component used everywhere in the app)
+  var photoHtml = fighter.photo_url
+    ? '<img class="fighter-card__photo" src="' + _mEsc(fighter.photo_url) +
+      '" alt="' + _mEsc(fighter.name) + '" onerror="this.style.display=\'none\'">'
+    : '<div class="fighter-card__photo-placeholder"></div>';
+  var champBadge = fighter.is_champion ? '<span class="fighter-card__badge-champ">Champ</span>' : '';
+
+  var cardHtml =
+    '<div class="fighter-card ' + tierClass + '">' +
+      '<div class="fighter-card__photo-wrap">' + photoHtml + '</div>' +
+      '<div class="fighter-card__rating">' +
+        '<span class="fighter-card__rating-num">' + rankLabel + '</span>' +
+        '<span class="fighter-card__rating-label">' + rankSub + '</span>' +
+      '</div>' +
+      champBadge +
+      '<div class="fighter-card__info">' +
+        '<p class="fighter-card__division">' + _mEsc(divLabel) + '</p>' +
+        '<p class="fighter-card__name">' + _mEsc(fighter.name) + '</p>' +
+        '<p class="fighter-card__record">' + record + '</p>' +
+      '</div>' +
+    '</div>';
+
+  // Fight history rows
+  var historyHtml = '';
+  if (fights.length === 0) {
+    historyHtml = '<p class="draft-empty" style="padding:var(--space-4)">No fight results recorded yet.</p>';
+  } else {
+    var rows = fights.map(function(fight) {
+      var isA      = fight.fighter_a_id === fighterId;
+      var score    = _modalComputeScore(fight, isA);
+      var oppId    = isA ? fight.fighter_b_id : fight.fighter_a_id;
+      var oppName  = opponentMap[oppId] || 'Unknown';
+
+      var resultLabel, resultClass;
+      if (fight.outcome === 'no_contest') {
+        resultLabel = 'NC'; resultClass = 'fight-result--nc';
+      } else if (fight.winner_id === fighterId) {
+        resultLabel = 'W'; resultClass = 'fight-result--win';
+      } else if (fight.outcome === 'draw') {
+        resultLabel = 'D'; resultClass = 'fight-result--draw';
+      } else {
+        resultLabel = 'L'; resultClass = 'fight-result--loss';
+      }
+
+      var method    = FIGHTER_MODAL_OUTCOME_LABELS[fight.outcome] || fight.outcome || '-';
+      var round     = fight.end_round ? 'R' + fight.end_round : '-';
+      var eventName = fight.event ? _mEsc(fight.event.name) : '-';
+      var eventDate = fight.event && fight.event.event_date
+        ? _modalFormatDate(fight.event.event_date) : '';
+      var ptsClass  = score.total >= 25 ? ' fight-history-pts--high'
+                    : score.total >= 10 ? ' fight-history-pts--mid' : '';
+
+      return (
+        '<tr class="fight-history-row">' +
+          '<td class="fight-history-event">' +
+            '<span class="fight-history-event__name">' + eventName + '</span>' +
+            (eventDate ? '<span class="fight-history-event__date">' + eventDate + '</span>' : '') +
+          '</td>' +
+          '<td class="fight-history-opponent">' + _mEsc(oppName) + '</td>' +
+          '<td><span class="fight-result ' + resultClass + '">' + resultLabel + '</span></td>' +
+          '<td class="fight-history-method">' + _mEsc(method) + '</td>' +
+          '<td class="fight-history-round">' + round + '</td>' +
+          '<td class="fight-history-pts' + ptsClass + '">' + score.total.toFixed(1) + '</td>' +
+        '</tr>'
+      );
+    }).join('');
+
+    historyHtml =
+      '<table class="fight-history-table">' +
+        '<thead><tr>' +
+          '<th>Event</th><th>Opponent</th><th>Result</th>' +
+          '<th>Method</th><th>Rnd</th><th>Pts</th>' +
+        '</tr></thead>' +
+        '<tbody>' + rows + '</tbody>' +
+      '</table>';
+  }
+
+  return (
+    '<div class="fighter-modal" role="dialog" aria-modal="true">' +
+
+      // Hero: fighter card on the left, name/bio on the right
+      '<div class="fighter-modal__hero">' +
+        '<button class="fighter-modal__close" id="closeFighterModalBtn" aria-label="Close">&times;</button>' +
+        cardHtml +
+        '<div class="fighter-modal__hero-info">' +
+          (fighter.nickname ? '<p class="fighter-modal__nickname">"' + _mEsc(fighter.nickname) + '"</p>' : '') +
+          '<h2 class="fighter-modal__name">' + _mEsc(fighter.name) + '</h2>' +
+          (fighter.country ? '<p class="fighter-modal__country">' + _mEsc(fighter.country) + '</p>' : '') +
+        '</div>' +
+      '</div>' +
+
+      // Career stat tiles
+      '<div class="fighter-modal__stats">' +
+        _statTile(record, 'Record') +
+        _statTile(String(finishes), 'Finishes') +
+        _statTile(String(fights.length), 'UFC Fights') +
+        _statTile(careerPts.toFixed(1), 'Career Pts') +
+      '</div>' +
+
+      // Fight history
+      '<div class="fighter-modal__body">' +
+        '<p class="fighter-modal__section-label">Fight History ' +
+          '<span style="opacity:.5;font-size:.85em">(' + fights.length + ')</span>' +
+        '</p>' +
+        historyHtml +
+      '</div>' +
+
+    '</div>'
+  );
+}
+
+function _statTile(value, label) {
+  return (
+    '<div class="fighter-modal__stat">' +
+      '<span class="fighter-modal__stat-val">' + _mEsc(value) + '</span>' +
+      '<span class="fighter-modal__stat-label">' + label + '</span>' +
+    '</div>'
+  );
+}
+
+// ========================================================================
+// SCORING (v1.2) — kept in sync with score-event.js
+// ========================================================================
+function _modalComputeScore(fight, isA) {
+  var prefix    = isA ? 'fighter_a_' : 'fighter_b_';
+  var fighterId = isA ? fight.fighter_a_id : fight.fighter_b_id;
+
+  var sigStrikes   = fight[prefix + 'sig_strikes']     || 0;
+  var takedowns    = fight[prefix + 'takedowns']       || 0;
+  var reversals    = fight[prefix + 'reversals']       || 0;
+  var knockdowns   = fight[prefix + 'knockdowns']      || 0;
+  var controlSec   = fight[prefix + 'control_seconds'] || 0;
+  var potn         = !!fight[prefix + 'potn'];
+  var opponentRank = fight[prefix + 'opponent_rank'];
+
+  var isWinner = fight.winner_id === fighterId;
+  var isDraw   = fight.outcome === 'draw';
+
+  var base = (sigStrikes * 0.1) + (takedowns * 1) + (reversals * 1) +
+             (knockdowns * 2)   + (controlSec * 0.01);
+
+  var winBonus = 0;
+  if (isWinner) {
+    var isFinish = fight.outcome === 'ko_tko' || fight.outcome === 'submission';
+    if (isFinish) {
+      if      (fight.end_round === 1) winBonus = 18;
+      else if (fight.end_round === 2) winBonus = 14;
+      else if (fight.end_round === 3) winBonus = 9;
+      else                            winBonus = 8;
+      if (fight.end_round === 1 && fight.end_time_seconds != null && fight.end_time_seconds < 60) winBonus += 5;
+    } else if (fight.outcome === 'decision_u' || fight.outcome === 'decision_s' ||
+               fight.outcome === 'decision_m' || fight.outcome === 'dq') {
+      winBonus = 6;
+    }
+  } else if (isDraw) {
+    winBonus = 3;
+  }
+
+  var titleBonus = 0;
+  if (isWinner && fight.title_type !== 'none') {
+    if      (fight.title_type === 'divisional') titleBonus = fight.is_title_defense ? 5 : 10;
+    else if (fight.title_type === 'interim' || fight.title_type === 'bmf') titleBonus = fight.is_title_defense ? 3 : 5;
+  }
+
+  var rankedOppBonus = 0;
+  if (isWinner && opponentRank != null) {
+    if      (opponentRank <= 5)  rankedOppBonus = 4;
+    else if (opponentRank <= 10) rankedOppBonus = 2;
+    else if (opponentRank <= 15) rankedOppBonus = 1;
+  }
+
+  var potnBonus = potn ? 6 : 0;
+  var fotnBonus = fight.fight_of_the_night ? 4 : 0;
+  var mult      = FIGHTER_MODAL_MULTIPLIERS[fight.card_position] || 1.0;
+  var subtotal  = base + winBonus + titleBonus + rankedOppBonus + potnBonus + fotnBonus;
+
+  return { total: Math.round(subtotal * mult * 100) / 100 };
+}
+
+// ========================================================================
+// HELPERS
+// ========================================================================
+function _mEsc(str) {
+  if (str === null || str === undefined) return '';
+  var d = document.createElement('div');
+  d.textContent = String(str);
+  return d.innerHTML;
+}
+
+function _modalFormatDate(dateStr) {
+  if (!dateStr) return '';
+  var d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}

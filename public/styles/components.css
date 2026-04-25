@@ -240,8 +240,7 @@ body {
 .fighter-card {
   position: relative;
   width: 200px;
-  /* aspect-ratio locks the 2:3 portrait format regardless of container */
-  aspect-ratio: 2 / 3;
+  min-height: 300px; /* equivalent of the old 2:3 aspect-ratio at 200px wide */
   border-radius: 10px;
   border: 2px solid var(--border-subtle); /* default: unranked */
   overflow: hidden;
@@ -251,9 +250,9 @@ body {
   flex-shrink: 0;
 }
 
-/* Photo area: top 60% of the card */
+/* Photo area: fixed 180px so the card can grow taller when buttons are present */
 .fighter-card__photo-wrap {
-  flex: 0 0 60%;
+  flex: 0 0 180px;
   /* Dark gradient as the placeholder background when no photo is available */
   background: linear-gradient(160deg, var(--bg-tertiary) 0%, var(--bg-secondary) 100%);
   display: flex;
@@ -3577,6 +3576,18 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* button reset */
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: var(--font-body);
+  text-align: left;
+}
+
+.lineup-roster-row__name:hover {
+  color: var(--accent-crimson);
+  text-decoration: underline;
 }
 
 .lineup-roster-row__division {
@@ -3852,4 +3863,392 @@ body {
     align-items: flex-start;
     padding: var(--space-6) var(--space-4);
   }
+
+  .fighter-hero__inner {
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-6);
+  }
+
+  .fighter-hero__bio { align-items: center; text-align: center; }
+
+  .fight-history-table { font-size: var(--text-caption); }
+
+  /* Hide method + round columns on small screens to keep table readable */
+  .fight-history-method,
+  .fight-history-round,
+  th:nth-child(4),
+  th:nth-child(5) { display: none; }
 }
+
+/* ========================================================================
+   FIGHTER MODAL
+   ======================================================================== */
+
+.fighter-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.82);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 400;
+  padding: var(--space-4);
+  animation: fadeIn 0.15s ease;
+}
+
+.fighter-modal {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 760px;
+  max-height: 88vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: slideUp 0.2s ease;
+}
+
+/* Loading state */
+.fighter-modal__loading {
+  padding: var(--space-8);
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: var(--text-body-sm);
+}
+
+/* ---- Hero: cage texture + crimson glow, fighter card left, bio right ---- */
+.fighter-modal__hero {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-6);
+  padding: var(--space-6) var(--space-6) var(--space-4);
+  background:
+    radial-gradient(ellipse 100% 200% at 30% -20%, rgba(193,59,46,0.2) 0%, transparent 55%),
+    repeating-linear-gradient( 45deg, transparent, transparent 14px, rgba(255,255,255,0.013) 14px, rgba(255,255,255,0.013) 15px),
+    repeating-linear-gradient(-45deg, transparent, transparent 14px, rgba(255,255,255,0.013) 14px, rgba(255,255,255,0.013) 15px),
+    var(--bg-primary);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.fighter-modal__hero > .fighter-card {
+  flex-shrink: 0;
+}
+
+.fighter-modal__close {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  background: rgba(0,0,0,0.4);
+  border: 1px solid var(--border-strong);
+  color: var(--text-secondary);
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 5px 10px;
+  border-radius: 6px;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.fighter-modal__close:hover {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+
+/* Bio text to the right of the fighter card */
+.fighter-modal__hero-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding-bottom: var(--space-6);
+  padding-right: var(--space-6);
+  min-width: 0;
+}
+
+.fighter-modal__nickname {
+  font-size: var(--text-body-sm);
+  color: var(--text-tertiary);
+  font-style: italic;
+  margin: 0;
+}
+
+.fighter-modal__name {
+  font-family: var(--font-display);
+  font-size: 3rem;
+  line-height: 1;
+  letter-spacing: 0.03em;
+  color: var(--text-primary);
+  margin: 0;
+  /* allow long names to wrap rather than overflow */
+  overflow-wrap: break-word;
+}
+
+.fighter-modal__country {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0;
+}
+
+/* ---- Career stat tiles ---- */
+.fighter-modal__stats {
+  display: flex;
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+  background: var(--bg-secondary);
+}
+
+.fighter-modal__stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: var(--space-4) var(--space-2);
+  border-right: 1px solid var(--border-subtle);
+}
+
+.fighter-modal__stat:last-child { border-right: none; }
+
+.fighter-modal__stat-val {
+  font-family: var(--font-display);
+  font-size: 1.8rem;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: var(--text-primary);
+}
+
+.fighter-modal__stat-label {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-tertiary);
+}
+
+/* ---- Scrollable body with fight history ---- */
+.fighter-modal__body {
+  overflow-y: auto;
+  flex: 1;
+}
+
+.fighter-modal__section-label {
+  font-size: var(--text-caption);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-tertiary);
+  padding: var(--space-3) var(--space-4);
+  margin: 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* Fight history table sits flush inside the modal body */
+.fighter-modal__body .fight-history-table {
+  border-radius: 0;
+  border: none;
+}
+
+.fighter-modal__body .fight-history-table thead th {
+  background: var(--bg-tertiary);
+}
+
+/* ========================================================================
+   FIGHTER PROFILE PAGE
+   ======================================================================== */
+
+/* Full-width hero banner — cage texture + crimson glow, same as settings page */
+.fighter-hero {
+  background:
+    repeating-linear-gradient( 45deg, transparent, transparent 14px, rgba(255,255,255,0.015) 14px, rgba(255,255,255,0.015) 15px),
+    repeating-linear-gradient(-45deg, transparent, transparent 14px, rgba(255,255,255,0.015) 14px, rgba(255,255,255,0.015) 15px),
+    var(--bg-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+  padding: var(--space-8) 0;
+}
+
+.fighter-hero__inner {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 var(--space-8);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-8);
+}
+
+/* Left: keep the fighter-card at its natural size */
+.fighter-hero__card {
+  flex-shrink: 0;
+}
+
+/* Right: bio text + career stat tiles */
+.fighter-hero__bio {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-2);
+}
+
+.fighter-hero__nickname {
+  font-size: var(--text-body-sm);
+  color: var(--text-tertiary);
+  font-style: italic;
+  margin: 0;
+}
+
+.fighter-hero__name {
+  font-family: var(--font-display);
+  font-size: 3rem;
+  line-height: 1;
+  letter-spacing: 0.03em;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.fighter-hero__division {
+  font-size: var(--text-body-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--accent-crimson);
+  margin: 0;
+}
+
+.fighter-hero__country {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin: 0;
+}
+
+/* Career stat tiles row */
+.fighter-hero__stats {
+  display: flex;
+  gap: var(--space-4);
+  margin-top: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.fighter-hero__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 70px;
+}
+
+.fighter-hero__stat-val {
+  font-family: var(--font-display);
+  font-size: 1.8rem;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: var(--text-primary);
+}
+
+.fighter-hero__stat-label {
+  font-size: var(--text-caption);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-tertiary);
+}
+
+/* ---- Fight history table ---- */
+
+.fight-history-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.fight-history-table thead th {
+  padding: 10px var(--space-4);
+  text-align: left;
+  font-size: var(--text-caption);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-tertiary);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-tertiary);
+}
+
+.fight-history-row td {
+  padding: 10px var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+  vertical-align: middle;
+}
+
+.fight-history-row:last-child td { border-bottom: none; }
+
+.fight-history-event__name {
+  display: block;
+  font-size: var(--text-body-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.fight-history-event__date {
+  display: block;
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  margin-top: 1px;
+}
+
+.fight-history-opponent {
+  font-size: var(--text-body-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.fight-history-method {
+  font-size: var(--text-caption);
+  color: var(--text-secondary);
+}
+
+.fight-history-round {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  font-weight: 600;
+}
+
+/* Result badge */
+.fight-result {
+  display: inline-block;
+  width: 28px;
+  text-align: center;
+  padding: 3px 0;
+  border-radius: 4px;
+  font-size: var(--text-caption);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.fight-result--win  { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
+.fight-result--loss { background: rgba(193, 59, 46, 0.12);  color: var(--accent-crimson); }
+.fight-result--draw { background: rgba(212, 175, 55, 0.12); color: var(--accent-gold); }
+.fight-result--nc   { background: var(--bg-tertiary);       color: var(--text-tertiary); }
+
+/* Fantasy points cell — colour-coded by performance */
+.fight-history-pts {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
+  text-align: right;
+}
+
+.fight-history-pts--mid  { color: var(--accent-gold); }
+.fight-history-pts--high { color: #4ade80; }
