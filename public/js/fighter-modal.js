@@ -64,11 +64,16 @@ async function showFighterModal(fighterId) {
   });
   document.addEventListener('keydown', _fighterModalEscapeHandler);
 
-  // Fetch fighter + fights in parallel
-  var results = await Promise.all([
+  // If this page is in league context (most pages are: ?id=LEAGUE_ID), look
+  // up whether the fighter is currently rostered. Drives the Propose Trade
+  // CTA — only shown when the fighter is on someone's roster in this league.
+  var pageLeagueId = new URLSearchParams(window.location.search).get('id');
+
+  // Fetch fighter + fights (+ optional ownership) in parallel
+  var fetchPromises = [
     supabaseClient
       .from('fighters')
-      .select('id, name, nickname, primary_division, current_rank, is_champion, record_wins, record_losses, record_draws, photo_url, country')
+      .select('id, name, nickname, primary_division, current_rank, is_champion, record_wins, record_losses, record_draws, photo_url, country, date_of_birth')
       .eq('id', fighterId)
       .single(),
 
@@ -77,10 +82,38 @@ async function showFighterModal(fighterId) {
       .select('*, event:ufc_events(id, name, event_date)')
       .or('fighter_a_id.eq.' + fighterId + ',fighter_b_id.eq.' + fighterId)
       .order('created_at', { ascending: false })
-  ]);
+  ];
 
-  var fighterRes = results[0];
-  var fightsRes  = results[1];
+  if (pageLeagueId) {
+    fetchPromises.push(
+      supabaseClient
+        .from('rosters')
+        .select('league_member_id')
+        .eq('league_id', pageLeagueId)
+        .eq('fighter_id', fighterId)
+        .maybeSingle(),
+      // We also need the league's draft state so we can swap CTAs:
+      //   * during an active draft → "Draft" button (only appears on the
+      //     draft page, where window.makePick exists)
+      //   * after the draft        → "Propose Trade" button
+      //   * never both at once
+      supabaseClient
+        .from('leagues')
+        .select('draft_started, draft_completed')
+        .eq('id', pageLeagueId)
+        .single()
+    );
+  }
+
+  var results = await Promise.all(fetchPromises);
+
+  var fighterRes   = results[0];
+  var fightsRes    = results[1];
+  var ownershipRes = results[2] || null;
+  var leagueRes    = results[3] || null;
+  var ownerMemberId   = (ownershipRes && ownershipRes.data) ? ownershipRes.data.league_member_id : null;
+  var draftCompleted  = !!(leagueRes && leagueRes.data && leagueRes.data.draft_completed);
+  var draftActive     = !!(leagueRes && leagueRes.data && leagueRes.data.draft_started && !leagueRes.data.draft_completed);
 
   if (fighterRes.error || !fighterRes.data) {
     document.querySelector('#fighterModal .fighter-modal').innerHTML =
@@ -105,10 +138,25 @@ async function showFighterModal(fighterId) {
 
   // Replace loading state with real content
   document.querySelector('#fighterModal .fighter-modal').outerHTML =
-    buildFighterModalHtml(fighter, fights, fighterId, opponentMap);
+    buildFighterModalHtml(fighter, fights, fighterId, opponentMap, {
+      leagueId:        pageLeagueId,
+      ownerMemberId:   ownerMemberId,
+      draftCompleted:  draftCompleted,
+      draftActive:     draftActive
+    });
 
   // Re-query since we replaced the element
   document.getElementById('closeFighterModalBtn').addEventListener('click', closeFighterModal);
+
+  // Wire the Propose Trade button (only present when ownerMemberId is known)
+  var tradeBtn = document.getElementById('fighterModalTradeBtn');
+  if (tradeBtn) {
+    tradeBtn.addEventListener('click', function() {
+      var url = 'trades.html?id=' + encodeURIComponent(pageLeagueId) +
+                '&withFighter=' + encodeURIComponent(fighterId);
+      window.location.href = url;
+    });
+  }
 }
 
 function closeFighterModal() {
@@ -124,7 +172,10 @@ function _fighterModalEscapeHandler(e) {
 // ========================================================================
 // BUILD MODAL HTML
 // ========================================================================
-function buildFighterModalHtml(fighter, fights, fighterId, opponentMap) {
+function buildFighterModalHtml(fighter, fights, fighterId, opponentMap, tradeCtx) {
+  // tradeCtx: { leagueId, ownerMemberId } — when ownerMemberId is non-null,
+  // the fighter is currently rostered and can be the subject of a trade.
+  tradeCtx = tradeCtx || {};
   var divLabel  = FIGHTER_MODAL_DIVISION_LABELS[fighter.primary_division] || fighter.primary_division;
   var record    = fighter.record_wins + '-' + fighter.record_losses +
                   (fighter.record_draws ? '-' + fighter.record_draws : '');
@@ -232,6 +283,32 @@ function buildFighterModalHtml(fighter, fights, fighterId, opponentMap) {
           (fighter.nickname ? '<p class="fighter-modal__nickname">"' + _mEsc(fighter.nickname) + '"</p>' : '') +
           '<h2 class="fighter-modal__name">' + _mEsc(fighter.name) + '</h2>' +
           (fighter.country ? '<p class="fighter-modal__country">' + _mEsc(fighter.country) + '</p>' : '') +
+          (function() {
+            var age = _modalAgeFromDob(fighter.date_of_birth);
+            return '<p class="fighter-modal__country">Age ' + (age != null ? age : '[age]') + '</p>';
+          })() +
+          // CTAs — at most one shows at a time.
+          //
+          //   Draft (during active draft, only on the draft page where
+          //   window.makePick is exposed): visible for unowned fighters.
+          //
+          //   Propose Trade (after draft completes): visible for fighters
+          //   on someone's roster.
+          (function() {
+            var canDraft = tradeCtx.draftActive
+                        && !tradeCtx.ownerMemberId
+                        && typeof window.makePick === 'function';
+            if (canDraft) {
+              return '<button class="btn-primary fighter-modal__draft-btn" ' +
+                       'id="fighterModalDraftBtn" data-draft-fighter="' +
+                       _mEsc(fighterId) + '">Draft Fighter</button>';
+            }
+            if (tradeCtx.ownerMemberId && tradeCtx.draftCompleted) {
+              return '<button class="btn-secondary fighter-modal__trade-btn" ' +
+                       'id="fighterModalTradeBtn">Propose Trade</button>';
+            }
+            return '';
+          })() +
         '</div>' +
       '</div>' +
 
@@ -273,7 +350,6 @@ function _modalComputeScore(fight, isA) {
 
   var sigStrikes   = fight[prefix + 'sig_strikes']     || 0;
   var takedowns    = fight[prefix + 'takedowns']       || 0;
-  var reversals    = fight[prefix + 'reversals']       || 0;
   var knockdowns   = fight[prefix + 'knockdowns']      || 0;
   var controlSec   = fight[prefix + 'control_seconds'] || 0;
   var potn         = !!fight[prefix + 'potn'];
@@ -282,7 +358,7 @@ function _modalComputeScore(fight, isA) {
   var isWinner = fight.winner_id === fighterId;
   var isDraw   = fight.outcome === 'draw';
 
-  var base = (sigStrikes * 0.1) + (takedowns * 1) + (reversals * 1) +
+  var base = (sigStrikes * 0.1) + (takedowns * 1) +
              (knockdowns * 2)   + (controlSec * 0.01);
 
   var winBonus = 0;
@@ -338,4 +414,16 @@ function _modalFormatDate(dateStr) {
   var d = new Date(dateStr);
   if (isNaN(d.getTime())) return dateStr;
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+// Whole-year age from a YYYY-MM-DD birth date. Returns null if missing/unparseable.
+function _modalAgeFromDob(dob) {
+  if (!dob) return null;
+  var birth = new Date(dob);
+  if (isNaN(birth.getTime())) return null;
+  var today = new Date();
+  var age   = today.getFullYear() - birth.getFullYear();
+  var m = today.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+  return age;
 }

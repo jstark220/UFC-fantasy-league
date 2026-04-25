@@ -44,6 +44,10 @@
       <!-- Event banner: rendered by lineup.js -->
       <div id="eventBanner"></div>
 
+      <!-- Roster imbalance warning — shown when trades / FA leave the roster
+           out of alignment with construction rules. Populated by lineup.js. -->
+      <div id="rosterImbalanceBanner" class="roster-imbalance-banner" style="display: none;"></div>
+
       <!-- Starter card slots -->
       <div class="lineup-section">
         <p class="section-label">
@@ -66,6 +70,7 @@
   <script src="js/supabase-config.js"></script>
   <script src="js/auth-guard.js"></script>
   <script src="js/fighter-modal.js"></script>
+  <script src="js/waiver-phase.js"></script>
   <script src="js/lineup.js"></script>
 
   <script>

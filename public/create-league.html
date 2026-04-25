@@ -3,76 +3,307 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Create League - UFC Fantasy League</title>
-  <link rel="stylesheet" href="css/styles.css">
+
+  <script src="js/theme.js"></script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="styles/tokens.css">
+  <link rel="stylesheet" href="styles/components.css">
+
+  <title>Create League - Knockdown Fantasy</title>
 </head>
-<body class="auth-page">
+<body>
 
-  <div class="card">
+  <div class="dashboard-page" id="pageContent" style="display: none;">
 
-    <a href="dashboard.html" class="back-link">← My Leagues</a>
-
-    <h1>Create League</h1>
-    <p class="subtitle">Set up a new UFC Fantasy League</p>
-
-    <!-- Error or success message; hidden by default -->
-    <div id="message" class="message"></div>
-
-    <form id="createForm">
-
-      <div class="form-group">
-        <label for="leagueName">League Name</label>
-        <input type="text" id="leagueName" placeholder="e.g. Octagon Champions" maxlength="60" required>
+    <nav class="top-nav">
+      <a href="index.html" class="top-nav__logo">
+        <span class="kf-red">Knockdown</span> Fantasy
+      </a>
+      <div class="top-nav__links">
+        <a href="dashboard.html" class="btn-ghost">← Dashboard</a>
       </div>
-
-      <div class="form-group">
-        <label for="format">Format</label>
-        <select id="format" required>
-          <option value="season">Season-Long</option>
-          <option value="dynasty">Dynasty</option>
-        </select>
+      <div class="top-nav__actions">
+        <button class="btn-theme" onclick="toggleTheme()" aria-label="Toggle theme">☾</button>
+        <button id="globalLogoutBtn" class="btn-ghost" onclick="logOut()">Log out</button>
       </div>
+    </nav>
 
-      <div class="form-group">
-        <label for="draftFormat">Draft Format</label>
-        <select id="draftFormat" required>
-          <option value="snake">Snake Draft</option>
-          <option value="auction">Auction Draft</option>
-        </select>
+    <div class="dashboard-header">
+      <div class="dashboard-header__inner">
+        <p class="dashboard-welcome__eyebrow">New league</p>
+        <h1 class="dashboard-welcome__name">Create League</h1>
+        <p class="dashboard-welcome__sub">All settings use the v1.2 defaults — change anything you want before submitting.</p>
       </div>
+    </div>
 
-      <div class="form-group">
-        <label for="startDate">Season Start Date <span style="font-weight: normal; color: #888;">(optional)</span></label>
-        <input type="date" id="startDate">
-      </div>
+    <div class="dashboard-body create-league-body">
 
-      <div class="form-group">
-        <label for="teamName">Your Team Name</label>
-        <input type="text" id="teamName" placeholder="3-30 characters" minlength="3" maxlength="30" required>
-      </div>
+      <div id="message" class="message"></div>
 
-      <!-- Auto-generated invite code displayed before the submit button -->
-      <div class="form-group">
-        <label>Invite Code</label>
-        <p style="font-size: 0.8rem; color: #888; margin: 0 0 0.4rem;">
-          Share this with managers you want to invite. Generated automatically.
-        </p>
-        <div class="invite-code-box">
-          <span class="invite-code-text" id="inviteCodeDisplay"></span>
-          <button type="button" class="copy-btn" id="copyBtn">Copy</button>
+      <form id="createForm" class="create-league-form">
+
+        <!-- ===========================================================
+             Section: League Basics
+             =========================================================== -->
+        <section class="form-section">
+          <p class="section-label">League Basics</p>
+
+          <div class="form-grid form-grid--2">
+            <div class="form-group">
+              <label for="leagueName">League Name</label>
+              <input type="text" id="leagueName" class="input"
+                     placeholder="e.g. Octagon Champions"
+                     maxlength="60" required>
+            </div>
+
+            <div class="form-group">
+              <label for="teamName">Your Team Name</label>
+              <input type="text" id="teamName" class="input"
+                     placeholder="3-30 characters"
+                     minlength="3" maxlength="30" required>
+            </div>
+
+            <div class="form-group form-grid__span-2">
+              <label for="description">Description <span class="form-label__hint">(optional)</span></label>
+              <input type="text" id="description" class="input"
+                     placeholder="A short tagline shown on the dashboard"
+                     maxlength="200">
+            </div>
+
+            <div class="form-group">
+              <label for="seasonStart">Season Start <span class="form-label__hint">(optional)</span></label>
+              <input type="date" id="seasonStart" class="input">
+            </div>
+
+            <div class="form-group">
+              <label for="seasonEnd">Season End <span class="form-label__hint">(optional)</span></label>
+              <input type="date" id="seasonEnd" class="input">
+            </div>
+          </div>
+        </section>
+
+        <!-- ===========================================================
+             Section: League Rules
+             =========================================================== -->
+        <section class="form-section">
+          <p class="section-label">League Rules</p>
+
+          <div class="form-grid form-grid--3">
+            <div class="form-group">
+              <label for="format">Format</label>
+              <select id="format" class="input" required>
+                <option value="season">Season-Long</option>
+                <option value="dynasty">Dynasty</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="draftFormat">Draft Format</label>
+              <select id="draftFormat" class="input" required>
+                <option value="snake">Snake Draft</option>
+                <option value="auction">Auction Draft</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="maxManagers">Managers</label>
+              <input type="number" id="maxManagers" class="input"
+                     value="8" min="2" max="16" step="1" required>
+              <p class="form-label__hint">Default: 8</p>
+            </div>
+
+            <div class="form-group">
+              <label for="rosterSize">Roster Size</label>
+              <input type="number" id="rosterSize" class="input"
+                     value="20" min="10" max="30" step="1" required>
+              <p class="form-label__hint">Default: 20 (matches the slot rules below)</p>
+            </div>
+
+            <div class="form-group">
+              <label for="startersPerEvent">Starters / Event</label>
+              <input type="number" id="startersPerEvent" class="input"
+                     value="3" min="1" max="10" step="1" required>
+              <p class="form-label__hint">Default: 3</p>
+            </div>
+          </div>
+
+          <p class="form-section__note">
+            Roster slot construction stays at v1.2: 2 per men's division (8 × 2 = 16) +
+            2 women's flex + 2 any-division flex. If you change roster size,
+            you'll need to adjust slot rules later in League Settings.
+          </p>
+        </section>
+
+        <!-- ===========================================================
+             Section: Scoring Rules — collapsible, defaults to closed
+             =========================================================== -->
+        <section class="form-section">
+          <button type="button" class="form-section__toggle" id="scoringToggle"
+                  aria-expanded="true" aria-controls="scoringPanel">
+            <span class="form-section__toggle-label">
+              <span class="section-label">Scoring Rules</span>
+              <span class="form-label__hint">v1.2 defaults — edit any value below</span>
+            </span>
+            <span class="form-section__toggle-icon" aria-hidden="true">▾</span>
+          </button>
+
+          <div id="scoringPanel" class="form-section__panel">
+
+            <p class="form-section__group-label">Base Scoring (per fight)</p>
+            <div class="form-grid form-grid--3">
+              <div class="form-group">
+                <label for="s_sig_strike">Sig Strike</label>
+                <input type="number" id="s_sig_strike" class="input" step="0.01" min="0" data-default="0.1">
+              </div>
+              <div class="form-group">
+                <label for="s_takedown">Takedown</label>
+                <input type="number" id="s_takedown" class="input" step="0.1" min="0" data-default="1">
+              </div>
+              <div class="form-group">
+                <label for="s_knockdown">Knockdown</label>
+                <input type="number" id="s_knockdown" class="input" step="0.1" min="0" data-default="2">
+              </div>
+              <div class="form-group">
+                <label for="s_control_per_sec">Control / sec</label>
+                <input type="number" id="s_control_per_sec" class="input" step="0.001" min="0" data-default="0.01">
+              </div>
+            </div>
+
+            <p class="form-section__group-label">Win Bonuses</p>
+            <div class="form-grid form-grid--3">
+              <div class="form-group">
+                <label for="s_finish_r1">R1 Finish</label>
+                <input type="number" id="s_finish_r1" class="input" step="1" min="0" data-default="18">
+              </div>
+              <div class="form-group">
+                <label for="s_finish_r2">R2 Finish</label>
+                <input type="number" id="s_finish_r2" class="input" step="1" min="0" data-default="14">
+              </div>
+              <div class="form-group">
+                <label for="s_finish_r3">R3 Finish</label>
+                <input type="number" id="s_finish_r3" class="input" step="1" min="0" data-default="9">
+              </div>
+              <div class="form-group">
+                <label for="s_finish_r4_r5">R4 / R5 Finish</label>
+                <input type="number" id="s_finish_r4_r5" class="input" step="1" min="0" data-default="8">
+              </div>
+              <div class="form-group">
+                <label for="s_decision">Decision Win</label>
+                <input type="number" id="s_decision" class="input" step="1" min="0" data-default="6">
+              </div>
+              <div class="form-group">
+                <label for="s_quick_win_bonus">Quick Win Bonus
+                  <span class="form-label__hint">(&lt;60s R1)</span>
+                </label>
+                <input type="number" id="s_quick_win_bonus" class="input" step="1" min="0" data-default="5">
+              </div>
+              <div class="form-group">
+                <label for="s_draw_points">Draw</label>
+                <input type="number" id="s_draw_points" class="input" step="1" min="0" data-default="3">
+              </div>
+            </div>
+
+            <p class="form-section__group-label">Title & Ranked Opponent Wins</p>
+            <div class="form-grid form-grid--3">
+              <div class="form-group">
+                <label for="s_divisional_title_win">Divisional Title Win</label>
+                <input type="number" id="s_divisional_title_win" class="input" step="1" min="0" data-default="10">
+              </div>
+              <div class="form-group">
+                <label for="s_divisional_title_defense">Divisional Title Defense</label>
+                <input type="number" id="s_divisional_title_defense" class="input" step="1" min="0" data-default="5">
+              </div>
+              <div class="form-group">
+                <label for="s_bmf_interim_win">BMF / Interim Win</label>
+                <input type="number" id="s_bmf_interim_win" class="input" step="1" min="0" data-default="5">
+              </div>
+              <div class="form-group">
+                <label for="s_bmf_interim_defense">BMF / Interim Defense</label>
+                <input type="number" id="s_bmf_interim_defense" class="input" step="1" min="0" data-default="3">
+              </div>
+              <div class="form-group">
+                <label for="s_top5_win">Top 5 Opponent Win</label>
+                <input type="number" id="s_top5_win" class="input" step="1" min="0" data-default="4">
+              </div>
+              <div class="form-group">
+                <label for="s_top10_win">Top 10 Opponent Win</label>
+                <input type="number" id="s_top10_win" class="input" step="1" min="0" data-default="2">
+              </div>
+              <div class="form-group">
+                <label for="s_top15_win">Top 15 Opponent Win</label>
+                <input type="number" id="s_top15_win" class="input" step="1" min="0" data-default="1">
+              </div>
+            </div>
+
+            <p class="form-section__group-label">Performance Bonuses</p>
+            <div class="form-grid form-grid--3">
+              <div class="form-group">
+                <label for="s_potn">Performance of the Night</label>
+                <input type="number" id="s_potn" class="input" step="1" min="0" data-default="6">
+              </div>
+              <div class="form-group">
+                <label for="s_fotn">Fight of the Night</label>
+                <input type="number" id="s_fotn" class="input" step="1" min="0" data-default="4">
+              </div>
+            </div>
+
+            <p class="form-section__group-label">Card Position Multipliers</p>
+            <div class="form-grid form-grid--3">
+              <div class="form-group">
+                <label for="s_main_event_mult">Main Event</label>
+                <input type="number" id="s_main_event_mult" class="input" step="0.05" min="1" data-default="1.2">
+              </div>
+              <div class="form-group">
+                <label for="s_co_main_mult">Co-Main Event</label>
+                <input type="number" id="s_co_main_mult" class="input" step="0.05" min="1" data-default="1.1">
+              </div>
+            </div>
+
+            <button type="button" class="btn-ghost" id="scoringResetBtn" style="margin-top: var(--space-4)">
+              Reset all scoring to defaults
+            </button>
+          </div>
+        </section>
+
+        <!-- ===========================================================
+             Section: Invite Code + Submit
+             =========================================================== -->
+        <section class="form-section">
+          <p class="section-label">Invite Code</p>
+          <p class="form-section__note" style="margin-top: var(--space-2)">
+            Share this with managers you want to invite. Generated automatically.
+          </p>
+          <div class="invite-code-box">
+            <span class="invite-code-text" id="inviteCodeDisplay"></span>
+            <button type="button" class="btn-secondary" id="copyBtn">Copy</button>
+          </div>
+        </section>
+
+        <div class="create-league-actions">
+          <a href="dashboard.html" class="btn-ghost">Cancel</a>
+          <button type="submit" class="btn-primary" id="submitBtn">Create League</button>
         </div>
-      </div>
 
-      <button type="submit" class="btn-primary" id="submitBtn">Create League</button>
+      </form>
 
-    </form>
-
+    </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/supabase-config.js"></script>
   <script src="js/auth-guard.js"></script>
   <script src="js/create-league.js"></script>
+
+  <script>
+    document.querySelectorAll('.btn-theme').forEach(function(btn) {
+      var theme = document.documentElement.getAttribute('data-theme');
+      btn.textContent = theme === 'light' ? '☀' : '☾';
+    });
+  </script>
 
 </body>
 </html>

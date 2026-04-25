@@ -3537,6 +3537,18 @@ body {
   padding-left: calc(var(--space-4) - 3px);
 }
 
+.lineup-roster-row--on-card {
+  border-left: 3px solid var(--accent-gold);
+  background: rgba(212, 175, 55, 0.05);
+  padding-left: calc(var(--space-4) - 3px);
+}
+
+/* Started + on card: crimson takes priority */
+.lineup-roster-row--started.lineup-roster-row--on-card {
+  border-left-color: var(--accent-crimson);
+  background: rgba(193, 59, 46, 0.05);
+}
+
 .lineup-roster-row__photo-wrap {
   width: 40px;
   height: 40px;
@@ -3588,6 +3600,26 @@ body {
 .lineup-roster-row__name:hover {
   color: var(--accent-crimson);
   text-decoration: underline;
+}
+
+.lineup-roster-row__matchup {
+  font-size: var(--text-caption);
+  font-weight: 600;
+  color: var(--accent-gold);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.lineup-roster-row__matchup-badge {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent-crimson);
+  background: rgba(193, 59, 46, 0.12);
+  padding: 1px 5px;
+  border-radius: 3px;
 }
 
 .lineup-roster-row__division {
@@ -3997,6 +4029,14 @@ body {
   margin: 0;
 }
 
+.fighter-modal__trade-btn,
+.fighter-modal__draft-btn {
+  margin-top: var(--space-3);
+  padding: 8px 18px;
+  font-size: var(--text-body-sm);
+  align-self: flex-start;
+}
+
 /* ---- Career stat tiles ---- */
 .fighter-modal__stats {
   display: flex;
@@ -4369,4 +4409,1276 @@ body {
   color: var(--text-tertiary);
   padding: var(--space-4) 0;
   margin-bottom: var(--space-4);
+}
+
+/* ============================================================
+   WAIVERS PAGE
+   ============================================================ */
+
+/* Tab bar */
+.waiver-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: var(--space-6);
+}
+
+.waiver-tab {
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  padding: var(--space-3) var(--space-6);
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  font-weight: 600;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  transition: color 0.15s, border-color 0.15s;
+  margin-bottom: -1px; /* overlap the container border */
+}
+
+.waiver-tab:first-child {
+  padding-left: 0; /* align flush with the page content edge */
+}
+
+.waiver-tab:hover {
+  color: var(--text-primary);
+}
+
+.waiver-tab--active {
+  color: var(--text-primary);
+  border-bottom-color: var(--accent-crimson);
+}
+
+.waiver-tab__count {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent-crimson);
+  background: rgba(193, 59, 46, 0.14);
+  padding: 1px 7px;
+  border-radius: 10px;
+  min-width: 20px;
+  text-align: center;
+}
+
+/* Search + filter controls */
+.waiver-controls {
+  display: flex;
+  gap: var(--space-3);
+  margin-bottom: var(--space-6);
+  flex-wrap: wrap;
+}
+
+.waiver-search {
+  flex: 1 1 220px;
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 12px 16px;
+  font-family: var(--font-body);
+  font-size: 15px;
+  color: var(--text-primary);
+  outline: none;
+  box-sizing: border-box;
+  -webkit-appearance: none;
+  appearance: none;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.waiver-search::placeholder {
+  color: var(--text-tertiary);
+}
+
+.waiver-search:hover {
+  border-color: var(--text-primary);
+}
+
+.waiver-search:focus {
+  border-color: var(--accent-crimson);
+}
+
+.waiver-filter {
+  flex: 0 1 200px;
+  background-color: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 12px 40px 12px 16px;
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-primary);
+  cursor: pointer;
+  outline: none;
+  box-sizing: border-box;
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23A0A0A0' stroke-width='1.75' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.waiver-filter:hover {
+  border-color: var(--text-primary);
+  background-color: var(--bg-tertiary);
+}
+
+.waiver-filter:focus {
+  border-color: var(--accent-crimson);
+}
+
+/* Style the open dropdown panel (Chrome/Edge/Safari) so the option list
+   reads as part of our dark theme rather than the OS default. */
+.waiver-filter option {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+/* Pending claim cards (two-column add/drop layout) */
+.waiver-pending-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--accent-gold);
+  border-radius: 6px;
+  padding: var(--space-4) var(--space-6);
+  margin-bottom: var(--space-3);
+}
+
+.waiver-pending-card__sides {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+
+.waiver-pending-card__add,
+.waiver-pending-card__drop {
+  flex: 1;
+}
+
+.waiver-pending-card__drop--empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.waiver-pending-card__label {
+  display: block;
+  font-size: var(--text-caption);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-tertiary);
+  margin-bottom: var(--space-2);
+}
+
+.waiver-pending-card__fighter {
+  display: block;
+  font-size: var(--text-body);
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.3;
+}
+
+.waiver-pending-card__div {
+  display: block;
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  margin-top: var(--space-1);
+}
+
+.waiver-pending-card__drop--empty .waiver-pending-card__fighter {
+  color: var(--text-tertiary);
+  font-weight: 400;
+  font-style: italic;
+}
+
+.waiver-pending-card__arrow {
+  font-size: 20px;
+  color: var(--accent-gold);
+  flex-shrink: 0;
+  align-self: center;
+  padding: 0 var(--space-2);
+}
+
+.waiver-pending-card__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+  flex-wrap: wrap;
+}
+
+.waiver-pending-card__priority {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+}
+
+/* Status badges */
+.waiver-status-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  padding: 2px 8px;
+  border-radius: 3px;
+}
+
+.badge-pending {
+  color: var(--accent-gold);
+  background: rgba(212, 175, 55, 0.12);
+}
+
+.badge-approved {
+  color: #4ade80;
+  background: rgba(74, 222, 128, 0.12);
+}
+
+.badge-rejected {
+  color: var(--accent-crimson);
+  background: rgba(193, 59, 46, 0.12);
+}
+
+.badge-cancelled {
+  color: var(--text-tertiary);
+  background: rgba(128, 128, 128, 0.12);
+}
+
+/* Commissioner queue section */
+.waiver-commissioner {
+  margin-top: var(--space-8);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.waiver-commissioner__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-6);
+}
+
+.waiver-commissioner__title {
+  font-family: var(--font-display);
+  font-size: var(--text-heading-sm);
+  letter-spacing: 0.04em;
+  color: var(--text-primary);
+}
+
+/* Roster cap warning in claim modal — gold by default (advisory),
+   crimson when paired with --error (blocking submission). */
+.waiver-cap-warning {
+  font-size: var(--text-caption);
+  color: var(--accent-gold);
+  background: rgba(212, 175, 55, 0.1);
+  border: 1px solid rgba(212, 175, 55, 0.25);
+  border-radius: 4px;
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+  line-height: 1.4;
+}
+
+.waiver-cap-warning--error {
+  color: var(--accent-crimson);
+  background: rgba(193, 59, 46, 0.1);
+  border-color: rgba(193, 59, 46, 0.3);
+}
+
+/* Claim modal field (drop selector) */
+.waiver-modal-field {
+  margin-bottom: var(--space-4);
+}
+
+.waiver-modal-label {
+  display: block;
+  font-size: var(--text-caption);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-tertiary);
+  margin-bottom: var(--space-2);
+}
+
+.waiver-modal-field .waiver-filter {
+  width: 100%;
+  flex: none;
+}
+
+/* ============================================================
+   PHASE BANNER (waivers page)
+   Sits at the top of the page, communicates current waiver mode.
+   Two variants: --window (active claim period) and --fa (free agency).
+   ============================================================ */
+
+.phase-banner {
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  padding: var(--space-4) var(--space-6);
+  margin-bottom: var(--space-6);
+}
+
+.phase-banner__title {
+  font-family: var(--font-display);
+  font-size: var(--text-heading-sm);
+  letter-spacing: 0.04em;
+  margin-bottom: var(--space-2);
+}
+
+.phase-banner__body {
+  font-size: var(--text-body-sm);
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* Active claim window — crimson left border, subtle crimson tint */
+.phase-banner--window {
+  border-left: 3px solid var(--accent-crimson);
+  background: rgba(193, 59, 46, 0.06);
+}
+.phase-banner--window .phase-banner__title {
+  color: var(--accent-crimson);
+}
+
+/* Free agency — gold left border, gold tinted title */
+.phase-banner--fa {
+  border-left: 3px solid var(--accent-gold);
+  background: rgba(212, 175, 55, 0.05);
+}
+.phase-banner--fa .phase-banner__title {
+  color: var(--accent-gold);
+}
+
+/* ============================================================
+   CLAIM MODAL — phase explainer strip
+   Tells the user whether they're submitting a claim or making an
+   instant add, and when claims will process.
+   ============================================================ */
+
+.waiver-modal-mode-strip {
+  font-size: var(--text-caption);
+  line-height: 1.5;
+  border-radius: 4px;
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+}
+.waiver-modal-mode-strip--claim {
+  color: var(--accent-crimson);
+  background: rgba(193, 59, 46, 0.1);
+  border: 1px solid rgba(193, 59, 46, 0.25);
+}
+.waiver-modal-mode-strip--fa {
+  color: var(--accent-gold);
+  background: rgba(212, 175, 55, 0.1);
+  border: 1px solid rgba(212, 175, 55, 0.25);
+}
+
+/* ============================================================
+   TEMPORARY EXTENDED ROSTER FLEX (lineup page)
+   Set apart from regular slot sections with a gold accent and
+   an explanatory note about the Wed 3am ET auto-drop.
+   ============================================================ */
+
+.lineup-slot-header--terf {
+  border-top: 1px dashed var(--accent-gold);
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
+}
+.lineup-slot-header--terf .lineup-slot-header__title {
+  color: var(--accent-gold);
+}
+
+.lineup-terf-note {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  font-style: italic;
+  margin: 0 0 var(--space-3) 0;
+  padding: var(--space-2) var(--space-3);
+  background: rgba(212, 175, 55, 0.06);
+  border-left: 2px solid var(--accent-gold);
+  border-radius: 0 4px 4px 0;
+  line-height: 1.5;
+}
+
+/* ============================================================
+   ROSTER IMBALANCE BANNER (lineup page)
+   Shown above the starters when trades / FA leave the roster
+   missing required slots or over the flex limit.
+   ============================================================ */
+
+.roster-imbalance-banner {
+  border: 1px solid rgba(193, 59, 46, 0.3);
+  border-left: 3px solid var(--accent-crimson);
+  background: rgba(193, 59, 46, 0.08);
+  border-radius: 6px;
+  padding: var(--space-4) var(--space-6);
+  margin-bottom: var(--space-6);
+}
+
+.roster-imbalance-banner__title {
+  font-family: var(--font-display);
+  font-size: var(--text-heading-sm);
+  letter-spacing: 0.04em;
+  color: var(--accent-crimson);
+  margin: 0 0 var(--space-3) 0;
+}
+
+.roster-imbalance-banner__line {
+  font-size: var(--text-body-sm);
+  color: var(--text-primary);
+  line-height: 1.5;
+  margin: 0 0 var(--space-2) 0;
+}
+.roster-imbalance-banner__line strong {
+  color: var(--accent-crimson);
+  font-weight: 700;
+  margin-right: var(--space-1);
+}
+
+.roster-imbalance-banner__hint {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  line-height: 1.5;
+  margin: var(--space-3) 0 0 0;
+  padding-top: var(--space-3);
+  border-top: 1px solid rgba(193, 59, 46, 0.2);
+}
+
+/* ============================================================
+   DRAFT PAGE
+   Full-viewport three-panel layout. Top-nav + status strip
+   stay slim; the panels share remaining height.
+   ============================================================ */
+
+.draft-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--bg-primary);
+}
+
+/* Status strip — whose turn it is, current pick number */
+.draft-status {
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-secondary);
+  flex-shrink: 0;
+}
+.draft-status__inner {
+  max-width: 100%;
+  padding: var(--space-3) var(--space-6);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+.draft-status__turn {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-heading-sm);
+  letter-spacing: 0.04em;
+  color: var(--text-primary);
+}
+.draft-status__counter {
+  margin: 0;
+  font-size: var(--text-body-sm);
+  font-weight: 600;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.draft-status__mine     { color: var(--accent-crimson); }
+.draft-status__team     { color: var(--accent-gold); }
+.draft-status__complete { color: var(--accent-gold); }
+
+/* Tab bar — only visible on narrow screens (overrides .waiver-tabs default) */
+.draft-tabs {
+  display: none;
+  padding: 0 var(--space-6);
+  flex-shrink: 0;
+  margin-bottom: 0;
+}
+
+/* Three-panel room. Using an explicit calc'd height on the room (rather
+   than relying on flex:1 stretch from .draft-page) so that the panels
+   inside have a definite height to work against. The flex:1 chain was
+   inconsistent across browsers when paired with min-height: 0 and
+   overflow: hidden — the grid 1fr body row wouldn't always pick up a
+   bounded size, so internal scroll never engaged. */
+.draft-room {
+  display: flex;
+  height: calc(100dvh - var(--nav-height) - 60px); /* 60px ≈ status strip */
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Narrow screens add a ~50px tab bar between the status strip and the room */
+@media (max-width: 899px) {
+  .draft-room {
+    height: calc(100dvh - var(--nav-height) - 60px - 50px);
+  }
+}
+
+.draft-panel {
+  /* Grid is more predictable than flex column here: the body row gets a
+     definite "remaining height" that scrolls cleanly. With the flex
+     equivalent we kept hitting browser-specific edge cases where the body
+     wouldn't acquire a bounded height to scroll within. */
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bg-primary);
+}
+
+.panel-fighters { width: 320px; flex-shrink: 0; border-right: 1px solid var(--border-subtle); }
+.panel-board    { flex: 1; }
+.panel-roster   { width: 320px; flex-shrink: 0; border-left:  1px solid var(--border-subtle); }
+
+.draft-panel__header {
+  padding: var(--space-4) var(--space-4) var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+.draft-panel__header .section-label { margin: 0; }
+
+/* Header variant with a trailing action button (e.g. "View All →") */
+.draft-panel__header--with-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.draft-view-all-btn {
+  font-size: var(--text-caption);
+  font-weight: 600;
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   VIEW ALL MODAL
+   Fullscreen browser for the draft pool. Multi-column grid so
+   the user can see many more fighters at once than fits in the
+   panel; same filters and sort dropdowns as the panel.
+   ============================================================ */
+
+.view-all-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  padding: var(--space-4);
+}
+
+.view-all-modal {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  width: 100%;
+  max-width: 1200px;
+  max-height: 92vh;
+  display: grid;
+  grid-template-rows: auto auto auto 1fr;
+  overflow: hidden;
+  box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.5);
+}
+
+.view-all-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-6);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.view-all-modal__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-heading-md);
+  letter-spacing: 0.04em;
+  color: var(--text-primary);
+}
+
+.view-all-modal__close {
+  background: none;
+  border: 0;
+  width: 32px;
+  height: 32px;
+  font-size: 26px;
+  line-height: 1;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.view-all-modal__close:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.view-all-modal__controls {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-6);
+  border-bottom: 1px solid var(--border-subtle);
+}
+@media (max-width: 800px) {
+  .view-all-modal__controls {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.view-all-modal__controls .waiver-search,
+.view-all-modal__controls .waiver-filter {
+  flex: 0 0 auto;
+  width: 100%;
+}
+
+.view-all-modal__count {
+  padding: var(--space-2) var(--space-6);
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.view-all-modal__body {
+  overflow-y: auto;
+  padding: var(--space-4) var(--space-6);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: var(--space-2);
+  align-content: start;
+  min-height: 0;
+}
+
+/* ============================================================
+   CREATE LEAGUE FORM
+   Long form with grouped sections + collapsible scoring rules.
+   Reused-style elements (.form-group, .input, .invite-code-box,
+   .message, .section-label) come from elsewhere in this file.
+   ============================================================ */
+
+.create-league-body {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: var(--space-8);
+}
+
+.create-league-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+/* Section card. Generous internal padding so the form feels intentional
+   on wide screens; a clear header divider gives each section its own
+   visual area. */
+.form-section {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: var(--space-6) var(--space-8);
+}
+
+/* Section header — uses the display font + underline so it reads as a
+   real section title rather than a small label. Override applies only to
+   .section-label that sits as a direct child of .form-section. */
+.form-section > .section-label,
+.form-section > .form-section__toggle .section-label {
+  font-family: var(--font-display);
+  font-size: var(--text-heading-sm);
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  margin: 0;
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: var(--space-6);
+}
+
+.form-section__note {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  margin: var(--space-4) 0 0 0;
+  line-height: 1.5;
+}
+
+.form-section__group-label {
+  font-size: var(--text-caption);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent-gold);
+  margin: var(--space-6) 0 var(--space-3) 0;
+}
+.form-section__group-label:first-child,
+.form-section__panel > .form-section__group-label:first-of-type {
+  margin-top: 0;
+}
+
+/* Collapsible scoring panel */
+.form-section__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+}
+/* When the toggle wraps the section header, drop the underline because
+   the panel below already provides separation when expanded. */
+.form-section__toggle .section-label {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+.form-section__toggle-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.form-section__toggle-icon {
+  font-size: 22px;
+  color: var(--text-tertiary);
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+.form-section__toggle[aria-expanded="true"] .form-section__toggle-icon {
+  transform: rotate(180deg);
+}
+.form-section__panel {
+  margin-top: var(--space-6);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* Grid layouts for form fields. align-items: start prevents form-groups
+   from stretching to the tallest neighbor — without it, a column with no
+   hint sits next to one with a hint and gets blank space below its input. */
+.form-grid {
+  display: grid;
+  gap: var(--space-4);
+  align-items: start;
+}
+.form-grid--2 { grid-template-columns: repeat(2, 1fr); }
+.form-grid--3 { grid-template-columns: repeat(3, 1fr); }
+.form-grid__span-2 { grid-column: span 2; }
+
+@media (max-width: 720px) {
+  .form-grid--2,
+  .form-grid--3 { grid-template-columns: 1fr; }
+  .form-grid__span-2 { grid-column: auto; }
+}
+
+.form-grid .form-group {
+  margin-bottom: 0;
+}
+
+.form-label__hint {
+  font-weight: 400;
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  margin: 4px 0 0 0;
+}
+label .form-label__hint {
+  display: inline;
+  margin-left: var(--space-2);
+}
+
+.create-league-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--space-4);
+  padding-top: var(--space-4);
+}
+
+/* ============================================================
+   JOIN LEAGUE — narrower focused-form layout
+   ============================================================ */
+
+.join-league-body {
+  max-width: 540px;
+  margin: 0 auto;
+  padding: var(--space-8);
+}
+
+/* Make the invite code input feel like a code: monospace, gold accent,
+   tracked-out, centered text so the 6 chars sit prominently. */
+.join-league-form__code {
+  font-family: monospace;
+  font-size: 22px;
+  letter-spacing: 0.25em;
+  text-align: center;
+  color: var(--accent-gold);
+  text-transform: uppercase;
+}
+.join-league-form__code::placeholder {
+  letter-spacing: 0.25em;
+}
+
+.join-league-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--space-4);
+  margin-top: var(--space-6);
+}
+
+/* Dashboard "Your Leagues" footer actions — Create / Join sit side-by-side
+   below the league list and wrap on narrow screens. */
+.dashboard-league-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+/* League Settings — scoring section sits below the 2-col grid; the
+   single Save button at the bottom of the form covers everything. */
+.settings-scoring {
+  margin-top: var(--space-6);
+}
+.settings-save {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-6);
+}
+
+.draft-panel__controls {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+/* Override the row-sized flex defaults on .waiver-search / .waiver-filter
+   so they sit at their natural input height in this stacked context. */
+.draft-panel__controls .waiver-search,
+.draft-panel__controls .waiver-filter {
+  flex: 0 0 auto;
+  width: 100%;
+}
+
+.draft-panel__body {
+  /* Sits in the 1fr grid row above. min-height: 0 lets it shrink past its
+     content so overflow-y can engage. */
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-3) var(--space-4);
+}
+
+/* Resize handles — wide screens only */
+.draft-resize-handle {
+  width: 6px;
+  cursor: col-resize;
+  background: transparent;
+  flex-shrink: 0;
+  transition: background 0.15s ease;
+  position: relative;
+}
+.draft-resize-handle::before {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0; left: 50%;
+  width: 1px;
+  background: var(--border-subtle);
+  transform: translateX(-50%);
+}
+.draft-resize-handle:hover,
+.draft-resize-handle--active {
+  background: rgba(193, 59, 46, 0.15);
+}
+
+/* Fighter pool rows — extends .lineup-roster-row */
+.draft-pool-row {
+  margin-bottom: var(--space-2);
+}
+.draft-pool-row--pickable {
+  border-left: 3px solid var(--accent-gold);
+}
+.draft-pool-row--invalid {
+  opacity: 0.45;
+}
+
+/* Draft board — extends .standings-card / .standings-table */
+.draft-board { overflow-x: auto; }
+.draft-board__table th,
+.draft-board__table td {
+  padding: var(--space-2) var(--space-3);
+  text-align: center;
+  font-size: var(--text-caption);
+  white-space: nowrap;
+}
+.draft-board__round {
+  font-weight: 700;
+  color: var(--text-tertiary);
+  background: var(--bg-secondary);
+}
+.draft-board__col-mine {
+  color: var(--accent-crimson) !important;
+}
+.draft-board__cell--mine    { background: rgba(193, 59, 46, 0.06); }
+.draft-board__cell--made    { color: var(--text-primary); font-weight: 500; }
+.draft-board__cell--current {
+  background: rgba(212, 175, 55, 0.18);
+  color: var(--accent-gold);
+  font-weight: 600;
+}
+.draft-board__cell--empty   { color: var(--text-tertiary); }
+.draft-board__on-clock {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* Inline button for clicked-fighter cells on the draft board — looks like
+   plain text but acts as a button (opens the fighter modal). */
+.draft-board__pick-name {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: center;
+  width: 100%;
+  transition: color 0.15s ease;
+}
+.draft-board__pick-name:hover {
+  color: var(--accent-crimson);
+  text-decoration: underline;
+}
+
+/* My roster slot grid */
+.draft-slots {
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.draft-slots__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) 0;
+  font-size: var(--text-caption);
+}
+.draft-slots__label {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+.draft-slots__pips {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.draft-my-picks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.draft-my-pick {
+  align-items: center;
+  padding: var(--space-2) var(--space-3);
+}
+.draft-my-pick__num {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--bg-tertiary);
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  margin-right: var(--space-2);
+}
+
+/* ---- Narrow-screen behavior ---- */
+@media (max-width: 899px) {
+  .draft-tabs {
+    display: flex;
+  }
+  .draft-resize-handle {
+    display: none;
+  }
+  .draft-panel {
+    display: none;
+    width: 100% !important;
+    border-right: 0;
+    border-left: 0;
+  }
+  .draft-panel.waiver-tab--active {
+    display: grid;
+    flex: 1;
+  }
+  .draft-room--split .draft-panel.waiver-tab--active {
+    flex: 1;
+    border-right: 1px solid var(--border-subtle);
+  }
+  .draft-room--split .draft-panel.waiver-tab--active:last-child {
+    border-right: 0;
+  }
+}
+
+/* ============================================================
+   TRADES PAGE
+   Two-column roster picker for proposing trades, plus trade
+   cards for the Incoming / Sent tabs.
+   ============================================================ */
+
+.trade-partner-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+  flex-wrap: wrap;
+}
+.trade-partner-row label {
+  margin-bottom: 0;
+}
+.trade-partner-row .waiver-filter {
+  flex: 1 1 280px;
+  max-width: 360px;
+}
+
+/* Two-column picker: your roster on the left, partner's on the right */
+.trade-picker-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-6);
+}
+
+@media (max-width: 720px) {
+  .trade-picker-grid {
+    grid-template-columns: 1fr;
+    gap: var(--space-4);
+  }
+}
+
+.trade-picker-col .section-label {
+  margin-bottom: var(--space-3);
+}
+
+.trade-picker-list {
+  max-height: 540px;
+  overflow-y: auto;
+  padding-right: var(--space-2); /* room for scrollbar without touching content */
+}
+
+/* Each row is a clickable pick. Selected state mirrors the started-fighter
+   styling on the lineup page: crimson left border + soft tint. */
+.trade-pick-row {
+  cursor: pointer;
+  position: relative;
+}
+
+.trade-pick-row:hover {
+  background: var(--bg-tertiary);
+}
+
+.trade-pick-row--selected {
+  border-left: 3px solid var(--accent-crimson);
+  background: rgba(193, 59, 46, 0.08);
+}
+
+.trade-pick-indicator {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: var(--space-3);
+  border-radius: 50%;
+  background: transparent;
+  border: 1.5px solid var(--border-strong);
+  color: transparent;
+  font-size: 13px;
+  font-weight: 700;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.trade-pick-row--selected .trade-pick-indicator {
+  background: var(--accent-crimson);
+  border-color: var(--accent-crimson);
+  color: #fff;
+}
+
+.trade-propose-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-6);
+}
+
+/* Trade cards (Incoming / Sent) */
+.trade-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--accent-gold);
+  border-radius: 6px;
+  padding: var(--space-4) var(--space-6);
+  margin-bottom: var(--space-4);
+}
+
+.trade-card--resolved {
+  border-left-color: var(--border-strong);
+  opacity: 0.85;
+}
+
+.trade-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-4);
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.trade-card__teams {
+  font-family: var(--font-display);
+  font-size: var(--text-heading-sm);
+  letter-spacing: 0.04em;
+  color: var(--text-primary);
+}
+
+.trade-card__arrow {
+  color: var(--accent-gold);
+  margin: 0 var(--space-2);
+}
+
+.trade-card__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.trade-card__date {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+}
+
+.trade-card__sides {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: var(--space-4);
+  align-items: stretch;
+}
+
+@media (max-width: 720px) {
+  .trade-card__sides {
+    grid-template-columns: 1fr;
+  }
+  .trade-card__divider { display: none; }
+}
+
+.trade-card__side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.trade-card__side-label {
+  font-size: var(--text-caption);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-tertiary);
+}
+
+.trade-card__divider {
+  align-self: center;
+  font-size: 24px;
+  color: var(--accent-gold);
+}
+
+.trade-card__fighter {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-primary);
+  border-radius: 4px;
+  border: 1px solid var(--border-subtle);
+}
+
+.trade-card__fighter--none {
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+.trade-card__fighter-name {
+  font-size: var(--text-body);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.trade-card__fighter-div {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+
+.trade-card__message {
+  font-size: var(--text-body-sm);
+  color: var(--text-secondary);
+  font-style: italic;
+  margin: var(--space-4) 0 0 0;
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-primary);
+  border-left: 2px solid var(--border-strong);
+  border-radius: 0 4px 4px 0;
+}
+
+/* Review-window timer strip — visible while an accepted trade is waiting
+   for its 24h auto-execution. Gold accent matches the .trade-card border. */
+.trade-card__timer {
+  font-size: var(--text-caption);
+  color: var(--accent-gold);
+  background: rgba(212, 175, 55, 0.08);
+  border: 1px solid rgba(212, 175, 55, 0.25);
+  border-radius: 4px;
+  padding: var(--space-3) var(--space-4);
+  margin: var(--space-4) 0 0 0;
+  line-height: 1.5;
+}
+.trade-card__timer strong { color: var(--text-primary); }
+
+/* Subtler treatment once the trade is fully done */
+.trade-card__timer--done {
+  color: var(--text-tertiary);
+  background: var(--bg-primary);
+  border-color: var(--border-subtle);
+}
+
+.trade-card__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
 }

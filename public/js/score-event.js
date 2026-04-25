@@ -395,13 +395,13 @@ function resetFightForm() {
   document.getElementById('fighterBSelected').textContent = '';
   document.getElementById('statsHeaderB').textContent     = 'Fighter B Stats';
 
-  ['aSigStrikes','aTakedowns','aReversals','aKnockdowns','aControlSeconds'].forEach(function(id) {
+  ['aSigStrikes','aTakedowns','aKnockdowns','aControlSeconds'].forEach(function(id) {
     document.getElementById(id).value = '0';
   });
   document.getElementById('aOpponentRank').value = '';
   document.getElementById('aPotN').checked = false;
 
-  ['bSigStrikes','bTakedowns','bReversals','bKnockdowns','bControlSeconds'].forEach(function(id) {
+  ['bSigStrikes','bTakedowns','bKnockdowns','bControlSeconds'].forEach(function(id) {
     document.getElementById(id).value = '0';
   });
   document.getElementById('bOpponentRank').value = '';
@@ -450,7 +450,6 @@ function populateFightForm(fight) {
 
   document.getElementById('aSigStrikes').value     = fight.fighter_a_sig_strikes   || 0;
   document.getElementById('aTakedowns').value      = fight.fighter_a_takedowns      || 0;
-  document.getElementById('aReversals').value      = fight.fighter_a_reversals      || 0;
   document.getElementById('aKnockdowns').value     = fight.fighter_a_knockdowns     || 0;
   document.getElementById('aControlSeconds').value = fight.fighter_a_control_seconds || 0;
   document.getElementById('aOpponentRank').value   = fight.fighter_a_opponent_rank != null ? fight.fighter_a_opponent_rank : '';
@@ -458,7 +457,6 @@ function populateFightForm(fight) {
 
   document.getElementById('bSigStrikes').value     = fight.fighter_b_sig_strikes   || 0;
   document.getElementById('bTakedowns').value      = fight.fighter_b_takedowns      || 0;
-  document.getElementById('bReversals').value      = fight.fighter_b_reversals      || 0;
   document.getElementById('bKnockdowns').value     = fight.fighter_b_knockdowns     || 0;
   document.getElementById('bControlSeconds').value = fight.fighter_b_control_seconds || 0;
   document.getElementById('bOpponentRank').value   = fight.fighter_b_opponent_rank != null ? fight.fighter_b_opponent_rank : '';
@@ -515,14 +513,12 @@ async function handleFightFormSubmit(e) {
     end_time_seconds:            endTimeSecVal,
     fighter_a_sig_strikes:       parseInt(document.getElementById('aSigStrikes').value)     || 0,
     fighter_a_takedowns:         parseInt(document.getElementById('aTakedowns').value)      || 0,
-    fighter_a_reversals:         parseInt(document.getElementById('aReversals').value)      || 0,
     fighter_a_knockdowns:        parseInt(document.getElementById('aKnockdowns').value)     || 0,
     fighter_a_control_seconds:   parseInt(document.getElementById('aControlSeconds').value) || 0,
     fighter_a_opponent_rank:     parseInt(document.getElementById('aOpponentRank').value)   || null,
     fighter_a_potn:              document.getElementById('aPotN').checked,
     fighter_b_sig_strikes:       parseInt(document.getElementById('bSigStrikes').value)     || 0,
     fighter_b_takedowns:         parseInt(document.getElementById('bTakedowns').value)      || 0,
-    fighter_b_reversals:         parseInt(document.getElementById('bReversals').value)      || 0,
     fighter_b_knockdowns:        parseInt(document.getElementById('bKnockdowns').value)     || 0,
     fighter_b_control_seconds:   parseInt(document.getElementById('bControlSeconds').value) || 0,
     fighter_b_opponent_rank:     parseInt(document.getElementById('bOpponentRank').value)   || null,
@@ -572,7 +568,6 @@ function computeFighterScore(fight, isA) {
 
   const sigStrikes    = fight[prefix + 'sig_strikes']    || 0;
   const takedowns     = fight[prefix + 'takedowns']      || 0;
-  const reversals     = fight[prefix + 'reversals']      || 0;
   const knockdowns    = fight[prefix + 'knockdowns']     || 0;
   const controlSec    = fight[prefix + 'control_seconds'] || 0;
   const potn          = !!fight[prefix + 'potn'];
@@ -583,7 +578,7 @@ function computeFighterScore(fight, isA) {
   const isDraw    = fight.outcome === 'draw';
 
   // Base stats score
-  const base = (sigStrikes * 0.1) + (takedowns * 1) + (reversals * 1) +
+  const base = (sigStrikes * 0.1) + (takedowns * 1) +
                (knockdowns * 2) + (controlSec * 0.01);
 
   // Win bonus (only if this fighter won)
@@ -653,7 +648,6 @@ function computeFighterScore(fight, isA) {
     scoring_detail: {
       sig_strikes:      sigStrikes,
       takedowns:        takedowns,
-      reversals:        reversals,
       knockdowns:       knockdowns,
       control_seconds:  controlSec,
       opponent_rank:    opponentRank,

@@ -155,6 +155,7 @@ let isViewMode    = false;   // true when browsing another manager's lineup from
 let viewedMember  = null;    // the member object being viewed (null when viewing own lineup)
 let selections    = new Set();  // fighter IDs currently started
 let selectionRowIds = {};       // fighter_id -> starter_selections DB row id
+let selectionSlots  = {};       // fighter_id -> slot_position (1, 2, or 3)
 let rosterRowIds    = {};       // fighter_id -> rosters table row id (needed to delete)
 
 // ========================================================================
@@ -218,7 +219,8 @@ async function initLineup() {
 
   // Nav links — Lineup is active only when viewing your own
   var nav = '<a href="standings.html?id=' + leagueId + '" class="btn-secondary">Standings</a>';
-  nav += '<a href="waivers.html?id='  + leagueId + '" class="btn-secondary">Waivers</a>';
+  nav += '<a href="waivers.html?id='  + leagueId + '" class="btn-secondary">Free Agency</a>';
+  nav += '<a href="trades.html?id='   + leagueId + '" class="btn-secondary">Trades</a>';
   nav += '<a href="lineup.html?id='   + leagueId + '" class="' + (isViewMode ? 'btn-secondary' : 'btn-primary') + '">My Lineup</a>';
   document.getElementById('headerActions').innerHTML = nav;
 
@@ -226,7 +228,7 @@ async function initLineup() {
   const [rostersRes, selectionsRes] = await Promise.all([
     supabaseClient
       .from('rosters')
-      .select('id, draft_pick, slot_override, fighters(id, name, primary_division, current_rank, is_champion, record_wins, record_losses, record_draws, photo_url)')
+      .select('id, draft_pick, slot_override, acquired_at, fighters(id, name, primary_division, current_rank, is_champion, record_wins, record_losses, record_draws, photo_url)')
       .eq('league_id', leagueId)
       .eq('league_member_id', myMemberId)
       .order('draft_pick'),
@@ -249,14 +251,19 @@ async function initLineup() {
   rosterRowIds = {};
   myRoster = (rostersRes.data || []).filter(function(r) { return r.fighters; }).map(function(r) {
     rosterRowIds[r.fighters.id] = r.id;
-    return Object.assign({}, r.fighters, { slot_override: r.slot_override || null });
+    return Object.assign({}, r.fighters, {
+      slot_override: r.slot_override || null,
+      acquired_at:   r.acquired_at   || null
+    });
   });
 
   // Restore any starters the user already picked for this event
   selectionRowIds = {};
+  selectionSlots  = {};
   (selectionsRes.data || []).forEach(function(s) {
     selections.add(s.fighter_id);
     selectionRowIds[s.fighter_id] = s.id;
+    selectionSlots[s.fighter_id]  = s.slot_position;
   });
 
   document.getElementById('pageContent').style.display = 'block';
@@ -390,6 +397,22 @@ function buildEmptySlot(slotNum) {
 }
 
 // ========================================================================
+// FIGHT CARD LOOKUP
+// Builds a map of lowercase fighter name -> matchup info from the fight card
+// data so roster rows can be highlighted and annotated when a fighter is booked.
+// ========================================================================
+function buildFightCardLookup() {
+  var lookup = {};
+  PLACEHOLDER_FIGHTS.forEach(function(section) {
+    section.fights.forEach(function(fight) {
+      lookup[fight.redCorner.toLowerCase()]  = { opponent: fight.blueCorner,  weightClass: fight.weightClass, badge: fight.badge || null };
+      lookup[fight.blueCorner.toLowerCase()] = { opponent: fight.redCorner,   weightClass: fight.weightClass, badge: fight.badge || null };
+    });
+  });
+  return lookup;
+}
+
+// ========================================================================
 // RENDER ROSTER LIST
 // Renders the roster grouped by slot category (division, Women's Flex,
 // Any-Division Flex) with a section header showing slot limit pips.
@@ -405,8 +428,32 @@ function renderRosterList() {
 
   const isFull = selections.size >= MAX_STARTERS;
 
-  // Assign each fighter to its slot category using the same greedy rules as the draft
-  const assigned = assignSlots(myRoster);
+  // Determine whether the +3 cap expansion is currently in effect. Only when
+  // expanded do we split out a "Temporary Extended Roster Flex" (TERF) section
+  // for the most recently acquired fighters that exceed the normal cap of 20.
+  const eventDate    = nextEvent ? nextEvent.event_date : null;
+  const capExpanded  = typeof isCapExpanded === 'function' ? isCapExpanded(new Date(), eventDate) : false;
+  const overflow     = Math.max(0, myRoster.length - 20);
+  const showTerf     = capExpanded && overflow > 0;
+
+  // If TERF is active, peel the most-recently-acquired N fighters off the
+  // bottom and run slot assignment on the rest. They don't compete for slot
+  // construction limits while they're "extended". Auto-drop on Wed 3am ET
+  // will hit these same fighters first.
+  let coreRoster = myRoster;
+  let terfRoster = [];
+  if (showTerf) {
+    const sortedByAcquired = myRoster.slice().sort(function(a, b) {
+      const ta = a.acquired_at ? new Date(a.acquired_at).getTime() : 0;
+      const tb = b.acquired_at ? new Date(b.acquired_at).getTime() : 0;
+      return ta - tb; // oldest first
+    });
+    coreRoster = sortedByAcquired.slice(0, sortedByAcquired.length - overflow);
+    terfRoster = sortedByAcquired.slice(sortedByAcquired.length - overflow);
+  }
+
+  // Assign each core fighter to its slot category using the same greedy rules as the draft
+  const assigned = assignSlots(coreRoster);
 
   // Build a map of slot type -> array of fighters (in roster order)
   const groups = {};
@@ -423,12 +470,11 @@ function renderRosterList() {
   // Build the render context once so all row renderers share the same derived data
   const ctx = {
     isFull:        selections.size >= MAX_STARTERS,
-    // How many any_flex slots are currently occupied
     flexCount:     groups['any_flex'].length,
-    // Divisions already represented in any_flex (used for eligibility gating)
     flexDivisions: groups['any_flex'].map(function(f) { return f.primary_division; }),
-    // Full division groups so "← Out" modal can see who is in a fighter's division
-    divisionGroups: groups
+    divisionGroups: groups,
+    // Map of lowercase fighter name -> { opponent, weightClass, badge } for upcoming card
+    fightCard: buildFightCardLookup()
   };
 
   let html = '';
@@ -448,6 +494,16 @@ function renderRosterList() {
   if (groups['any_flex'].length > 0) {
     html += renderSlotSection('Any-Division Flex', groups['any_flex'], 2, ctx, 'any_flex');
   }
+
+  // Temporary Extended Roster Flex — visible only while the +3 expansion is
+  // active (Thu 3am ET event-week → Sun 3am ET after event). These fighters
+  // will be auto-dropped Wed 3am ET if you don't drop down to 20 manually.
+  if (showTerf) {
+    html += renderTerfSection(terfRoster, ctx);
+  }
+
+  // Surface any roster construction violations introduced by trades / FA adds
+  renderImbalanceBanner(myRoster, capExpanded);
 
   el.innerHTML = html;
 
@@ -487,6 +543,143 @@ function renderRosterList() {
   });
 }
 
+// Computes whether the roster fits the construction rules. Trades, instant
+// FA adds, and approved waivers can all leave a roster in a state that's at
+// the cap but distributed wrong — e.g. you traded away a welterweight and
+// now have an empty Welterweight slot.
+//
+// Slot layout: 2 per men's division, 2 women's flex, 2 any-flex (20 total).
+// Fighters above the per-division/women caps spill into the any-flex slots,
+// which is allowed up to the 2 any-flex slot count. The two failure modes:
+//
+//   * Shortage — a men's division has < 2, or women count < 2. Means an
+//     empty slot the manager can't fill from their current roster.
+//   * Excess  — total any-flex demand exceeds the 2 available any-flex
+//     slots, i.e. fighters can't all be assigned to slots.
+//
+// Returns null when balanced; otherwise { shortages, excesses }.
+function detectRosterImbalance(roster) {
+  const counts = {};
+  MENS_DIVISIONS.forEach(function(d) { counts[d] = 0; });
+  let womenTotal = 0;
+
+  roster.forEach(function(f) {
+    if (WOMENS_DIVISIONS.includes(f.primary_division)) {
+      womenTotal++;
+    } else if (counts[f.primary_division] !== undefined) {
+      counts[f.primary_division]++;
+    }
+  });
+
+  // How many fighters would need an any-flex slot? Each men's division above
+  // 2 contributes its surplus; women's count above 2 does the same.
+  let anyFlexDemand = 0;
+  const sources = [];
+  MENS_DIVISIONS.forEach(function(d) {
+    if (counts[d] > 2) {
+      anyFlexDemand += counts[d] - 2;
+      sources.push(DIVISION_LABELS[d] + ' (' + counts[d] + ')');
+    }
+  });
+  if (womenTotal > 2) {
+    anyFlexDemand += womenTotal - 2;
+    sources.push("women's fighters (" + womenTotal + ')');
+  }
+
+  const shortages = [];
+  const excesses  = [];
+
+  // Shortages: unfillable slots
+  MENS_DIVISIONS.forEach(function(d) {
+    if (counts[d] < 2) {
+      shortages.push(DIVISION_LABELS[d] + ' (' + counts[d] + ' of 2)');
+    }
+  });
+  if (womenTotal < 2) shortages.push("Women's Flex (" + womenTotal + ' of 2)');
+
+  // Excess: only flag when total spillover actually exceeds the 2 any-flex slots
+  if (anyFlexDemand > 2) {
+    excesses.push(
+      'Any-Division Flex needs ' + anyFlexDemand + ' slots but only has 2 — ' +
+      'too many fighters in ' + sources.join(', ')
+    );
+  }
+
+  if (shortages.length === 0 && excesses.length === 0) return null;
+  return { shortages: shortages, excesses: excesses };
+}
+
+// Populates #rosterImbalanceBanner. Hidden when balanced, or when the +3
+// cap expansion is active (TERF window) — during expansion the player is
+// expected to be temporarily over, so flagging it would just be noise.
+function renderImbalanceBanner(roster, capExpanded) {
+  const el = document.getElementById('rosterImbalanceBanner');
+  if (!el) return;
+
+  if (capExpanded) {
+    // The TERF section already explains the +3 state; don't double up.
+    el.style.display = 'none';
+    el.innerHTML = '';
+    return;
+  }
+
+  const issues = detectRosterImbalance(roster);
+  if (!issues) {
+    el.style.display = 'none';
+    el.innerHTML = '';
+    return;
+  }
+
+  let body = '';
+  if (issues.shortages.length > 0) {
+    body += '<p class="roster-imbalance-banner__line"><strong>Short:</strong> ' +
+            issues.shortages.map(escapeHtml).join(', ') + '.</p>';
+  }
+  if (issues.excesses.length > 0) {
+    body += '<p class="roster-imbalance-banner__line"><strong>Over:</strong> ' +
+            issues.excesses.map(escapeHtml).join(', ') + '.</p>';
+  }
+
+  el.innerHTML =
+    '<p class="roster-imbalance-banner__title">Roster construction is out of alignment</p>' +
+    body +
+    '<p class="roster-imbalance-banner__hint">' +
+      'Add a fighter from a short division and drop one from an over slot to rebalance. ' +
+      'You can still set starters, but the roster won\'t be valid for league play until ' +
+      'it matches the construction rules.' +
+    '</p>';
+  el.style.display = '';
+}
+
+// Renders the Temporary Extended Roster Flex section — the +3 fighters
+// granted during the Thu→Sun event-week cap expansion. Headers + footnote
+// make it explicit these slots are temporary and will be auto-dropped if
+// the roster isn't trimmed back to 20 by Wed 3am ET.
+function renderTerfSection(fighters, ctx) {
+  if (!fighters || fighters.length === 0) return '';
+  const pipsHtml = renderPips(fighters.length, 3);
+  let html = '<div class="lineup-slot-header lineup-slot-header--terf">';
+  html += '<span class="lineup-slot-header__title">Temporary Extended Roster Flex</span>';
+  html += '<span class="lineup-slot-header__pips">' + pipsHtml + '</span>';
+  html += '</div>';
+  html += '<p class="lineup-terf-note">' +
+            'These three slots are open while waivers are active for the upcoming event. ' +
+            'Drop your roster back to 20 by Wed 3am ET, or the most recently added fighters here will be auto-dropped.' +
+          '</p>';
+
+  // Sort started fighters to the top (mirrors renderSlotSection)
+  const sorted = fighters.slice().sort(function(a, b) {
+    const aStarted = selections.has(a.id);
+    const bStarted = selections.has(b.id);
+    if (aStarted !== bStarted) return aStarted ? -1 : 1;
+    return 0;
+  });
+  sorted.forEach(function(fighter) {
+    html += renderRosterRow(fighter, ctx, 'any_flex');
+  });
+  return html;
+}
+
 // Renders one slot category: a header row (title + pip dots) followed by fighter rows.
 function renderSlotSection(title, fighters, totalSlots, ctx, slotType) {
   const pipsHtml = renderPips(fighters.length, totalSlots);
@@ -517,7 +710,8 @@ function renderRosterRow(fighter, ctx, slotType) {
   const rankClass  = fighter.is_champion ? 'rank-champion' : (fighter.current_rank ? 'rank-ranked' : 'rank-unranked');
   const divLabel   = DIVISION_LABELS[fighter.primary_division] || fighter.primary_division;
   const record     = fighter.record_wins + '-' + fighter.record_losses + (fighter.record_draws ? '-' + fighter.record_draws : '');
-  const rowClass   = isStarted ? ' lineup-roster-row--started' : '';
+  const fightInfo  = ctx.fightCard[fighter.name.toLowerCase()] || null;
+  const rowClass   = (isStarted ? ' lineup-roster-row--started' : '') + (fightInfo ? ' lineup-roster-row--on-card' : '');
   const photoHtml  = fighter.photo_url
     ? '<img class="lineup-roster-row__photo" src="' + fighter.photo_url + '" alt="' + escapeHtml(fighter.name) + '" onerror="this.style.display=\'none\'">'
     : '';
@@ -565,6 +759,12 @@ function renderRosterRow(fighter, ctx, slotType) {
       '<span class="lineup-roster-row__rank ' + rankClass + '">' + rankLabel + '</span>' +
       '<div class="lineup-roster-row__info">' +
         '<button class="lineup-roster-row__name" data-open-fighter="' + fighter.id + '">' + escapeHtml(fighter.name) + '</button>' +
+        (fightInfo
+          ? '<span class="lineup-roster-row__matchup">' +
+              'vs. ' + escapeHtml(fightInfo.opponent) +
+              (fightInfo.badge ? ' <span class="lineup-roster-row__matchup-badge">' + escapeHtml(fightInfo.badge) + '</span>' : '') +
+            '</span>'
+          : '') +
         '<span class="lineup-roster-row__division">' + escapeHtml(divLabel) + '</span>' +
       '</div>' +
       '<span class="lineup-roster-row__record">' + record + '</span>' +
@@ -597,12 +797,23 @@ async function toggleStarter(fighterId) {
         .eq('id', rowId);
       if (error) { alert('Error removing starter: ' + error.message); return; }
       delete selectionRowIds[fighterId];
+      delete selectionSlots[fighterId];
     }
     selections.delete(fighterId);
   } else {
     if (selections.size >= MAX_STARTERS) return;
-    // Start: insert into DB, store the new row id for future deletes
-    const slotPos = selections.size + 1;
+    // Start: pick the smallest slot_position in [1, MAX_STARTERS] that isn't
+    // already in use. The previous "selections.size + 1" approach collided
+    // with surviving rows when a starter was benched and a new one started
+    // (the freed slot wasn't reused, so we'd insert a duplicate of an
+    // existing slot_position).
+    const taken = new Set(Object.values(selectionSlots));
+    let slotPos = 0;
+    for (let i = 1; i <= MAX_STARTERS; i++) {
+      if (!taken.has(i)) { slotPos = i; break; }
+    }
+    if (slotPos === 0) return; // shouldn't happen given the size check above
+
     const { data, error } = await supabaseClient
       .from('starter_selections')
       .insert({
@@ -615,6 +826,7 @@ async function toggleStarter(fighterId) {
       .single();
     if (error) { alert('Error saving starter: ' + error.message); return; }
     selectionRowIds[fighterId] = data.id;
+    selectionSlots[fighterId]  = slotPos;
     selections.add(fighterId);
   }
 
@@ -625,8 +837,10 @@ async function toggleStarter(fighterId) {
 
 // ========================================================================
 // DROP FIGHTER
-// Deletes a fighter from the user's roster. Asks for confirmation first
-// since this is irreversible (the fighter goes to free agency, not waivers).
+// Deletes a fighter from the user's roster and logs the drop so the rolling
+// 48hr waiver hold and the Wednesday auto-drop bookkeeping both pick it up.
+// Dropped fighters are NOT immediate free agents — they sit on waivers until
+// 3am ET on (drop_date + 2 days), regardless of the current waiver phase.
 // ========================================================================
 async function dropFighter(fighterId) {
   if (isLocked) return;
@@ -634,7 +848,11 @@ async function dropFighter(fighterId) {
   const fighter = myRoster.find(function(f) { return f.id === fighterId; });
   if (!fighter) return;
 
-  const confirmed = confirm('Drop ' + fighter.name + ' from your roster?\n\nThey will become a free agent. This cannot be undone.');
+  const confirmed = confirm(
+    'Drop ' + fighter.name + ' from your roster?\n\n' +
+    'They will go on rolling waivers for ~48 hours before becoming a free agent. ' +
+    'Other managers can submit claims during that period. This cannot be undone.'
+  );
   if (!confirmed) return;
 
   const rowId = rosterRowIds[fighterId];
@@ -653,11 +871,23 @@ async function dropFighter(fighterId) {
     return;
   }
 
+  // Log the drop so the waivers page can apply the rolling-waiver hold.
+  // Failure is non-fatal — the drop itself already succeeded; we just lose
+  // the audit trail on the rare error case. Surface a console warning.
+  const dropLog = await supabaseClient.from('roster_drops').insert({
+    league_id: leagueId,
+    league_member_id: myMemberId,
+    fighter_id: fighterId,
+    source: 'manual'
+  });
+  if (dropLog.error) console.warn('roster_drops insert failed:', dropLog.error);
+
   // If the dropped fighter was a starter, clean up their starter_selection row too
   const selRowId = selectionRowIds[fighterId];
   if (selRowId) {
     await supabaseClient.from('starter_selections').delete().eq('id', selRowId);
     delete selectionRowIds[fighterId];
+    delete selectionSlots[fighterId];
   }
 
   // Update local state so the UI refreshes instantly without a full page reload

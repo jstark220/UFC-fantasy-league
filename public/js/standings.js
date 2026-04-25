@@ -56,7 +56,8 @@ async function initStandings() {
   document.getElementById('leagueName').textContent = league.name;
 
   var nav = '<a href="standings.html?id=' + leagueId + '" class="btn-primary">Standings</a>';
-  nav    += '<a href="waivers.html?id='   + leagueId + '" class="btn-secondary">Waivers</a>';
+  nav    += '<a href="waivers.html?id='   + leagueId + '" class="btn-secondary">Free Agency</a>';
+  nav    += '<a href="trades.html?id='    + leagueId + '" class="btn-secondary">Trades</a>';
   nav    += '<a href="lineup.html?id='    + leagueId + '" class="btn-secondary">My Lineup</a>';
   document.getElementById('headerActions').innerHTML = nav;
 

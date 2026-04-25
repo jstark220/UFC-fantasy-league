@@ -40,8 +40,17 @@ let user, leagueId, league, members, memberMap, myMemberId;
 let allFighters, fighterMap;
 let picks = [];
 let divisionFilter = 'all';
+let statusFilter   = 'all';
+let sortBy         = 'rank';
 let searchQuery = '';
 let picking = false; // blocks a second pick while a request is in flight
+
+// View All modal — independent filter / sort state so the modal can be
+// browsed without disturbing the side panel's controls.
+let viewAllSearch   = '';
+let viewAllSort     = 'rank';
+let viewAllDivision = 'all';
+let viewAllStatus   = 'all';
 
 // ========================================================================
 // INIT
@@ -57,7 +66,10 @@ async function initDraft() {
   // Set back link before data arrives so it's ready immediately
   document.getElementById('leagueLink').href = 'league.html?id=' + leagueId;
 
-  // Load all four data sets at the same time to minimise wait
+  // Load all four data sets at the same time to minimise wait.
+  // Picks come from `draft_picks` (immutable history), NOT from `rosters` —
+  // rosters mutate after the draft ends (trades, drops) and would create
+  // gaps on the board. See migrations/003_draft_picks.sql.
   const [leagueRes, membersRes, fightersRes, picksRes] = await Promise.all([
     supabaseClient
       .from('leagues')
@@ -70,11 +82,11 @@ async function initDraft() {
       .eq('league_id', leagueId),
     supabaseClient
       .from('fighters')
-      .select('id, name, primary_division, current_rank, is_champion, record_wins, record_losses, record_draws')
+      .select('id, name, primary_division, current_rank, is_champion, record_wins, record_losses, record_draws, photo_url')
       .order('is_champion', { ascending: false })
       .order('current_rank', { nullsFirst: false }),
     supabaseClient
-      .from('rosters')
+      .from('draft_picks')
       .select('id, league_member_id, fighter_id, draft_pick, draft_round')
       .eq('league_id', leagueId)
       .order('draft_pick')
@@ -116,6 +128,44 @@ async function initDraft() {
 
   // Subscribe to live pick events
   subscribeToRealtime();
+
+  // One delegated listener: any element with data-open-fighter opens the
+  // fighter modal regardless of which renderer emitted it. Avoids re-wiring
+  // after every realtime pick re-render.
+  document.addEventListener('click', function(e) {
+    var trigger = e.target.closest('[data-open-fighter]');
+    if (!trigger) return;
+    if (typeof showFighterModal === 'function') {
+      showFighterModal(trigger.getAttribute('data-open-fighter'));
+    }
+  });
+
+  // Delegated listener for the fighter-modal Draft button. The modal lives
+  // outside our normal render tree, so per-render wiring won't catch it —
+  // a delegated handler at document level does.
+  document.addEventListener('click', function(e) {
+    var trigger = e.target.closest('[data-draft-fighter]');
+    if (!trigger) return;
+    var fighter = fighterMap[trigger.getAttribute('data-draft-fighter')];
+    if (!fighter) return;
+
+    // Validate up front so we can give a clear message instead of a silent
+    // no-op from inside makePick.
+    if (!isMyTurn()) {
+      alert("It's not your pick yet.");
+      return;
+    }
+    if (!canPick(fighter, getMyPickFighters())) {
+      alert('No valid roster slot for this fighter.');
+      return;
+    }
+    makePick(fighter);
+    if (typeof closeFighterModal === 'function') closeFighterModal();
+  });
+
+  // View All button — opens the fullscreen browse modal
+  var viewAllBtn = document.getElementById('viewAllBtn');
+  if (viewAllBtn) viewAllBtn.addEventListener('click', openViewAll);
 
   // Reveal the page now that everything is ready
   document.getElementById('pageContent').style.display = 'block';
@@ -240,12 +290,15 @@ async function makePick(fighter) {
 // Listens for new rows inserted into the rosters table for this league.
 // ========================================================================
 function subscribeToRealtime() {
+  // Listen on draft_picks (immutable record), not rosters. The trigger
+  // sync_draft_pick_trigger inserts into draft_picks whenever a roster
+  // row lands with draft metadata, so this fires once per pick.
   supabaseClient
     .channel('draft_room_' + leagueId)
     .on('postgres_changes', {
       event: 'INSERT',
       schema: 'public',
-      table: 'rosters',
+      table: 'draft_picks',
       filter: 'league_id=eq.' + leagueId
     }, handleNewPick)
     .subscribe();
@@ -294,6 +347,9 @@ function renderAll() {
   renderFighterPool();
   renderDraftBoard();
   renderMyRoster();
+  // If the View All modal is open, refresh it too so newly drafted fighters
+  // disappear from its list in real time.
+  if (document.getElementById('viewAllOverlay')) renderViewAllList();
 }
 
 // ========================================================================
@@ -306,7 +362,7 @@ function renderHeader() {
   const pickCounterEl = document.getElementById('pickCounter');
 
   if (league.draft_completed || picks.length >= totalPicks) {
-    turnInfoEl.innerHTML = '<span class="turn-complete">Draft Complete!</span>';
+    turnInfoEl.innerHTML = '<span class="draft-status__complete">Draft Complete</span>';
     pickCounterEl.textContent = '';
     return;
   }
@@ -316,9 +372,10 @@ function renderHeader() {
   const teamName = activeMember ? activeMember.team_name : '?';
 
   if (activeManagerId === myMemberId) {
-    turnInfoEl.innerHTML = '<span class="turn-mine">Your pick!</span>  Round ' + round;
+    turnInfoEl.innerHTML = '<span class="draft-status__mine">Your pick</span> · Round ' + round;
   } else {
-    turnInfoEl.textContent = escapeHtml(teamName) + "'s pick  —  Round " + round;
+    turnInfoEl.innerHTML =
+      '<span class="draft-status__team">' + escapeHtml(teamName) + '</span> is on the clock · Round ' + round;
   }
 
   pickCounterEl.textContent = 'Pick ' + currentPickNum + ' of ' + totalPicks;
@@ -340,62 +397,301 @@ function renderFighterPool() {
     fighters = fighters.filter(function(f) { return f.primary_division === divisionFilter; });
   }
 
+  // Apply status filter (undefeated / top tiers / unranked) — same rules as
+  // the Free Agency page so the two surfaces feel consistent.
+  if (statusFilter === 'undefeated') {
+    fighters = fighters.filter(function(f) {
+      return f.record_losses === 0 && (f.record_draws || 0) === 0;
+    });
+  } else if (statusFilter === 'top5') {
+    fighters = fighters.filter(function(f) {
+      return f.is_champion || (f.current_rank && f.current_rank <= 5);
+    });
+  } else if (statusFilter === 'top10') {
+    fighters = fighters.filter(function(f) {
+      return f.is_champion || (f.current_rank && f.current_rank <= 10);
+    });
+  } else if (statusFilter === 'unranked') {
+    fighters = fighters.filter(function(f) {
+      return !f.is_champion && !f.current_rank;
+    });
+  }
+
   // Apply name search
   if (searchQuery) {
     const q = searchQuery.toLowerCase();
     fighters = fighters.filter(function(f) { return f.name.toLowerCase().includes(q); });
   }
 
+  // Sort a copy so the underlying allFighters array order stays stable
+  fighters = fighters.slice().sort(function(a, b) {
+    if (sortBy === 'rank') {
+      var ra = a.is_champion ? 0 : (a.current_rank || 999);
+      var rb = b.is_champion ? 0 : (b.current_rank || 999);
+      return ra - rb;
+    }
+    if (sortBy === 'record') {
+      // Most wins first, fewest losses as tiebreaker
+      if (b.record_wins !== a.record_wins) return b.record_wins - a.record_wins;
+      return a.record_losses - b.record_losses;
+    }
+    // 'points_year' and 'points_proj': data isn't tracked yet; fall back to rank
+    var ra2 = a.is_champion ? 0 : (a.current_rank || 999);
+    var rb2 = b.is_champion ? 0 : (b.current_rank || 999);
+    return ra2 - rb2;
+  });
+
   const poolEl = document.getElementById('fighterPool');
 
   if (fighters.length === 0) {
-    poolEl.innerHTML = '<p class="draft-empty">No fighters match your filters.</p>';
+    poolEl.innerHTML = '<p class="draft-empty" style="padding: var(--space-4) 0">No fighters match your filters.</p>';
     return;
   }
 
-  let html = '<table class="fighter-pool-table"><thead><tr>';
-  html += '<th>Rnk</th><th>Name</th><th>Division</th><th>Rec</th>';
-  html += '</tr></thead><tbody>';
+  let html = '';
 
   fighters.forEach(function(f) {
     const valid       = myTurn && canPick(f, myPickFighters);
-    const rankDisplay = f.is_champion ? 'C' : (f.current_rank ? '#' + f.current_rank : '-');
+    const rankLabel   = f.is_champion ? 'C' : (f.current_rank ? '#' + f.current_rank : 'NR');
+    const rankClass   = f.is_champion ? 'rank-champion' : (f.current_rank ? 'rank-ranked' : 'rank-unranked');
     const divLabel    = DIVISION_LABELS[f.primary_division] || f.primary_division;
-    const record      = f.record_wins + '-' + f.record_losses + '-' + f.record_draws;
+    const record      = f.record_wins + '-' + f.record_losses + (f.record_draws ? '-' + f.record_draws : '');
+    const photoHtml   = f.photo_url
+      ? '<img class="lineup-roster-row__photo" src="' + escapeHtml(f.photo_url) + '" alt="' + escapeHtml(f.name) + '" onerror="this.style.display=\'none\'">'
+      : '';
 
-    let rowClass, titleAttr = '';
+    let rowMods = ' draft-pool-row';
+    let titleAttr = '';
+    let pickBtn   = '';
     if (myTurn && valid) {
-      rowClass = 'row-pickable';
+      rowMods += ' draft-pool-row--pickable';
+      pickBtn  = '<button class="btn-secondary lineup-row-btn draft-pick-btn" data-fighter-id="' + f.id + '">Draft</button>';
     } else if (myTurn && !valid) {
-      rowClass = 'row-invalid';
+      rowMods += ' draft-pool-row--invalid';
       titleAttr = ' title="No valid roster slot available for this fighter"';
-    } else {
-      rowClass = 'row-watching';
+      pickBtn   = '<button class="btn-secondary lineup-row-btn" disabled>No slot</button>';
     }
 
-    // Only add the data attribute on rows the user can actually click
-    const dataAttr = (myTurn && valid) ? ' data-fighter-id="' + f.id + '"' : '';
-
-    html += '<tr class="' + rowClass + '"' + dataAttr + titleAttr + '>';
-    html += '<td>' + escapeHtml(rankDisplay) + '</td>';
-    html += '<td>' + escapeHtml(f.name) + '</td>';
-    html += '<td>' + escapeHtml(divLabel) + '</td>';
-    html += '<td>' + record + '</td>';
-    html += '</tr>';
+    html +=
+      '<div class="lineup-roster-row' + rowMods + '"' + titleAttr + '>' +
+        '<div class="lineup-roster-row__photo-wrap">' + photoHtml + '</div>' +
+        '<span class="lineup-roster-row__rank ' + rankClass + '">' + escapeHtml(rankLabel) + '</span>' +
+        '<div class="lineup-roster-row__info">' +
+          '<button class="lineup-roster-row__name" data-open-fighter="' + f.id + '">' +
+            escapeHtml(f.name) +
+          '</button>' +
+          '<span class="lineup-roster-row__division">' + escapeHtml(divLabel) + '</span>' +
+        '</div>' +
+        '<span class="lineup-roster-row__record">' + record + '</span>' +
+        pickBtn +
+      '</div>';
   });
 
-  html += '</tbody></table>';
   poolEl.innerHTML = html;
 
-  // Wire click handlers only when it is the user's turn
-  if (myTurn) {
-    poolEl.querySelectorAll('tr[data-fighter-id]').forEach(function(row) {
-      row.addEventListener('click', function() {
-        const fighter = fighterMap[row.getAttribute('data-fighter-id')];
-        if (fighter) makePick(fighter);
-      });
+  // Wire pick buttons (only present when it's your turn AND the slot is legal)
+  poolEl.querySelectorAll('.draft-pick-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      const fighter = fighterMap[btn.getAttribute('data-fighter-id')];
+      if (fighter) makePick(fighter);
     });
+  });
+}
+
+// ========================================================================
+// VIEW ALL MODAL
+// Fullscreen overlay with the same search / sort / division / status
+// controls as the side panel, but laid out as a multi-column grid so the
+// user can see many more fighters at once. Independent control state so
+// browsing here doesn't change the panel's filters.
+// ========================================================================
+function openViewAll() {
+  // Build the division-filter options from the same constants the panel uses
+  var divOptions = '<option value="all">All Divisions</option>';
+  WOMENS_DIVISIONS.concat(MENS_DIVISIONS).forEach(function(d) {
+    divOptions += '<option value="' + d + '">' + escapeHtml(DIVISION_LABELS[d]) + '</option>';
+  });
+
+  // Remove any stale instance
+  var existing = document.getElementById('viewAllOverlay');
+  if (existing) existing.remove();
+
+  var overlay = document.createElement('div');
+  overlay.id = 'viewAllOverlay';
+  overlay.className = 'view-all-overlay';
+  overlay.innerHTML =
+    '<div class="view-all-modal" role="dialog" aria-modal="true" aria-labelledby="viewAllTitle">' +
+      '<div class="view-all-modal__header">' +
+        '<h2 class="view-all-modal__title" id="viewAllTitle">All Available Fighters</h2>' +
+        '<button class="view-all-modal__close" id="viewAllClose" aria-label="Close">&times;</button>' +
+      '</div>' +
+      '<div class="view-all-modal__controls">' +
+        '<input type="text" id="viewAllSearchInput" class="waiver-search" placeholder="Search fighters...">' +
+        '<select id="viewAllSortInput" class="waiver-filter">' +
+          '<option value="rank">Sort: Rank</option>' +
+          '<option value="record">Sort: Record</option>' +
+          '<option value="points_year">Sort: Points (Year)</option>' +
+          '<option value="points_proj">Sort: Projected Pts</option>' +
+        '</select>' +
+        '<select id="viewAllDivisionInput" class="waiver-filter">' + divOptions + '</select>' +
+        '<select id="viewAllStatusInput" class="waiver-filter">' +
+          '<option value="all">All Fighters</option>' +
+          '<option value="undefeated">Undefeated</option>' +
+          '<option value="top5">Top 5</option>' +
+          '<option value="top10">Top 10</option>' +
+          '<option value="unranked">Unranked</option>' +
+        '</select>' +
+      '</div>' +
+      '<div class="view-all-modal__count" id="viewAllCount"></div>' +
+      '<div class="view-all-modal__body" id="viewAllBody"></div>' +
+    '</div>';
+
+  document.body.appendChild(overlay);
+
+  // Restore any previous selections (modal can be re-opened mid-session)
+  document.getElementById('viewAllSearchInput').value   = viewAllSearch;
+  document.getElementById('viewAllSortInput').value     = viewAllSort;
+  document.getElementById('viewAllDivisionInput').value = viewAllDivision;
+  document.getElementById('viewAllStatusInput').value   = viewAllStatus;
+
+  // Wire close interactions
+  document.getElementById('viewAllClose').addEventListener('click', closeViewAll);
+  overlay.addEventListener('click', function(e) {
+    if (e.target === overlay) closeViewAll();
+  });
+  document.addEventListener('keydown', _viewAllEscHandler);
+
+  // Wire control changes
+  document.getElementById('viewAllSearchInput').addEventListener('input', function() {
+    viewAllSearch = this.value.trim();
+    renderViewAllList();
+  });
+  document.getElementById('viewAllSortInput').addEventListener('change', function() {
+    viewAllSort = this.value;
+    renderViewAllList();
+  });
+  document.getElementById('viewAllDivisionInput').addEventListener('change', function() {
+    viewAllDivision = this.value;
+    renderViewAllList();
+  });
+  document.getElementById('viewAllStatusInput').addEventListener('change', function() {
+    viewAllStatus = this.value;
+    renderViewAllList();
+  });
+
+  renderViewAllList();
+}
+
+function closeViewAll() {
+  var overlay = document.getElementById('viewAllOverlay');
+  if (overlay) overlay.remove();
+  document.removeEventListener('keydown', _viewAllEscHandler);
+}
+
+function _viewAllEscHandler(e) {
+  if (e.key === 'Escape') closeViewAll();
+}
+
+function renderViewAllList() {
+  var body  = document.getElementById('viewAllBody');
+  var count = document.getElementById('viewAllCount');
+  if (!body) return;
+
+  var pickedIds      = new Set(picks.map(function(p) { return p.fighter_id; }));
+  var myTurn         = isMyTurn() && !picking;
+  var myPickFighters = getMyPickFighters();
+
+  // Same filter pipeline as renderFighterPool, but reading viewAll* state
+  var fighters = allFighters.filter(function(f) { return !pickedIds.has(f.id); });
+
+  if (viewAllDivision !== 'all') {
+    fighters = fighters.filter(function(f) { return f.primary_division === viewAllDivision; });
   }
+
+  if (viewAllStatus === 'undefeated') {
+    fighters = fighters.filter(function(f) { return f.record_losses === 0 && (f.record_draws || 0) === 0; });
+  } else if (viewAllStatus === 'top5') {
+    fighters = fighters.filter(function(f) { return f.is_champion || (f.current_rank && f.current_rank <= 5); });
+  } else if (viewAllStatus === 'top10') {
+    fighters = fighters.filter(function(f) { return f.is_champion || (f.current_rank && f.current_rank <= 10); });
+  } else if (viewAllStatus === 'unranked') {
+    fighters = fighters.filter(function(f) { return !f.is_champion && !f.current_rank; });
+  }
+
+  if (viewAllSearch) {
+    var q = viewAllSearch.toLowerCase();
+    fighters = fighters.filter(function(f) { return f.name.toLowerCase().includes(q); });
+  }
+
+  fighters = fighters.slice().sort(function(a, b) {
+    if (viewAllSort === 'rank') {
+      var ra = a.is_champion ? 0 : (a.current_rank || 999);
+      var rb = b.is_champion ? 0 : (b.current_rank || 999);
+      return ra - rb;
+    }
+    if (viewAllSort === 'record') {
+      if (b.record_wins !== a.record_wins) return b.record_wins - a.record_wins;
+      return a.record_losses - b.record_losses;
+    }
+    var ra2 = a.is_champion ? 0 : (a.current_rank || 999);
+    var rb2 = b.is_champion ? 0 : (b.current_rank || 999);
+    return ra2 - rb2;
+  });
+
+  if (count) {
+    count.textContent = fighters.length + ' fighter' + (fighters.length === 1 ? '' : 's');
+  }
+
+  if (fighters.length === 0) {
+    body.innerHTML = '<p class="draft-empty" style="padding: var(--space-6) 0; grid-column: 1 / -1; text-align: center">No fighters match your filters.</p>';
+    return;
+  }
+
+  var html = '';
+  fighters.forEach(function(f) {
+    var valid     = myTurn && canPick(f, myPickFighters);
+    var rankLabel = f.is_champion ? 'C' : (f.current_rank ? '#' + f.current_rank : 'NR');
+    var rankClass = f.is_champion ? 'rank-champion' : (f.current_rank ? 'rank-ranked' : 'rank-unranked');
+    var divLabel  = DIVISION_LABELS[f.primary_division] || f.primary_division;
+    var record    = f.record_wins + '-' + f.record_losses + (f.record_draws ? '-' + f.record_draws : '');
+    var photoHtml = f.photo_url
+      ? '<img class="lineup-roster-row__photo" src="' + escapeHtml(f.photo_url) + '" alt="' + escapeHtml(f.name) + '" onerror="this.style.display=\'none\'">'
+      : '';
+
+    var pickBtn = '';
+    if (myTurn && valid) {
+      pickBtn = '<button class="btn-secondary lineup-row-btn view-all-pick-btn" data-fighter-id="' + f.id + '">Draft</button>';
+    } else if (myTurn && !valid) {
+      pickBtn = '<button class="btn-secondary lineup-row-btn" disabled>No slot</button>';
+    }
+
+    html +=
+      '<div class="lineup-roster-row">' +
+        '<div class="lineup-roster-row__photo-wrap">' + photoHtml + '</div>' +
+        '<span class="lineup-roster-row__rank ' + rankClass + '">' + rankLabel + '</span>' +
+        '<div class="lineup-roster-row__info">' +
+          '<button class="lineup-roster-row__name" data-open-fighter="' + f.id + '">' + escapeHtml(f.name) + '</button>' +
+          '<span class="lineup-roster-row__division">' + escapeHtml(divLabel) + '</span>' +
+        '</div>' +
+        '<span class="lineup-roster-row__record">' + record + '</span>' +
+        pickBtn +
+      '</div>';
+  });
+
+  body.innerHTML = html;
+
+  // Wire pick buttons. data-open-fighter is handled by the global delegated
+  // listener attached at init time, so fighter modal opens still work.
+  body.querySelectorAll('.view-all-pick-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var fighter = fighterMap[btn.getAttribute('data-fighter-id')];
+      if (fighter) {
+        makePick(fighter);
+        // Close the modal so the user sees the live board update
+        closeViewAll();
+      }
+    });
+  });
 }
 
 // ========================================================================
@@ -409,27 +705,28 @@ function renderDraftBoard() {
   const totalPicks   = getTotalPicks();
   const currentPickNum = getCurrentPickNum();
 
-  // Pre-build a pick_number -> fighter name map for fast cell lookup
+  // Pre-build a pick_number -> fighter_id map. Cells render the fighter's
+  // name (looked up via fighterMap) and expose data-open-fighter so the
+  // delegated click handler opens the fighter modal.
   const pickMap = {};
   picks.forEach(function(p) {
-    const fighter = fighterMap[p.fighter_id];
-    pickMap[p.draft_pick] = fighter ? fighter.name : '?';
+    pickMap[p.draft_pick] = p.fighter_id;
   });
 
-  let html = '<div class="board-scroll"><table class="draft-board-table"><thead><tr>';
-  html += '<th class="round-label-th">Rd</th>';
+  let html = '<div class="standings-card draft-board"><table class="standings-table draft-board__table"><thead><tr>';
+  html += '<th class="standings-th standings-th--rank">Rd</th>';
 
   league.draft_order.forEach(function(memberId) {
     const member = memberMap[memberId];
     const isMe   = memberId === myMemberId;
-    html += '<th' + (isMe ? ' class="col-mine"' : '') + '>';
+    html += '<th class="standings-th' + (isMe ? ' draft-board__col-mine' : '') + '">';
     html += escapeHtml(member ? member.team_name : '?');
     html += '</th>';
   });
   html += '</tr></thead><tbody>';
 
   for (let round = 1; round <= totalRounds; round++) {
-    html += '<tr><td class="round-num">' + round + '</td>';
+    html += '<tr class="standings-row"><td class="draft-board__round">' + round + '</td>';
 
     for (let managerIdx = 0; managerIdx < n; managerIdx++) {
       // Map (round, managerIdx) to the absolute pick number.
@@ -441,15 +738,25 @@ function renderDraftBoard() {
       const memberId  = league.draft_order[managerIdx];
       const isMe      = memberId === myMemberId;
       const isCurrent = pickNum === currentPickNum && picks.length < totalPicks;
-      const colClass  = isMe ? ' col-mine' : '';
 
+      let cellClass = 'draft-board__cell';
+      if (isMe)     cellClass += ' draft-board__cell--mine';
+      if (pickMap[pickNum]) cellClass += ' draft-board__cell--made';
+      else if (isCurrent)   cellClass += ' draft-board__cell--current';
+      else                  cellClass += ' draft-board__cell--empty';
+
+      html += '<td class="' + cellClass + '">';
       if (pickMap[pickNum]) {
-        html += '<td class="pick-made' + colClass + '">' + escapeHtml(pickMap[pickNum]) + '</td>';
+        var fighter = fighterMap[pickMap[pickNum]];
+        var name    = fighter ? fighter.name : '?';
+        html +=
+          '<button class="draft-board__pick-name" data-open-fighter="' + pickMap[pickNum] + '">' +
+            escapeHtml(name) +
+          '</button>';
       } else if (isCurrent) {
-        html += '<td class="pick-current' + colClass + '">&#9658;</td>';
-      } else {
-        html += '<td class="pick-empty' + colClass + '"></td>';
+        html += '<span class="draft-board__on-clock">On the clock</span>';
       }
+      html += '</td>';
     }
     html += '</tr>';
   }
@@ -487,37 +794,51 @@ function renderMyRoster() {
 
   document.getElementById('myPickCount').textContent = myPickFighters.length;
 
-  let html = '<div class="slot-grid">';
+  let html = '<div class="draft-slots">';
 
   MENS_DIVISIONS.forEach(function(div) {
-    html += '<div class="slot-row">';
-    html += '<span class="slot-label">' + escapeHtml(DIVISION_LABELS[div]) + '</span>';
-    html += '<span class="slot-pips">' + renderPips(Math.min(menCounts[div], 2), 2) + '</span>';
+    html += '<div class="draft-slots__row">';
+    html += '<span class="draft-slots__label">' + escapeHtml(DIVISION_LABELS[div]) + '</span>';
+    html += '<span class="draft-slots__pips">' + renderPips(Math.min(menCounts[div], 2), 2) + '</span>';
     html += '</div>';
   });
 
-  html += '<div class="slot-row">';
-  html += '<span class="slot-label">Women\'s Flex</span>';
-  html += '<span class="slot-pips">' + renderPips(Math.min(womenCount, 2), 2) + '</span>';
+  html += '<div class="draft-slots__row">';
+  html += '<span class="draft-slots__label">Women\'s Flex</span>';
+  html += '<span class="draft-slots__pips">' + renderPips(Math.min(womenCount, 2), 2) + '</span>';
   html += '</div>';
 
-  html += '<div class="slot-row">';
-  html += '<span class="slot-label">Any-Div Flex</span>';
-  html += '<span class="slot-pips">' + renderPips(flexUsed, 2) + '</span>';
+  html += '<div class="draft-slots__row">';
+  html += '<span class="draft-slots__label">Any-Division Flex</span>';
+  html += '<span class="draft-slots__pips">' + renderPips(flexUsed, 2) + '</span>';
   html += '</div>';
 
   html += '</div>';
 
-  // List of drafted fighters in pick order
-  html += '<div class="my-picks-list">';
+  // Drafted fighters in pick order — uses the lineup-roster-row look but compact
+  html += '<div class="draft-my-picks">';
   if (myPickFighters.length === 0) {
-    html += '<p class="draft-empty">No picks yet.</p>';
+    html += '<p class="draft-empty" style="padding: var(--space-4) 0">No picks yet.</p>';
   } else {
-    myPickFighters.forEach(function(f) {
-      html += '<div class="my-pick-row">';
-      html += '<span class="my-pick-name">' + escapeHtml(f.name) + '</span>';
-      html += '<span class="my-pick-div">' + escapeHtml(DIVISION_LABELS[f.primary_division] || f.primary_division) + '</span>';
-      html += '</div>';
+    myPickFighters.forEach(function(f, idx) {
+      const rankLabel = f.is_champion ? 'C' : (f.current_rank ? '#' + f.current_rank : 'NR');
+      const rankClass = f.is_champion ? 'rank-champion' : (f.current_rank ? 'rank-ranked' : 'rank-unranked');
+      const divLabel  = DIVISION_LABELS[f.primary_division] || f.primary_division;
+      const photoHtml = f.photo_url
+        ? '<img class="lineup-roster-row__photo" src="' + escapeHtml(f.photo_url) + '" alt="' + escapeHtml(f.name) + '" onerror="this.style.display=\'none\'">'
+        : '';
+      html +=
+        '<div class="lineup-roster-row draft-my-pick">' +
+          '<span class="draft-my-pick__num">' + (idx + 1) + '</span>' +
+          '<div class="lineup-roster-row__photo-wrap">' + photoHtml + '</div>' +
+          '<span class="lineup-roster-row__rank ' + rankClass + '">' + rankLabel + '</span>' +
+          '<div class="lineup-roster-row__info">' +
+            '<button class="lineup-roster-row__name" data-open-fighter="' + f.id + '">' +
+              escapeHtml(f.name) +
+            '</button>' +
+            '<span class="lineup-roster-row__division">' + escapeHtml(divLabel) + '</span>' +
+          '</div>' +
+        '</div>';
     });
   }
   html += '</div>';
@@ -563,6 +884,16 @@ function populateDivisionFilter() {
 
   document.getElementById('fighterSearch').addEventListener('input', function() {
     searchQuery = this.value.trim();
+    renderFighterPool();
+  });
+
+  document.getElementById('statusFilter').addEventListener('change', function() {
+    statusFilter = this.value;
+    renderFighterPool();
+  });
+
+  document.getElementById('sortBy').addEventListener('change', function() {
+    sortBy = this.value;
     renderFighterPool();
   });
 }

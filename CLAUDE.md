@@ -62,7 +62,7 @@ Build the authentication flow (signup, login, logout pages).
 
 ## Scoring System v1.2 (reference for future work)
 
-Base scoring: sig strike +0.1, takedown +1, reversal +1, knockdown +2, control +0.01/sec
+Base scoring: sig strike +0.1, takedown +1, knockdown +2, control +0.01/sec
 
 Win bonuses: R1 finish +18, R2 +14, R3 +9, R4/R5 +8, Decision +6, Quick win (<60s R1) +5 additional
 

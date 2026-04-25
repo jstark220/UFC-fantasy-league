@@ -3,45 +3,89 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Join League - UFC Fantasy League</title>
-  <link rel="stylesheet" href="css/styles.css">
+
+  <script src="js/theme.js"></script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="styles/tokens.css">
+  <link rel="stylesheet" href="styles/components.css">
+
+  <title>Join League - Knockdown Fantasy</title>
 </head>
-<body class="auth-page">
+<body>
 
-  <div class="card">
+  <div class="dashboard-page" id="pageContent" style="display: none;">
 
-    <a href="dashboard.html" class="back-link">← My Leagues</a>
-
-    <h1>Join League</h1>
-    <p class="subtitle">Enter an invite code to join a league</p>
-
-    <!-- Error or success message; hidden by default -->
-    <div id="message" class="message"></div>
-
-    <form id="joinForm">
-
-      <div class="form-group">
-        <label for="inviteCode">Invite Code</label>
-        <!-- oninput auto-uppercases as the user types -->
-        <input type="text" id="inviteCode" placeholder="6-character code" maxlength="6" required
-               oninput="this.value = this.value.toUpperCase()">
+    <nav class="top-nav">
+      <a href="index.html" class="top-nav__logo">
+        <span class="kf-red">Knockdown</span> Fantasy
+      </a>
+      <div class="top-nav__links">
+        <a href="dashboard.html" class="btn-ghost">← Dashboard</a>
       </div>
-
-      <div class="form-group">
-        <label for="teamName">Your Team Name</label>
-        <input type="text" id="teamName" placeholder="3-30 characters" minlength="3" maxlength="30" required>
+      <div class="top-nav__actions">
+        <button class="btn-theme" onclick="toggleTheme()" aria-label="Toggle theme">☾</button>
+        <button id="globalLogoutBtn" class="btn-ghost" onclick="logOut()">Log out</button>
       </div>
+    </nav>
 
-      <button type="submit" class="btn-primary" id="submitBtn">Join League</button>
+    <div class="dashboard-header">
+      <div class="dashboard-header__inner">
+        <p class="dashboard-welcome__eyebrow">Join a league</p>
+        <h1 class="dashboard-welcome__name">Enter Invite Code</h1>
+        <p class="dashboard-welcome__sub">Got a code from a commissioner? Drop it in below.</p>
+      </div>
+    </div>
 
-    </form>
+    <div class="dashboard-body join-league-body">
 
+      <div id="message" class="message"></div>
+
+      <form id="joinForm" class="form-section join-league-form">
+
+        <p class="section-label">League Details</p>
+
+        <div class="form-group">
+          <label for="inviteCode">Invite Code</label>
+          <!-- oninput auto-uppercases as the user types so display matches DB -->
+          <input type="text" id="inviteCode" class="input join-league-form__code"
+                 placeholder="ABC123"
+                 maxlength="6" required autocomplete="off"
+                 oninput="this.value = this.value.toUpperCase()">
+          <p class="form-label__hint">6 characters, letters and numbers only.</p>
+        </div>
+
+        <div class="form-group">
+          <label for="teamName">Your Team Name</label>
+          <input type="text" id="teamName" class="input"
+                 placeholder="3-30 characters"
+                 minlength="3" maxlength="30" required>
+        </div>
+
+        <div class="join-league-actions">
+          <a href="dashboard.html" class="btn-ghost">Cancel</a>
+          <button type="submit" class="btn-primary" id="submitBtn">Join League</button>
+        </div>
+
+      </form>
+
+    </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/supabase-config.js"></script>
   <script src="js/auth-guard.js"></script>
   <script src="js/join-league.js"></script>
+
+  <script>
+    document.querySelectorAll('.btn-theme').forEach(function(btn) {
+      var theme = document.documentElement.getAttribute('data-theme');
+      btn.textContent = theme === 'light' ? '☀' : '☾';
+    });
+  </script>
 
 </body>
 </html>

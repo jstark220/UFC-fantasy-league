@@ -19,6 +19,11 @@ async function initJoinLeague() {
   const user = await requireAuth();
   if (!user) return;
 
+  // Reveal the page now that auth is confirmed (template hides it by default
+  // to avoid a flash of unauthenticated content)
+  const pageContent = document.getElementById('pageContent');
+  if (pageContent) pageContent.style.display = '';
+
   document.getElementById('joinForm').addEventListener('submit', async function(event) {
     event.preventDefault();
     hideMessage();

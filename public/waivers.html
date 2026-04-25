@@ -3,83 +3,122 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Waivers - UFC Fantasy League</title>
-  <link rel="stylesheet" href="css/styles.css">
+
+  <script src="js/theme.js"></script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="styles/tokens.css">
+  <link rel="stylesheet" href="styles/components.css">
+
+  <title>Free Agency - Knockdown Fantasy</title>
 </head>
 <body>
 
-  <div class="page" id="pageContent" style="display: none;">
+  <div class="dashboard-page" id="pageContent" style="display: none;">
 
-    <a href="#" class="back-link" id="leagueLink">&#8592; League</a>
-
-    <div class="page-header">
-      <h1 id="leagueName"></h1>
-    </div>
-
-    <!-- Tab bar: Available Fighters vs My Claims -->
-    <div class="waiver-tab-bar">
-      <button class="waiver-tab-btn tab-active" data-tab="available">Available Fighters</button>
-      <button class="waiver-tab-btn" data-tab="my-claims">My Claims</button>
-    </div>
-
-    <!-- Available fighters: all fighters not on any roster in this league -->
-    <div class="section" id="availableSection">
-      <div class="waiver-controls">
-        <input type="text" id="fighterSearch" placeholder="Search by name...">
-        <select id="divisionFilter">
-          <option value="all">All Divisions</option>
-          <option value="strawweight">Women's Strawweight</option>
-          <option value="flyweight_w">Women's Flyweight</option>
-          <option value="bantamweight_w">Women's Bantamweight</option>
-          <option value="flyweight">Men's Flyweight</option>
-          <option value="bantamweight">Men's Bantamweight</option>
-          <option value="featherweight">Men's Featherweight</option>
-          <option value="lightweight">Men's Lightweight</option>
-          <option value="welterweight">Men's Welterweight</option>
-          <option value="middleweight">Men's Middleweight</option>
-          <option value="light_heavyweight">Men's Light Heavyweight</option>
-          <option value="heavyweight">Men's Heavyweight</option>
-        </select>
+    <nav class="top-nav">
+      <a href="index.html" class="top-nav__logo">
+        <span class="kf-red">Knockdown</span> Fantasy
+      </a>
+      <div class="top-nav__links">
+        <a href="#" class="btn-ghost" id="leagueLink">← League</a>
       </div>
-      <div id="availableContent"></div>
-    </div>
-
-    <!-- My pending and past claims -->
-    <div class="section" id="myClaimsSection" style="display: none;">
-      <div id="myClaimsContent"></div>
-    </div>
-
-    <!-- Commissioner-only: claim queue and process button -->
-    <div class="section" id="commissionerSection" style="display: none;">
-      <div class="section-header-row">
-        <h2>Waiver Queue</h2>
-        <button class="btn-gold" id="processBtn">Process All Claims</button>
+      <div class="top-nav__actions">
+        <button class="btn-theme" onclick="toggleTheme()" aria-label="Toggle theme">☾</button>
+        <button id="globalLogoutBtn" class="btn-ghost" onclick="logOut()">Log out</button>
       </div>
-      <p class="waiver-process-note">
-        Claims are processed in priority order (lower number = higher priority).
-        Approved claimants move to the back of the queue.
-      </p>
-      <div id="processingContent"></div>
+    </nav>
+
+    <div class="league-header">
+      <div class="league-header__inner">
+        <h1 class="league-header__name" id="leagueName"></h1>
+        <div class="league-header__actions" id="headerActions"></div>
+      </div>
     </div>
 
-  </div>
+    <div class="dashboard-body">
 
-  <!-- Claim modal: appears when a manager clicks Claim on a fighter -->
-  <div class="modal-overlay" id="claimModal" style="display: none;">
-    <div class="modal">
-      <h2 class="modal-title">Submit Waiver Claim</h2>
-      <div id="claimModalContent"></div>
-      <div class="modal-actions">
-        <button class="btn-gold" id="confirmClaimBtn">Submit Claim</button>
-        <button class="btn-secondary" id="cancelModalBtn">Cancel</button>
+      <!-- Phase status banner — shows whether claims are required vs instant adds,
+           plus the time of the next cutoff. Populated by waivers.js. -->
+      <div id="phaseBanner" class="phase-banner" style="display: none;"></div>
+
+      <!-- Tab bar -->
+      <div class="waiver-tabs">
+        <button class="waiver-tab waiver-tab--active" data-tab="available">Available Fighters</button>
+        <button class="waiver-tab" data-tab="my-claims">
+          My Claims
+          <span class="waiver-tab__count" id="claimCount" style="display:none"></span>
+        </button>
+        <button class="waiver-tab" data-tab="activity">Roster Activity</button>
       </div>
+
+      <!-- Available fighters tab -->
+      <div id="availableSection">
+        <div class="waiver-controls">
+          <input  type="text"   id="fighterSearch"   class="waiver-search" placeholder="Search fighters...">
+          <select id="sortBy" class="waiver-filter">
+            <option value="rank">Sort: Rank</option>
+            <option value="record">Sort: Record</option>
+            <option value="points_year">Sort: Points (Year)</option>
+            <option value="points_proj">Sort: Projected Pts</option>
+          </select>
+          <select id="divisionFilter" class="waiver-filter">
+            <option value="all">All Divisions</option>
+            <option value="strawweight">Women's Strawweight</option>
+            <option value="flyweight_w">Women's Flyweight</option>
+            <option value="bantamweight_w">Women's Bantamweight</option>
+            <option value="flyweight">Men's Flyweight</option>
+            <option value="bantamweight">Men's Bantamweight</option>
+            <option value="featherweight">Men's Featherweight</option>
+            <option value="lightweight">Men's Lightweight</option>
+            <option value="welterweight">Men's Welterweight</option>
+            <option value="middleweight">Men's Middleweight</option>
+            <option value="light_heavyweight">Men's Light Heavyweight</option>
+            <option value="heavyweight">Men's Heavyweight</option>
+          </select>
+          <select id="statusFilter" class="waiver-filter">
+            <option value="all">All Fighters</option>
+            <option value="undefeated">Undefeated</option>
+            <option value="top5">Top 5</option>
+            <option value="top10">Top 10</option>
+            <option value="unranked">Unranked</option>
+          </select>
+        </div>
+        <div id="availableContent"></div>
+      </div>
+
+      <!-- My claims tab -->
+      <div id="myClaimsSection" style="display: none;">
+        <div id="myClaimsContent"></div>
+      </div>
+
+      <!-- Roster activity tab — league-wide approved claims -->
+      <div id="activitySection" style="display: none;">
+        <div id="activityContent"></div>
+      </div>
+
+      <!-- Commissioner queue — always below tabs, hidden until needed -->
+      <div id="commissionerSection" style="display: none;"></div>
+
     </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/supabase-config.js"></script>
   <script src="js/auth-guard.js"></script>
+  <script src="js/fighter-modal.js"></script>
+  <script src="js/waiver-phase.js"></script>
   <script src="js/waivers.js"></script>
+
+  <script>
+    document.querySelectorAll('.btn-theme').forEach(function(btn) {
+      var theme = document.documentElement.getAttribute('data-theme');
+      btn.textContent = theme === 'light' ? '☀' : '☾';
+    });
+  </script>
 
 </body>
 </html>

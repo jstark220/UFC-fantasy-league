@@ -12,6 +12,84 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+// Adds one year to a YYYY-MM-DD string. Rolls Feb 29 back to Feb 28 of the
+// (non-leap) following year. Returns '' for unparseable input.
+function addOneYear(dateStr) {
+  if (!dateStr) return '';
+  const m = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return '';
+  const year  = parseInt(m[1], 10) + 1;
+  const month = parseInt(m[2], 10);
+  let   day   = parseInt(m[3], 10);
+  if (month === 2 && day === 29) {
+    const isLeap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+    if (!isLeap) day = 28;
+  }
+  return year + '-' + String(month).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+}
+
+// ========================================================================
+// SCORING FIELD MAP — same shape as create-league.js. Maps each <input>'s
+// id to the key in leagues.scoring_config JSONB.
+// ========================================================================
+const SCORING_FIELDS = [
+  { id: 's_sig_strike',                key: 'sig_strike' },
+  { id: 's_takedown',                  key: 'takedown' },
+  { id: 's_knockdown',                 key: 'knockdown' },
+  { id: 's_control_per_sec',           key: 'control_per_sec' },
+  { id: 's_finish_r1',                 key: 'finish_r1' },
+  { id: 's_finish_r2',                 key: 'finish_r2' },
+  { id: 's_finish_r3',                 key: 'finish_r3' },
+  { id: 's_finish_r4_r5',              key: 'finish_r4_r5' },
+  { id: 's_decision',                  key: 'decision' },
+  { id: 's_quick_win_bonus',           key: 'quick_win_bonus' },
+  { id: 's_draw_points',               key: 'draw_points' },
+  { id: 's_divisional_title_win',      key: 'divisional_title_win' },
+  { id: 's_divisional_title_defense',  key: 'divisional_title_defense' },
+  { id: 's_bmf_interim_win',           key: 'bmf_interim_win' },
+  { id: 's_bmf_interim_defense',       key: 'bmf_interim_defense' },
+  { id: 's_top5_win',                  key: 'top5_win' },
+  { id: 's_top10_win',                 key: 'top10_win' },
+  { id: 's_top15_win',                 key: 'top15_win' },
+  { id: 's_potn',                      key: 'potn' },
+  { id: 's_fotn',                      key: 'fotn' },
+  { id: 's_main_event_mult',           key: 'main_event_mult' },
+  { id: 's_co_main_mult',              key: 'co_main_mult' }
+];
+
+// Pre-fill scoring inputs from a scoring_config object. Falls back to
+// data-default for any key the config doesn't have.
+function applyScoringValues(scoringConfig) {
+  scoringConfig = scoringConfig || {};
+  SCORING_FIELDS.forEach(function(f) {
+    const el = document.getElementById(f.id);
+    if (!el) return;
+    const stored = scoringConfig[f.key];
+    el.value = (stored != null ? stored : el.getAttribute('data-default')) || '';
+  });
+}
+
+// Reset every scoring input to its data-default (v1.2 values)
+function resetScoringToDefaults() {
+  SCORING_FIELDS.forEach(function(f) {
+    const el = document.getElementById(f.id);
+    if (el) el.value = el.getAttribute('data-default') || '';
+  });
+}
+
+// Build a scoring_config object from the current form values.
+function readScoringConfig() {
+  const cfg = {};
+  SCORING_FIELDS.forEach(function(f) {
+    const el = document.getElementById(f.id);
+    if (!el) return;
+    const raw = el.value.trim() === '' ? el.getAttribute('data-default') : el.value;
+    const num = parseFloat(raw);
+    cfg[f.key] = Number.isFinite(num) ? num : parseFloat(el.getAttribute('data-default'));
+  });
+  return cfg;
+}
+
 async function initSettings() {
   const user = await requireAuth();
   if (!user) return;
@@ -25,10 +103,12 @@ async function initSettings() {
   // Wire the back link now that we have the ID
   document.getElementById('backToLeague').href = 'league.html?id=' + leagueId;
 
-  // Fetch league row
+  // Fetch league row (include scoring_config so we can populate the
+  // scoring inputs from this league's saved values, falling back to v1.2
+  // for any key the JSONB is missing)
   const { data: league, error: leagueError } = await supabaseClient
     .from('leagues')
-    .select('id, name, format, draft_format, season_start_date, invite_code, commissioner_id, max_managers, roster_size, draft_started')
+    .select('id, name, format, draft_format, season_start_date, season_end_date, invite_code, commissioner_id, max_managers, roster_size, draft_started, scoring_config')
     .eq('id', leagueId)
     .single();
 
@@ -67,6 +147,22 @@ async function initSettings() {
     // Date input expects YYYY-MM-DD; Supabase returns it in that format already
     document.getElementById('inputStartDate').value = league.season_start_date.slice(0, 10);
   }
+  if (league.season_end_date) {
+    document.getElementById('inputEndDate').value = league.season_end_date.slice(0, 10);
+  }
+
+  // When the commissioner sets a Season Start and the End is still blank,
+  // auto-fill End to one year later. Doesn't overwrite a manually entered
+  // end date.
+  document.getElementById('inputStartDate').addEventListener('change', function() {
+    const endEl = document.getElementById('inputEndDate');
+    if (endEl && !endEl.value && this.value) {
+      endEl.value = addOneYear(this.value);
+    }
+  });
+
+  // Pre-fill scoring inputs from this league's saved scoring_config
+  applyScoringValues(league.scoring_config);
 
   // Lock draft-related fields once the draft has started
   if (league.draft_started) {
@@ -77,6 +173,13 @@ async function initSettings() {
   }
 
   if (isCommissioner) {
+    // Reveal the scoring reset button (only useful for the editor)
+    const resetBtn = document.getElementById('scoringResetBtn');
+    if (resetBtn) {
+      resetBtn.style.display = '';
+      resetBtn.addEventListener('click', resetScoringToDefaults);
+    }
+
     // Show invite code
     document.getElementById('inviteSection').style.display = '';
     document.getElementById('inviteCodeDisplay').textContent = league.invite_code;
@@ -118,8 +221,14 @@ async function initSettings() {
 
   } else {
     // Non-commissioner: make all inputs read-only and hide the save button
-    ['inputName', 'inputFormat', 'inputDraftFormat', 'inputStartDate', 'inputMaxManagers', 'inputRosterSize'].forEach(function(id) {
+    ['inputName', 'inputFormat', 'inputDraftFormat', 'inputStartDate', 'inputEndDate', 'inputMaxManagers', 'inputRosterSize'].forEach(function(id) {
       document.getElementById(id).disabled = true;
+    });
+    // Lock every scoring input too — members can VIEW the rules but only
+    // the commissioner edits.
+    SCORING_FIELDS.forEach(function(f) {
+      const el = document.getElementById(f.id);
+      if (el) el.disabled = true;
     });
     document.getElementById('saveSection').style.display = 'none';
     document.getElementById('memberNote').style.display  = '';
@@ -130,14 +239,26 @@ async function initSettings() {
     e.preventDefault();
 
     const btn = document.getElementById('saveBtn');
+
+    const seasonStart = document.getElementById('inputStartDate').value || null;
+    const seasonEnd   = document.getElementById('inputEndDate').value   || null;
+
+    // Date sanity: end must be on or after start when both are set
+    if (seasonStart && seasonEnd && seasonEnd < seasonStart) {
+      showMessage('Season end must be on or after the season start.', 'error');
+      return;
+    }
+
     btn.disabled = true;
     btn.textContent = 'Saving...';
 
     const updates = {
       name:              document.getElementById('inputName').value.trim(),
       format:            document.getElementById('inputFormat').value,
-      season_start_date: document.getElementById('inputStartDate').value || null,
+      season_start_date: seasonStart,
+      season_end_date:   seasonEnd,
       max_managers:      parseInt(document.getElementById('inputMaxManagers').value, 10),
+      scoring_config:    readScoringConfig()
     };
 
     // Only include draft-locked fields if the draft hasn't started yet

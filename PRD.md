@@ -212,18 +212,35 @@ See Section 5 for complete scoring rules.
 - As a manager, I want to claim a new UFC signee or undrafted fighter
 - As a manager, I want waiver priority to follow reverse standings
 
-**Requirements:**
-- Thursday: roster expands to +2 over normal cap (allowing claims to land)
-- Thursday: any undrafted fighter (free agent) moves to waivers
-- Friday: waiver claims process in reverse standings order (worst record first)
-- Tuesday: manager must drop down to normal cap (20 fighters)
-- Wednesday: auto-drop 2 most recently acquired if still over cap
-- UI: "Roster" page shows current roster; "Waivers" page shows claimable fighters
+**Two waiver mechanisms run simultaneously:**
+
+1. **Event-window waivers** — coordinated league-wide claim periods anchored to each Saturday event:
+    - **Thu 3am ET → Fri 3am ET (event week)**: pre-event claim window. All adds queue as claims, processed at Fri 3am ET in reverse-standings priority order.
+    - **Sun 3am ET → Tue 3am ET (after event)**: post-event claim window. Same mechanic, processed at Tue 3am ET.
+2. **Per-drop rolling waivers** — every dropped fighter sits on waivers in the league for ~48 hours regardless of phase. Claims clear at 3am ET on (drop_date_ET + 2 calendar days). Outside event windows, only newly dropped fighters are claim-only; everyone else is instant free agency.
+
+**Roster cap:**
+- Normal cap: 20 fighters.
+- Expanded cap: 23 fighters from **Thu 3am ET → Sun 3am ET** during event week (+3 "Temporary Extended Roster Flex" slots that show as a separate section on the lineup page).
+- **Wed 3am ET auto-drop**: any manager who has made fewer than 3 manual drops since the cap-expansion start gets their most-recently-acquired fighters dropped until roster size = 20.
+
+**Priority:** approved claimants move to the back of the priority queue (low-priority/last position). Stored on `league_members.waiver_priority`.
+
+**Required tables:**
+- `waiver_claims` — pending/approved/rejected/cancelled claims
+- `roster_drops` — every drop with source `manual`/`claim`/`auto`. Powers rolling-waiver calculations and the auto-drop bookkeeping.
+
+**UI:**
+- **Waivers page**: status banner naming the current phase and the next cutoff time. Available fighters list distinguishes "+ Add" (instant) from "+ Claim" (queued). Each pending claim shows when it will process. League-wide approved-claim activity feed.
+- **Lineup page**: "Temporary Extended Roster Flex" section appears only while the +3 expansion is active.
+
+**Processing trigger (v1):** lazy. Every load of the waivers page runs a catch-up pass that processes any cutoffs whose time has passed. Migrate to a Supabase scheduled Edge Function before any meaningful user count (see roadmap §8 Phase 2).
 
 **Out of scope for MVP:**
 - FAAB (free agent auction budget)
 - Waiver trades
 - IR slots for injured fighters
+- Configurable cutoff times per league
 
 ### 4.7 Leaderboard (MVP Scope)
 
@@ -257,7 +274,6 @@ Trades are explicitly deferred from MVP. Phase 2 feature. If time allows, a bare
 |------|--------|
 | Significant strike landed | +0.1 |
 | Takedown | +1.0 |
-| Reversal | +1.0 |
 | Knockdown | +2.0 |
 | Control time (per second) | +0.01 |
 
@@ -338,11 +354,16 @@ Multiplier applies to total points scored in that fight (base + bonuses).
 
 ### 6.4 Weekly Schedule
 
-- **Thursday:** Roster cap expands to +2, free agents move to waivers
-- **Friday:** Waiver claims process in reverse standings order
-- **Saturday (fight night):** Starters locked at first prelim fight
-- **Tuesday:** Deadline to drop down to normal cap
-- **Wednesday:** Auto-drop 2 most recently acquired fighters if still over cap
+All cutoffs are at **3:00 AM America/New_York** (handles DST automatically).
+
+- **Thu 3am ET (event week):** Roster cap expands from 20 to 23 (+3 Temporary Extended Roster Flex slots). Pre-event waiver window opens — all adds queue as claims.
+- **Fri 3am ET:** Pre-event waiver claims process in reverse-standings priority order. Outside the post-event window the league returns to free agency, except for any fighter dropped in the last 48h (rolling waiver).
+- **Saturday (fight night):** Starters locked at first prelim fight (event-anchored).
+- **Sun 3am ET:** Roster cap reverts to 20. Post-event waiver window opens.
+- **Tue 3am ET:** Post-event waiver claims process. Free agency resumes.
+- **Wed 3am ET:** Auto-drop sweep — any manager who has made fewer than 3 manual drops since Thu cap expansion gets their most-recently-acquired fighters dropped until roster size = 20.
+
+**Outside event windows**, free agency is instant for fighters who have been on FA for ≥48 hours. Any fighter dropped at any time runs on rolling waivers until 3am ET on (drop_date_ET + 2 calendar days), regardless of phase.
 
 ### 6.5 Trades
 
@@ -400,6 +421,7 @@ Multiplier applies to total points scored in that fight (base + bonuses).
 - Email notifications (lineup reminders, trade offers, waiver results)
 - Mobile responsive polish
 - Draft clock visual improvements
+- **Migrate waiver processing from lazy/page-load to a scheduled Supabase Edge Function.** v1 ships with a "catch-up" pass that runs whenever someone visits the waivers page. This works for friends-and-family scale but breaks down once you have inactive leagues — claims won't process until someone visits. Replace with a scheduled job that fires at each 3am ET cutoff and on a 5-minute cadence for rolling-waiver clears.
 
 ### Phase 3: Scale & Monetization (Month 4+)
 - Multi-league support per user

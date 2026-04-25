@@ -44,13 +44,13 @@
       <!-- Status message (save confirmation or error) -->
       <div id="settingsMessage" class="settings-message" style="display: none;"></div>
 
-      <div class="settings-grid">
+      <form id="settingsForm">
 
-        <!-- Left: editable league settings -->
-        <div class="league-info-card">
-          <p class="section-label">General</p>
+        <div class="settings-grid">
 
-          <form id="settingsForm">
+          <!-- Left: editable league settings -->
+          <div class="league-info-card">
+            <p class="section-label">General</p>
 
             <div class="form-group">
               <label class="form-label" for="inputName">League Name</label>
@@ -81,6 +81,11 @@
             </div>
 
             <div class="form-group">
+              <label class="form-label" for="inputEndDate">Season End Date</label>
+              <input class="form-input" type="date" id="inputEndDate">
+            </div>
+
+            <div class="form-group">
               <label class="form-label" for="inputMaxManagers">Max Managers</label>
               <input class="form-input" type="number" id="inputMaxManagers" min="2" max="16">
             </div>
@@ -90,44 +95,170 @@
               <input class="form-input" type="number" id="inputRosterSize" min="5" max="30">
               <p class="form-hint" id="rosterSizeHint" style="display: none;">Locked after the draft starts.</p>
             </div>
-
-            <!-- Save button: visible to commissioner only, hidden by JS for members -->
-            <div id="saveSection">
-              <button type="submit" class="btn-primary" id="saveBtn">Save Changes</button>
-            </div>
-
-          </form>
-        </div>
-
-        <!-- Right: invite code + danger zone -->
-        <div class="league-info-card">
-
-          <!-- Invite code: commissioner only -->
-          <div id="inviteSection" style="display: none;">
-            <p class="section-label">Invite Code</p>
-            <p class="form-hint">Share this with managers you want to invite.</p>
-            <div class="invite-code-box">
-              <span class="invite-code-text" id="inviteCodeDisplay"></span>
-              <button type="button" class="copy-btn" id="copyInviteBtn">Copy</button>
-            </div>
           </div>
 
-          <!-- Danger zone: commissioner only, shown after invite section -->
-          <div id="dangerSection" style="display: none;">
-            <p class="section-label" style="margin-top: var(--space-6); color: var(--accent-crimson);">Danger Zone</p>
-            <p class="form-hint">Deleting the league is permanent and cannot be undone.</p>
-            <button type="button" class="btn-danger" id="deleteLeagueBtn">Delete League</button>
-          </div>
+          <!-- Right: invite code + danger zone -->
+          <div class="league-info-card">
 
-          <!-- Members see a read-only note -->
-          <div id="memberNote" style="display: none;">
-            <p class="section-label">Info</p>
-            <p class="form-hint">Only the commissioner can change league settings.</p>
+            <!-- Invite code: commissioner only -->
+            <div id="inviteSection" style="display: none;">
+              <p class="section-label">Invite Code</p>
+              <p class="form-hint">Share this with managers you want to invite.</p>
+              <div class="invite-code-box">
+                <span class="invite-code-text" id="inviteCodeDisplay"></span>
+                <button type="button" class="copy-btn" id="copyInviteBtn">Copy</button>
+              </div>
+            </div>
+
+            <!-- Danger zone: commissioner only, shown after invite section -->
+            <div id="dangerSection" style="display: none;">
+              <p class="section-label" style="margin-top: var(--space-6); color: var(--accent-crimson);">Danger Zone</p>
+              <p class="form-hint">Deleting the league is permanent and cannot be undone.</p>
+              <button type="button" class="btn-danger" id="deleteLeagueBtn">Delete League</button>
+            </div>
+
+            <!-- Members see a read-only note -->
+            <div id="memberNote" style="display: none;">
+              <p class="section-label">Info</p>
+              <p class="form-hint">Only the commissioner can change league settings.</p>
+            </div>
+
           </div>
 
         </div>
 
-      </div>
+        <!-- ===========================================================
+             Scoring Rules — full-width below the 2-col grid.
+             Loads values from league.scoring_config, falls back to v1.2.
+             Editable only by the commissioner.
+             =========================================================== -->
+        <section class="form-section settings-scoring">
+          <p class="section-label">Scoring Rules</p>
+
+          <p class="form-section__group-label">Base Scoring (per fight)</p>
+          <div class="form-grid form-grid--3">
+            <div class="form-group">
+              <label for="s_sig_strike">Sig Strike</label>
+              <input type="number" id="s_sig_strike" class="input" step="0.01" min="0" data-default="0.1">
+            </div>
+            <div class="form-group">
+              <label for="s_takedown">Takedown</label>
+              <input type="number" id="s_takedown" class="input" step="0.1" min="0" data-default="1">
+            </div>
+            <div class="form-group">
+              <label for="s_knockdown">Knockdown</label>
+              <input type="number" id="s_knockdown" class="input" step="0.1" min="0" data-default="2">
+            </div>
+            <div class="form-group">
+              <label for="s_control_per_sec">Control / sec</label>
+              <input type="number" id="s_control_per_sec" class="input" step="0.001" min="0" data-default="0.01">
+            </div>
+          </div>
+
+          <p class="form-section__group-label">Win Bonuses</p>
+          <div class="form-grid form-grid--3">
+            <div class="form-group">
+              <label for="s_finish_r1">R1 Finish</label>
+              <input type="number" id="s_finish_r1" class="input" step="1" min="0" data-default="18">
+            </div>
+            <div class="form-group">
+              <label for="s_finish_r2">R2 Finish</label>
+              <input type="number" id="s_finish_r2" class="input" step="1" min="0" data-default="14">
+            </div>
+            <div class="form-group">
+              <label for="s_finish_r3">R3 Finish</label>
+              <input type="number" id="s_finish_r3" class="input" step="1" min="0" data-default="9">
+            </div>
+            <div class="form-group">
+              <label for="s_finish_r4_r5">R4 / R5 Finish</label>
+              <input type="number" id="s_finish_r4_r5" class="input" step="1" min="0" data-default="8">
+            </div>
+            <div class="form-group">
+              <label for="s_decision">Decision Win</label>
+              <input type="number" id="s_decision" class="input" step="1" min="0" data-default="6">
+            </div>
+            <div class="form-group">
+              <label for="s_quick_win_bonus">Quick Win Bonus
+                <span class="form-label__hint">(&lt;60s R1)</span>
+              </label>
+              <input type="number" id="s_quick_win_bonus" class="input" step="1" min="0" data-default="5">
+            </div>
+            <div class="form-group">
+              <label for="s_draw_points">Draw</label>
+              <input type="number" id="s_draw_points" class="input" step="1" min="0" data-default="3">
+            </div>
+          </div>
+
+          <p class="form-section__group-label">Title & Ranked Opponent Wins</p>
+          <div class="form-grid form-grid--3">
+            <div class="form-group">
+              <label for="s_divisional_title_win">Divisional Title Win</label>
+              <input type="number" id="s_divisional_title_win" class="input" step="1" min="0" data-default="10">
+            </div>
+            <div class="form-group">
+              <label for="s_divisional_title_defense">Divisional Title Defense</label>
+              <input type="number" id="s_divisional_title_defense" class="input" step="1" min="0" data-default="5">
+            </div>
+            <div class="form-group">
+              <label for="s_bmf_interim_win">BMF / Interim Win</label>
+              <input type="number" id="s_bmf_interim_win" class="input" step="1" min="0" data-default="5">
+            </div>
+            <div class="form-group">
+              <label for="s_bmf_interim_defense">BMF / Interim Defense</label>
+              <input type="number" id="s_bmf_interim_defense" class="input" step="1" min="0" data-default="3">
+            </div>
+            <div class="form-group">
+              <label for="s_top5_win">Top 5 Opponent Win</label>
+              <input type="number" id="s_top5_win" class="input" step="1" min="0" data-default="4">
+            </div>
+            <div class="form-group">
+              <label for="s_top10_win">Top 10 Opponent Win</label>
+              <input type="number" id="s_top10_win" class="input" step="1" min="0" data-default="2">
+            </div>
+            <div class="form-group">
+              <label for="s_top15_win">Top 15 Opponent Win</label>
+              <input type="number" id="s_top15_win" class="input" step="1" min="0" data-default="1">
+            </div>
+          </div>
+
+          <p class="form-section__group-label">Performance Bonuses</p>
+          <div class="form-grid form-grid--3">
+            <div class="form-group">
+              <label for="s_potn">Performance of the Night</label>
+              <input type="number" id="s_potn" class="input" step="1" min="0" data-default="6">
+            </div>
+            <div class="form-group">
+              <label for="s_fotn">Fight of the Night</label>
+              <input type="number" id="s_fotn" class="input" step="1" min="0" data-default="4">
+            </div>
+          </div>
+
+          <p class="form-section__group-label">Card Position Multipliers</p>
+          <div class="form-grid form-grid--3">
+            <div class="form-group">
+              <label for="s_main_event_mult">Main Event</label>
+              <input type="number" id="s_main_event_mult" class="input" step="0.05" min="1" data-default="1.2">
+            </div>
+            <div class="form-group">
+              <label for="s_co_main_mult">Co-Main Event</label>
+              <input type="number" id="s_co_main_mult" class="input" step="0.05" min="1" data-default="1.1">
+            </div>
+          </div>
+
+          <button type="button" class="btn-ghost" id="scoringResetBtn"
+                  style="margin-top: var(--space-4); display: none;">
+            Reset all scoring to v1.2 defaults
+          </button>
+        </section>
+
+        <!-- Save button: covers both general settings and scoring rules.
+             Hidden by JS when the viewer isn't the commissioner. -->
+        <div id="saveSection" class="settings-save">
+          <button type="submit" class="btn-primary" id="saveBtn">Save Changes</button>
+        </div>
+
+      </form>
+
     </div>
   </div>
 

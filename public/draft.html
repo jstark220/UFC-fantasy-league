@@ -3,64 +3,107 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Draft Room - UFC Fantasy League</title>
-  <link rel="stylesheet" href="css/styles.css">
+
+  <script src="js/theme.js"></script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="styles/tokens.css">
+  <link rel="stylesheet" href="styles/components.css">
+
+  <title>Draft Room - Knockdown Fantasy</title>
 </head>
-<body class="draft-body">
+<body>
 
-  <!-- Hidden until auth check and data load complete -->
-  <div id="pageContent" style="display: none;">
+  <div class="draft-page" id="pageContent" style="display: none;">
 
-    <!-- Sticky top bar: whose turn it is + overall pick counter -->
-    <div class="draft-header">
-      <div id="turnInfo" class="turn-info">Loading draft...</div>
-      <div class="draft-header-right">
-        <span id="pickCounter" class="pick-counter"></span>
-        <a id="leagueLink" href="#" class="back-link-light">&#8592; League</a>
+    <!-- Slim top nav, same as the rest of the app -->
+    <nav class="top-nav">
+      <a href="index.html" class="top-nav__logo">
+        <span class="kf-red">Knockdown</span> Fantasy
+      </a>
+      <div class="top-nav__links">
+        <a href="#" class="btn-ghost" id="leagueLink">← League</a>
+      </div>
+      <div class="top-nav__actions">
+        <button class="btn-theme" onclick="toggleTheme()" aria-label="Toggle theme">☾</button>
+        <button class="btn-ghost" onclick="logOut()">Log out</button>
+      </div>
+    </nav>
+
+    <!-- Whose-turn strip + pick counter. Stays compact so the panels get room. -->
+    <div class="draft-status">
+      <div class="draft-status__inner">
+        <p class="draft-status__turn" id="turnInfo">Loading draft...</p>
+        <p class="draft-status__counter" id="pickCounter"></p>
       </div>
     </div>
 
-    <!-- Tab bar: visible only on narrow screens, lets you switch between panels -->
-    <div class="draft-tabs" id="draftTabs">
-      <button class="draft-tab-btn" data-panel="panel-fighters">Fighters</button>
-      <button class="draft-tab-btn tab-active" data-panel="panel-board">Draft Board</button>
-      <button class="draft-tab-btn" data-panel="panel-roster">My Roster</button>
-      <button class="draft-tab-btn" data-panel="split">Split</button>
+    <!-- Mobile/narrow tab bar — switches which panel is visible.
+         On wide screens all three panels render side-by-side and this bar hides. -->
+    <div class="waiver-tabs draft-tabs" id="draftTabs">
+      <button class="waiver-tab" data-panel="panel-fighters">Fighters</button>
+      <button class="waiver-tab waiver-tab--active" data-panel="panel-board">Draft Board</button>
+      <button class="waiver-tab" data-panel="panel-roster">My Roster</button>
+      <button class="waiver-tab" data-panel="split">Split</button>
     </div>
 
-    <!-- Three-panel layout fills the remaining viewport height -->
+    <!-- Three-panel draft room; each panel scrolls independently. -->
     <div class="draft-room">
 
-      <!-- LEFT: available fighter pool with filter and search -->
+      <!-- LEFT: available fighter pool -->
       <div class="draft-panel panel-fighters">
-        <h2>Available Fighters</h2>
-        <div class="pool-controls">
-          <select id="divisionFilter">
-            <option value="all">All Divisions</option>
-            <!-- Weight class options added by draft.js -->
-          </select>
-          <input type="text" id="fighterSearch" placeholder="Search by name...">
+        <div class="draft-panel__header draft-panel__header--with-action">
+          <p class="section-label">Available Fighters</p>
+          <button class="btn-ghost draft-view-all-btn" id="viewAllBtn">View All →</button>
         </div>
-        <!-- Fighter rows rendered by draft.js; clickable when it's your turn -->
-        <div id="fighterPool"></div>
+        <div class="draft-panel__controls">
+          <input type="text" id="fighterSearch" class="waiver-search" placeholder="Search fighters...">
+          <select id="sortBy" class="waiver-filter">
+            <option value="rank">Sort: Rank</option>
+            <option value="record">Sort: Record</option>
+            <option value="points_year">Sort: Points (Year)</option>
+            <option value="points_proj">Sort: Projected Pts</option>
+          </select>
+          <select id="divisionFilter" class="waiver-filter">
+            <option value="all">All Divisions</option>
+          </select>
+          <select id="statusFilter" class="waiver-filter">
+            <option value="all">All Fighters</option>
+            <option value="undefeated">Undefeated</option>
+            <option value="top5">Top 5</option>
+            <option value="top10">Top 10</option>
+            <option value="unranked">Unranked</option>
+          </select>
+        </div>
+        <div class="draft-panel__body" id="fighterPool"></div>
       </div>
 
-      <!-- Drag handle: resize fighters vs board -->
-      <div class="resize-handle" id="resizeLeft"></div>
+      <!-- Resize handle: fighters ↔ board -->
+      <div class="draft-resize-handle" id="resizeLeft" aria-hidden="true"></div>
 
-      <!-- CENTER: snake draft board showing all picks by round; default active tab on narrow screens -->
-      <div class="draft-panel panel-board tab-active">
-        <h2>Draft Board</h2>
-        <div id="draftBoard"></div>
+      <!-- CENTER: snake draft board (default tab on narrow screens) -->
+      <div class="draft-panel panel-board waiver-tab--active">
+        <div class="draft-panel__header">
+          <p class="section-label">Draft Board</p>
+        </div>
+        <div class="draft-panel__body" id="draftBoard"></div>
       </div>
 
-      <!-- Drag handle: resize board vs roster -->
-      <div class="resize-handle" id="resizeRight"></div>
+      <!-- Resize handle: board ↔ roster -->
+      <div class="draft-resize-handle" id="resizeRight" aria-hidden="true"></div>
 
-      <!-- RIGHT: your roster slot progress + list of drafted fighters -->
+      <!-- RIGHT: your roster slot progress + drafted fighters -->
       <div class="draft-panel panel-roster">
-        <h2>My Roster (<span id="myPickCount">0</span> / 20)</h2>
-        <div id="myRoster"></div>
+        <div class="draft-panel__header">
+          <p class="section-label">
+            My Roster
+            <span class="section-label__count">(<span id="myPickCount">0</span> / 20)</span>
+          </p>
+        </div>
+        <div class="draft-panel__body" id="myRoster"></div>
       </div>
 
     </div>
@@ -69,75 +112,73 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/supabase-config.js"></script>
   <script src="js/auth-guard.js"></script>
+  <script src="js/fighter-modal.js"></script>
   <script src="js/draft.js"></script>
 
   <script>
-    // Drag-to-resize: left handle controls fighters panel width,
-    // right handle controls roster panel width. Board fills remaining space.
-    // Only active on wide screens (>= 900px).
-    document.querySelectorAll('.resize-handle').forEach(function(handle) {
+    // Sync the theme button glyph after theme.js has run
+    document.querySelectorAll('.btn-theme').forEach(function(btn) {
+      var theme = document.documentElement.getAttribute('data-theme');
+      btn.textContent = theme === 'light' ? '☀' : '☾';
+    });
+
+    // ---- Drag-to-resize: only active on wide screens (>= 900px) ----
+    document.querySelectorAll('.draft-resize-handle').forEach(function(handle) {
       handle.addEventListener('mousedown', function(e) {
         if (window.innerWidth <= 899) return;
 
-        var isLeft   = handle.id === 'resizeLeft';
-        var panel    = document.querySelector(isLeft ? '.panel-fighters' : '.panel-roster');
-        var startX   = e.clientX;
-        var startW   = panel.getBoundingClientRect().width;
+        var isLeft = handle.id === 'resizeLeft';
+        var panel  = document.querySelector(isLeft ? '.panel-fighters' : '.panel-roster');
+        var startX = e.clientX;
+        var startW = panel.getBoundingClientRect().width;
 
-        handle.classList.add('dragging');
-        document.body.style.cursor    = 'col-resize';
+        handle.classList.add('draft-resize-handle--active');
+        document.body.style.cursor     = 'col-resize';
         document.body.style.userSelect = 'none';
 
-        function onMove(e) {
-          // Left handle: drag right = grow fighters. Right handle: drag left = grow roster.
-          var delta    = isLeft ? (e.clientX - startX) : (startX - e.clientX);
-          var newWidth = Math.max(150, Math.min(600, startW + delta));
+        function onMove(ev) {
+          var delta    = isLeft ? (ev.clientX - startX) : (startX - ev.clientX);
+          var newWidth = Math.max(180, Math.min(600, startW + delta));
           panel.style.width      = newWidth + 'px';
           panel.style.flexShrink = '0';
         }
-
         function onUp() {
-          handle.classList.remove('dragging');
-          document.body.style.cursor    = '';
+          handle.classList.remove('draft-resize-handle--active');
+          document.body.style.cursor     = '';
           document.body.style.userSelect = '';
           document.removeEventListener('mousemove', onMove);
           document.removeEventListener('mouseup', onUp);
         }
-
         document.addEventListener('mousemove', onMove);
         document.addEventListener('mouseup', onUp);
         e.preventDefault();
       });
     });
 
-    // Tab switching for narrow screens. Adds/removes .tab-active on both the
-    // button and the corresponding panel div. The special "split" tab shows
-    // the fighters panel and roster panel side by side.
+    // ---- Tab switching for narrow screens ----
     document.getElementById('draftTabs').addEventListener('click', function(e) {
-      var btn = e.target.closest('.draft-tab-btn');
+      var btn = e.target.closest('.waiver-tab');
       if (!btn) return;
 
       var panelKey = btn.getAttribute('data-panel');
       var room     = document.querySelector('.draft-room');
 
-      // Update button active states
-      document.querySelectorAll('.draft-tab-btn').forEach(function(b) {
-        b.classList.toggle('tab-active', b === btn);
+      document.querySelectorAll('#draftTabs .waiver-tab').forEach(function(b) {
+        b.classList.toggle('waiver-tab--active', b === btn);
       });
 
       if (panelKey === 'split') {
-        // Show fighters + roster side by side; hide the board
-        room.classList.add('draft-room-split');
-        document.querySelectorAll('.draft-panel').forEach(function(panel) {
-          var isSplit = panel.classList.contains('panel-fighters') ||
-                        panel.classList.contains('panel-roster');
-          panel.classList.toggle('tab-active', isSplit);
+        // Side-by-side: fighters + roster, board hidden
+        room.classList.add('draft-room--split');
+        document.querySelectorAll('.draft-panel').forEach(function(p) {
+          var on = p.classList.contains('panel-fighters') ||
+                   p.classList.contains('panel-roster');
+          p.classList.toggle('waiver-tab--active', on);
         });
       } else {
-        // Normal single-panel view
-        room.classList.remove('draft-room-split');
-        document.querySelectorAll('.draft-panel').forEach(function(panel) {
-          panel.classList.toggle('tab-active', panel.classList.contains(panelKey));
+        room.classList.remove('draft-room--split');
+        document.querySelectorAll('.draft-panel').forEach(function(p) {
+          p.classList.toggle('waiver-tab--active', p.classList.contains(panelKey));
         });
       }
     });

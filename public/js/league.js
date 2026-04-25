@@ -109,7 +109,7 @@ async function initLeague() {
     navHtml += '<a href="draft.html?id=' + leagueId + '" class="btn-primary">Draft Room</a>';
   }
   if (league.draft_started) {
-    navHtml += '<a href="waivers.html?id=' + leagueId + '" class="btn-secondary">Waivers</a>';
+    navHtml += '<a href="waivers.html?id=' + leagueId + '" class="btn-secondary">Free Agency</a>';
     navHtml += '<a href="trades.html?id=' + leagueId + '" class="btn-secondary">Trades</a>';
     if (league.draft_completed) {
       navHtml += '<a href="lineup.html?id=' + leagueId + '" class="btn-primary">Lineup</a>';
@@ -165,6 +165,11 @@ async function initLeague() {
 
   // ---- Load real free agents into the panel ----
   loadFreeAgents();
+
+  // ---- Refresh hardcoded Top Performer photos with fresh URLs from the DB.
+  // The HTML originally embedded UFC.com URLs with security tokens (`itok`)
+  // that go stale over time, so we look the photos up by name instead.
+  refreshPerformerPhotos();
 }
 
 // ========================================================================
@@ -479,7 +484,7 @@ async function loadFreeAgents() {
       if (myRosterCount >= rosterMax) {
         if (confirm(
           'Your roster is full (' + myRosterCount + '/' + rosterMax + ').\n' +
-          'Go to the Waivers page to drop a player first?'
+          'Go to the Free Agency page to drop a player first?'
         )) {
           window.location.href = 'waivers.html?id=' + leagueIdRef;
         }
@@ -507,6 +512,42 @@ async function loadFreeAgents() {
       // Refresh the list so the newly-added fighter disappears
       await loadFreeAgents();
     });
+  });
+}
+
+// ========================================================================
+// REFRESH TOP-PERFORMER PHOTOS
+// The Top Performers section (left panel of league-live-row) is currently
+// hardcoded placeholder data. The original HTML embedded UFC.com image URLs
+// with `itok` security tokens that expire — when the token rotates, the
+// img 404s and the photo wrap renders blank.
+//
+// Pulling photo_url directly from the DB by name keeps the images fresh as
+// long as fetchFighterPhotos.js has been run recently. When the rest of
+// this section gets wired to real top-scorer data, this function can go
+// away (the dynamic renderer will set src directly).
+// ========================================================================
+async function refreshPerformerPhotos() {
+  const imgs = document.querySelectorAll('.performer-row__photo[data-fighter-name]');
+  if (!imgs.length) return;
+
+  const names = Array.from(imgs).map(function(img) { return img.getAttribute('data-fighter-name'); });
+
+  const { data, error } = await supabaseClient
+    .from('fighters')
+    .select('name, photo_url')
+    .in('name', names);
+
+  if (error || !data) return;
+
+  // Build name → photo_url map; tolerate fighters with no photo_url
+  const photoMap = {};
+  data.forEach(function(f) { photoMap[f.name] = f.photo_url; });
+
+  imgs.forEach(function(img) {
+    const url = photoMap[img.getAttribute('data-fighter-name')];
+    if (url) img.src = url;
+    // No url? Leave the img blank — onerror will hide it as before.
   });
 }
 

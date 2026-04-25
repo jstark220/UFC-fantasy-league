@@ -300,7 +300,6 @@ function computeFighterScore(fight, isA) {
 
   const sigStrikes   = fight[prefix + 'sig_strikes']     || 0;
   const takedowns    = fight[prefix + 'takedowns']       || 0;
-  const reversals    = fight[prefix + 'reversals']       || 0;
   const knockdowns   = fight[prefix + 'knockdowns']      || 0;
   const controlSec   = fight[prefix + 'control_seconds'] || 0;
   const potn         = !!fight[prefix + 'potn'];
@@ -310,7 +309,7 @@ function computeFighterScore(fight, isA) {
   const isDraw   = fight.outcome === 'draw';
 
   // Base stats
-  const base = (sigStrikes * 0.1) + (takedowns * 1) + (reversals * 1) +
+  const base = (sigStrikes * 0.1) + (takedowns * 1) +
                (knockdowns * 2) + (controlSec * 0.01);
 
   // Win bonus

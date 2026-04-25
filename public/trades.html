@@ -3,81 +3,128 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Trades - UFC Fantasy League</title>
-  <link rel="stylesheet" href="css/styles.css">
+
+  <script src="js/theme.js"></script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="styles/tokens.css">
+  <link rel="stylesheet" href="styles/components.css">
+
+  <title>Trades - Knockdown Fantasy</title>
 </head>
 <body>
 
-  <div class="page" id="pageContent" style="display: none;">
+  <div class="dashboard-page" id="pageContent" style="display: none;">
 
-    <a href="#" class="back-link" id="leagueLink">&#8592; League</a>
+    <nav class="top-nav">
+      <a href="index.html" class="top-nav__logo">
+        <span class="kf-red">Knockdown</span> Fantasy
+      </a>
+      <div class="top-nav__links">
+        <a href="#" class="btn-ghost" id="leagueLink">← League</a>
+      </div>
+      <div class="top-nav__actions">
+        <button class="btn-theme" onclick="toggleTheme()" aria-label="Toggle theme">☾</button>
+        <button id="globalLogoutBtn" class="btn-ghost" onclick="logOut()">Log out</button>
+      </div>
+    </nav>
 
-    <div class="page-header">
-      <h1 id="leagueName"></h1>
+    <div class="league-header">
+      <div class="league-header__inner">
+        <h1 class="league-header__name" id="leagueName"></h1>
+        <div class="league-header__actions" id="headerActions"></div>
+      </div>
     </div>
 
-    <!-- Tab bar -->
-    <div class="trade-tab-bar">
-      <button class="trade-tab-btn tab-active" data-tab="propose">Propose Trade</button>
-      <button class="trade-tab-btn" data-tab="incoming">Incoming <span id="incomingBadge" class="trade-badge" style="display:none;"></span></button>
-      <button class="trade-tab-btn" data-tab="sent">Sent</button>
-    </div>
+    <div class="dashboard-body">
 
-    <!-- PROPOSE TAB -->
-    <div id="proposeTab">
-      <div class="section">
-        <div class="form-group trade-partner-group">
-          <label for="partnerSelect">Trade with</label>
-          <select id="partnerSelect">
-            <option value="">-- Select a manager --</option>
+      <!-- Tab bar (reuses the .waiver-tab styling from the design system) -->
+      <div class="waiver-tabs">
+        <button class="waiver-tab waiver-tab--active" data-tab="propose">Propose Trade</button>
+        <button class="waiver-tab" data-tab="incoming">
+          Incoming
+          <span class="waiver-tab__count" id="incomingBadge" style="display:none"></span>
+        </button>
+        <button class="waiver-tab" data-tab="pending">
+          Pending
+          <span class="waiver-tab__count" id="pendingBadge" style="display:none"></span>
+        </button>
+        <button class="waiver-tab" data-tab="sent">Sent</button>
+      </div>
+
+      <!-- Propose Tab -->
+      <div id="proposeSection">
+        <div class="trade-partner-row">
+          <label class="waiver-modal-label" for="partnerSelect">Trade with</label>
+          <select id="partnerSelect" class="waiver-filter">
+            <option value="">— Select a manager —</option>
           </select>
         </div>
 
-        <!-- Two-column roster picker (shown once a partner is selected) -->
-        <div id="rosterPicker" style="display:none;">
+        <div id="rosterPicker" style="display:none">
           <div class="trade-picker-grid">
             <div class="trade-picker-col">
-              <h3 class="trade-picker-label">You give <span id="youGiveCount" class="trade-sel-count">(0 selected)</span></h3>
-              <div id="yourRosterList"></div>
+              <p class="section-label">
+                You give
+                <span class="section-label__count" id="youGiveCount">(0 selected)</span>
+              </p>
+              <div id="yourRosterList" class="trade-picker-list"></div>
             </div>
             <div class="trade-picker-col">
-              <h3 class="trade-picker-label">You receive <span id="youReceiveCount" class="trade-sel-count">(0 selected)</span></h3>
-              <div id="theirRosterList"></div>
+              <p class="section-label">
+                You receive
+                <span class="section-label__count" id="youReceiveCount">(0 selected)</span>
+              </p>
+              <div id="theirRosterList" class="trade-picker-list"></div>
             </div>
           </div>
 
-          <div class="form-group" style="margin-top:1rem;">
-            <label for="tradeMessage">Message (optional)</label>
-            <input type="text" id="tradeMessage" placeholder="e.g. Looking for a title contender swap" maxlength="200">
+          <div class="waiver-modal-field" style="margin-top: var(--space-6)">
+            <label class="waiver-modal-label" for="tradeMessage">Message (optional)</label>
+            <input type="text" id="tradeMessage" class="waiver-search"
+                   placeholder="e.g. Looking for a title contender swap" maxlength="200">
           </div>
 
           <div class="trade-propose-actions">
-            <button class="btn-gold" id="proposeBtn">Send Trade Offer</button>
+            <button class="btn-primary" id="proposeBtn">Send Trade Offer</button>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- INCOMING TAB -->
-    <div id="incomingTab" style="display:none;">
-      <div class="section">
+      <!-- Incoming Tab -->
+      <div id="incomingSection" style="display: none">
         <div id="incomingContent"></div>
       </div>
-    </div>
 
-    <!-- SENT TAB -->
-    <div id="sentTab" style="display:none;">
-      <div class="section">
+      <!-- Pending Tab — accepted trades currently in the 24h review window -->
+      <div id="pendingSection" style="display: none">
+        <div id="pendingContent"></div>
+      </div>
+
+      <!-- Sent Tab -->
+      <div id="sentSection" style="display: none">
         <div id="sentContent"></div>
       </div>
-    </div>
 
+    </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/supabase-config.js"></script>
   <script src="js/auth-guard.js"></script>
+  <script src="js/fighter-modal.js"></script>
+  <script src="js/waiver-phase.js"></script>
   <script src="js/trades.js"></script>
+
+  <script>
+    document.querySelectorAll('.btn-theme').forEach(function(btn) {
+      var theme = document.documentElement.getAttribute('data-theme');
+      btn.textContent = theme === 'light' ? '☀' : '☾';
+    });
+  </script>
 
 </body>
 </html>

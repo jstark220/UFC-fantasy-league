@@ -345,10 +345,6 @@
             <span class="scoring-row__value">+1</span>
           </div>
           <div class="scoring-row">
-            <span class="scoring-row__label">Reversal</span>
-            <span class="scoring-row__value">+1</span>
-          </div>
-          <div class="scoring-row">
             <span class="scoring-row__label">Knockdown</span>
             <span class="scoring-row__value scoring-row__value--gold">+2</span>
           </div>
@@ -746,6 +742,16 @@
         signUp.textContent = 'Dashboard';
         signUp.href = 'dashboard.html';
       }
+
+      // Redirect every other signup CTA on the page to the dashboard.
+      // Primary buttons get a friendlier label; small footer links keep
+      // their existing text since "Sign up" still reads as a sub-link.
+      document.querySelectorAll('a[href="signup.html"]').forEach(function(link) {
+        link.href = 'dashboard.html';
+        if (link.classList.contains('btn-primary')) {
+          link.textContent = 'Go to dashboard';
+        }
+      });
     }());
   </script>
 
