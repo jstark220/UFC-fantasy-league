@@ -1,18 +1,15 @@
 // ========================================================================
-// STANDINGS PAGE LOGIC
+// STANDINGS PAGE
 // Shows cumulative fantasy points for every manager in the league, sorted
-// from highest to lowest. Data comes from the scores table (summed per
-// manager per event). When no events have been scored yet, all managers
-// show 0.00 pts — the table still renders so the page is ready to go.
+// highest to lowest, with per-period breakdowns.
 // URL param: ?id=LEAGUE_UUID
-// Depends on supabaseClient (supabase-config.js) and requireAuth (auth-guard.js).
+// Depends on: supabaseClient (supabase-config.js), requireAuth (auth-guard.js)
 // ========================================================================
 
-let user, leagueId, league, members, myMemberId;
-let allScores = [];
+var leagueId;
 
 async function initStandings() {
-  user = await requireAuth();
+  var user = await requireAuth();
   if (!user) return;
 
   leagueId = new URLSearchParams(window.location.search).get('id');
@@ -20,189 +17,182 @@ async function initStandings() {
 
   document.getElementById('leagueLink').href = 'league.html?id=' + leagueId;
 
-  // Load everything in parallel
-  const [leagueRes, membersRes, scoresRes] = await Promise.all([
+  var results = await Promise.all([
     supabaseClient
       .from('leagues')
-      .select('id, name, commissioner_id')
+      .select('id, name')
       .eq('id', leagueId)
       .single(),
+
     supabaseClient
       .from('league_members')
       .select('id, user_id, team_name')
       .eq('league_id', leagueId),
-    // Fetch individual score rows; we sum them in JS grouped by member and event.
-    // total_points is the per-fighter score for a single fight on a single event.
+
+    // Join scores with the event so we can group by date for period columns
     supabaseClient
       .from('scores')
-      .select('league_member_id, event_id, total_points')
+      .select('league_member_id, total_points, event:ufc_events(id, event_date)')
       .eq('league_id', leagueId)
   ]);
+
+  var leagueRes  = results[0];
+  var membersRes = results[1];
+  var scoresRes  = results[2];
 
   if (leagueRes.error || !leagueRes.data) {
     window.location.href = 'dashboard.html';
     return;
   }
 
-  league  = leagueRes.data;
-  members = membersRes.data || [];
+  var league  = leagueRes.data;
+  var members = membersRes.data || [];
+  var scores  = scoresRes.data  || [];
 
-  // Verify the current user is a member of this league
-  const myMember = members.find(function(m) { return m.user_id === user.id; });
+  var myMember = members.find(function(m) { return m.user_id === user.id; });
   if (!myMember) { window.location.href = 'dashboard.html'; return; }
-  myMemberId = myMember.id;
 
-  allScores = scoresRes.data || [];
-
-  document.title    = 'Standings - ' + league.name;
+  document.title = 'Standings - ' + league.name;
   document.getElementById('leagueName').textContent = league.name;
 
-  const totals = buildTotals();
-  renderStandings(totals);
-  renderEventHistory(totals);
+  var nav = '<a href="standings.html?id=' + leagueId + '" class="btn-primary">Standings</a>';
+  nav    += '<a href="waivers.html?id='   + leagueId + '" class="btn-secondary">Waivers</a>';
+  nav    += '<a href="lineup.html?id='    + leagueId + '" class="btn-secondary">My Lineup</a>';
+  document.getElementById('headerActions').innerHTML = nav;
+
+  var standings = computeStandings(members, scores);
+  renderStandings(standings, myMember.id);
 
   document.getElementById('pageContent').style.display = 'block';
 }
 
 // ========================================================================
-// BUILD TOTALS
-// Aggregates the scores rows into per-member stats:
-//   total          - cumulative points across all events
-//   eventsPlayed   - how many distinct events this member has scores for
-//   eventPts       - map of event_id -> total points that event
+// COMPUTE STANDINGS
+// Returns members sorted by total points descending, each entry annotated
+// with total, lastEvent (points at the most recently scored event), and
+// last30d (points from events within the past 30 days).
 // ========================================================================
-function buildTotals() {
-  const map = {};
+function computeStandings(members, scores) {
+  var today = new Date();
+  today.setHours(23, 59, 59, 999);
+  var thirtyDaysAgo = new Date(today);
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-  // Seed every member at zero so they appear even with no score rows
+  // Find the event_id with the latest event_date among all scored events
+  var latestEventId   = null;
+  var latestEventDate = null;
+  scores.forEach(function(s) {
+    if (!s.event) return;
+    var d = new Date(s.event.event_date + 'T12:00:00');
+    if (!latestEventDate || d > latestEventDate) {
+      latestEventDate = d;
+      latestEventId   = s.event.id;
+    }
+  });
+
+  // Seed every member at zero so all appear even with no score rows
+  var memberMap = {};
   members.forEach(function(m) {
-    map[m.id] = { total: 0, eventsPlayed: 0, eventPts: {} };
+    memberMap[m.id] = { total: 0, lastEvent: 0, last30d: 0 };
   });
 
-  allScores.forEach(function(s) {
-    if (!map[s.league_member_id]) return;
-    const pts = s.total_points || 0;
-    map[s.league_member_id].total += pts;
-    // Sum multiple fighter scores within the same event into one event total
-    map[s.league_member_id].eventPts[s.event_id] =
-      (map[s.league_member_id].eventPts[s.event_id] || 0) + pts;
+  scores.forEach(function(s) {
+    if (!memberMap[s.league_member_id]) return;
+    var pts = s.total_points || 0;
+    memberMap[s.league_member_id].total += pts;
+
+    if (s.event) {
+      var eventDate = new Date(s.event.event_date + 'T12:00:00');
+
+      if (s.event.id === latestEventId) {
+        memberMap[s.league_member_id].lastEvent += pts;
+      }
+
+      if (eventDate >= thirtyDaysAgo && eventDate <= today) {
+        memberMap[s.league_member_id].last30d += pts;
+      }
+    }
   });
 
-  // Compute derived fields once the per-event breakdown is complete
-  members.forEach(function(m) {
-    const evPts    = map[m.id].eventPts;
-    const eventIds = Object.keys(evPts);
-    map[m.id].eventsPlayed = eventIds.length;
-    // Last event points - uses insertion order of eventIds.
-    // TODO: sort by event_date once ufc_events data is available, then use the latest.
-    map[m.id].lastEventPts =
-      eventIds.length > 0 ? evPts[eventIds[eventIds.length - 1]] : null;
-  });
-
-  return map;
-}
-
-// ========================================================================
-// RENDER STANDINGS TABLE
-// ========================================================================
-function renderStandings(totals) {
-  // Sort: highest total first; alphabetical as a tiebreaker
-  const sorted = members.slice().sort(function(a, b) {
-    const diff = totals[b.id].total - totals[a.id].total;
-    return diff !== 0 ? diff : a.team_name.localeCompare(b.team_name);
-  });
-
-  const tbody = document.getElementById('standingsBody');
-  tbody.innerHTML = '';
-
-  sorted.forEach(function(member, idx) {
-    const data = totals[member.id];
-    const rank  = idx + 1;
-    const total = data.total.toFixed(2);
-    const avg   = data.eventsPlayed > 0
-      ? (data.total / data.eventsPlayed).toFixed(2)
-      : '-';
-    const last  = data.lastEventPts !== null
-      ? data.lastEventPts.toFixed(2)
-      : '-';
-    const isMe  = member.id === myMemberId;
-
-    const row = document.createElement('tr');
-    if (isMe) row.className = 'standings-row-me';
-
-    // Team name links through to that manager's roster on the roster page
-    row.innerHTML =
-      '<td><span class="rank-badge rank-pos-' + rank + '">' + rank + '</span></td>' +
-      '<td>' +
-        '<a href="roster.html?id=' + leagueId + '&member=' + member.id + '" class="standings-team-link">' +
-          escapeHtml(member.team_name) +
-        '</a>' +
-        (isMe ? ' <span class="standings-you-tag">(you)</span>' : '') +
-      '</td>' +
-      '<td class="pts-cell">' + total + '</td>' +
-      '<td class="pts-cell">' + avg + '</td>' +
-      '<td class="pts-cell">' + last + '</td>';
-
-    tbody.appendChild(row);
+  return members.map(function(m) {
+    return { member: m, total: memberMap[m.id].total, lastEvent: memberMap[m.id].lastEvent, last30d: memberMap[m.id].last30d };
+  }).sort(function(a, b) {
+    var diff = b.total - a.total;
+    return diff !== 0 ? diff : a.member.team_name.localeCompare(b.member.team_name);
   });
 }
 
 // ========================================================================
-// RENDER EVENT HISTORY
-// Shows a per-event points breakdown once scoring data exists.
+// RENDER
 // ========================================================================
-function renderEventHistory(totals) {
-  const historyEl = document.getElementById('eventHistory');
-
-  // Collect every event_id that appears in any member's breakdown
-  const eventIdSet = {};
-  members.forEach(function(m) {
-    Object.keys(totals[m.id].eventPts).forEach(function(eid) {
-      eventIdSet[eid] = true;
-    });
+function renderStandings(standings, myMemberId) {
+  // Assign ranks with proper tie handling (tied managers share the same rank number)
+  var ranks = [];
+  standings.forEach(function(entry, idx) {
+    if (idx === 0) { ranks.push(1); return; }
+    ranks.push(standings[idx].total === standings[idx - 1].total ? ranks[idx - 1] : idx + 1);
   });
-  const eventIds = Object.keys(eventIdSet);
 
-  if (eventIds.length === 0) {
-    historyEl.innerHTML =
-      '<p class="standings-empty">No events have been scored yet. ' +
-      'Points will appear here after the commissioner enters results for each event.</p>';
-    return;
+  var rows = standings.map(function(entry, idx) {
+    var member = entry.member;
+    var rank   = ranks[idx];
+    var isMe   = member.id === myMemberId;
+
+    var rankClass = rank === 1 ? ' standings-rank--gold'
+                  : rank === 2 ? ' standings-rank--silver'
+                  : rank === 3 ? ' standings-rank--bronze' : '';
+
+    return (
+      '<tr class="standings-row' + (isMe ? ' standings-row--me' : '') + '">' +
+        '<td class="standings-rank-cell">' +
+          '<span class="standings-rank' + rankClass + '">' + rank + '</span>' +
+        '</td>' +
+        '<td class="standings-team-cell">' +
+          '<a href="lineup.html?id=' + leagueId + '&member=' + escapeHtml(member.id) + '" class="standings-team-link">' +
+            escapeHtml(member.team_name) +
+          '</a>' +
+          (isMe ? '<span class="standings-you">you</span>' : '') +
+        '</td>' +
+        '<td class="standings-pts-cell">' + (entry.total > 0 ? entry.total.toFixed(1) : '—') + '</td>' +
+        '<td class="standings-pts-cell">' + formatDelta(entry.lastEvent) + '</td>' +
+        '<td class="standings-pts-cell">' + formatDelta(entry.last30d)   + '</td>' +
+      '</tr>'
+    );
+  }).join('');
+
+  var hasAnyScores = standings.some(function(e) { return e.total > 0; });
+  var emptyNote = hasAnyScores ? '' :
+    '<p class="standings-empty-note">No events have been scored yet. Points will appear here after the first event.</p>';
+
+  document.getElementById('standingsContent').innerHTML =
+    emptyNote +
+    '<div class="standings-card">' +
+    '<table class="standings-table">' +
+      '<thead>' +
+        '<tr>' +
+          '<th class="standings-th standings-th--rank">#</th>' +
+          '<th class="standings-th standings-th--team">Team</th>' +
+          '<th class="standings-th standings-th--pts">Total Pts</th>' +
+          '<th class="standings-th standings-th--pts">Last Event</th>' +
+          '<th class="standings-th standings-th--pts">Last 30 Days</th>' +
+        '</tr>' +
+      '</thead>' +
+      '<tbody>' + rows + '</tbody>' +
+    '</table>' +
+    '</div>';
+}
+
+// Formats a period score: positive values get a green + prefix, zero shows a dash
+function formatDelta(pts) {
+  if (pts > 0) {
+    return '<span class="standings-delta standings-delta--up">+' + pts.toFixed(1) + '</span>';
   }
-
-  // TODO: join with ufc_events to show human-readable event names and sort by date.
-  // For now, render a simple per-event pts column for each scored event.
-  // Sort members the same way as the standings table
-  const sorted = members.slice().sort(function(a, b) {
-    return totals[b.id].total - totals[a.id].total;
-  });
-
-  let html = '<table><thead><tr><th>Team</th>';
-  eventIds.forEach(function(eid) {
-    // Show only the first 8 characters of the event UUID until event names are available
-    html += '<th class="th-pts">Event ' + escapeHtml(eid.substring(0, 8)) + '...</th>';
-  });
-  html += '</tr></thead><tbody>';
-
-  sorted.forEach(function(member) {
-    const isMe = member.id === myMemberId;
-    html += '<tr' + (isMe ? ' class="standings-row-me"' : '') + '>';
-    html += '<td>' + escapeHtml(member.team_name) + '</td>';
-    eventIds.forEach(function(eid) {
-      const pts = totals[member.id].eventPts[eid];
-      html += '<td class="pts-cell">' + (pts !== undefined ? pts.toFixed(2) : '-') + '</td>';
-    });
-    html += '</tr>';
-  });
-
-  html += '</tbody></table>';
-  historyEl.innerHTML = html;
+  return '<span class="standings-delta standings-delta--zero">&mdash;</span>';
 }
 
-// Escapes user-supplied strings before inserting into innerHTML to prevent XSS
 function escapeHtml(str) {
   if (str === null || str === undefined) return '';
-  const div = document.createElement('div');
+  var div = document.createElement('div');
   div.textContent = String(str);
   return div.innerHTML;
 }

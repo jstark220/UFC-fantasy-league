@@ -97,19 +97,18 @@ async function initLeague() {
   // ---- Render league name ----
   document.getElementById('leagueName').textContent = league.name;
 
-  // ---- Wire roster, free agents, and stats links ----
-  document.getElementById('rosterLink').href  = 'roster.html?id='    + leagueId;
+  // ---- Wire lineup, free agents, and stats links ----
+  document.getElementById('rosterLink').href  = 'lineup.html?id='    + leagueId;
   document.getElementById('waiverLink').href  = 'waivers.html?id='   + leagueId;
   document.getElementById('settingsLink').href = 'league-settings.html?id=' + leagueId;
 
   // ---- Render nav links in the page header ----
-  // Standings is always visible. Rosters and Lineup appear once the draft starts.
+  // Standings is always visible. Lineup/Waivers/Trades appear once the draft starts.
   var navHtml = '<a href="standings.html?id=' + leagueId + '" class="btn-secondary">Standings</a>';
   if (league.draft_started && !league.draft_completed) {
     navHtml += '<a href="draft.html?id=' + leagueId + '" class="btn-primary">Draft Room</a>';
   }
   if (league.draft_started) {
-    navHtml += '<a href="roster.html?id=' + leagueId + '" class="btn-secondary">Rosters</a>';
     navHtml += '<a href="waivers.html?id=' + leagueId + '" class="btn-secondary">Waivers</a>';
     navHtml += '<a href="trades.html?id=' + leagueId + '" class="btn-secondary">Trades</a>';
     if (league.draft_completed) {

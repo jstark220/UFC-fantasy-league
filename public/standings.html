@@ -3,41 +3,44 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Standings - UFC Fantasy League</title>
-  <link rel="stylesheet" href="css/styles.css">
+
+  <script src="js/theme.js"></script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="styles/tokens.css">
+  <link rel="stylesheet" href="styles/components.css">
+
+  <title>Standings - Knockdown Fantasy</title>
 </head>
 <body>
 
-  <!-- Hidden until auth check and data load complete -->
-  <div class="page" id="pageContent" style="display: none;">
+  <div class="dashboard-page" id="pageContent" style="display: none;">
 
-    <a href="#" class="back-link" id="leagueLink">&#8592; League</a>
+    <nav class="top-nav">
+      <a href="index.html" class="top-nav__logo">
+        <span class="kf-red">Knockdown</span> Fantasy
+      </a>
+      <div class="top-nav__links">
+        <a href="#" class="btn-ghost" id="leagueLink">← League</a>
+      </div>
+      <div class="top-nav__actions">
+        <button class="btn-theme" onclick="toggleTheme()" aria-label="Toggle theme">☾</button>
+        <button id="globalLogoutBtn" class="btn-ghost" onclick="logOut()">Log out</button>
+      </div>
+    </nav>
 
-    <div class="page-header">
-      <h1 id="leagueName"></h1>
+    <div class="league-header">
+      <div class="league-header__inner">
+        <h1 class="league-header__name" id="leagueName"></h1>
+        <div class="league-header__actions" id="headerActions"></div>
+      </div>
     </div>
 
-    <!-- Main standings table -->
-    <div class="section">
-      <h2>Standings</h2>
-      <table id="standingsTable">
-        <thead>
-          <tr>
-            <th class="th-rank">#</th>
-            <th>Team</th>
-            <th class="th-pts">Total Pts</th>
-            <th class="th-pts">Avg / Event</th>
-            <th class="th-pts">Last Event</th>
-          </tr>
-        </thead>
-        <tbody id="standingsBody"></tbody>
-      </table>
-    </div>
-
-    <!-- Per-event scoring history; populated by standings.js when event data exists -->
-    <div class="section">
-      <h2>Event History</h2>
-      <div id="eventHistory"></div>
+    <div class="dashboard-body">
+      <div id="standingsContent"></div>
     </div>
 
   </div>
@@ -46,6 +49,13 @@
   <script src="js/supabase-config.js"></script>
   <script src="js/auth-guard.js"></script>
   <script src="js/standings.js"></script>
+
+  <script>
+    document.querySelectorAll('.btn-theme').forEach(function(btn) {
+      var theme = document.documentElement.getAttribute('data-theme');
+      btn.textContent = theme === 'light' ? '☀' : '☾';
+    });
+  </script>
 
 </body>
 </html>

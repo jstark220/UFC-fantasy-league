@@ -148,9 +148,11 @@ const PLACEHOLDER_ROSTER = [
 
 // Module-level state
 let user, leagueId, myMemberId;
-let myRoster   = [];
-let nextEvent  = null;
-let isLocked   = false;
+let myRoster      = [];
+let nextEvent     = null;
+let isLocked      = false;
+let isViewMode    = false;   // true when browsing another manager's lineup from standings
+let viewedMember  = null;    // the member object being viewed (null when viewing own lineup)
 let selections    = new Set();  // fighter IDs currently started
 let selectionRowIds = {};       // fighter_id -> starter_selections DB row id
 let rosterRowIds    = {};       // fighter_id -> rosters table row id (needed to delete)
@@ -187,7 +189,17 @@ async function initLineup() {
   const members = membersRes.data || [];
   const myMember = members.find(function(m) { return m.user_id === user.id; });
   if (!myMember) { window.location.href = 'dashboard.html'; return; }
-  myMemberId = myMember.id;
+
+  // If a member param is present and belongs to a different manager, enter view mode
+  const memberParam  = new URLSearchParams(window.location.search).get('member');
+  const targetMember = memberParam
+    ? members.find(function(m) { return m.id === memberParam; })
+    : myMember;
+  if (!targetMember) { window.location.href = 'standings.html?id=' + leagueId; return; }
+
+  isViewMode   = targetMember.id !== myMember.id;
+  myMemberId   = targetMember.id;
+  viewedMember = isViewMode ? targetMember : null;
 
   // Store the upcoming event and check lock status
   nextEvent = (eventRes.data && eventRes.data[0]) || null;
@@ -195,14 +207,19 @@ async function initLineup() {
     isLocked = new Date() >= new Date(nextEvent.lineup_lock_time);
   }
 
-  document.title   = 'Lineup - ' + league.name;
+  document.title = (isViewMode ? targetMember.team_name : 'Lineup') + ' - ' + league.name;
   document.getElementById('leagueName').textContent = league.name;
 
-  // Nav links in the league header
+  // In view mode the back link returns to standings; otherwise it stays on the league page
+  if (isViewMode) {
+    document.getElementById('leagueLink').href = 'standings.html?id=' + leagueId;
+    document.getElementById('leagueLink').textContent = '← Standings';
+  }
+
+  // Nav links — Lineup is active only when viewing your own
   var nav = '<a href="standings.html?id=' + leagueId + '" class="btn-secondary">Standings</a>';
-  nav += '<a href="roster.html?id='   + leagueId + '" class="btn-secondary">Rosters</a>';
   nav += '<a href="waivers.html?id='  + leagueId + '" class="btn-secondary">Waivers</a>';
-  nav += '<a href="lineup.html?id='   + leagueId + '" class="btn-primary">Lineup</a>';
+  nav += '<a href="lineup.html?id='   + leagueId + '" class="' + (isViewMode ? 'btn-secondary' : 'btn-primary') + '">My Lineup</a>';
   document.getElementById('headerActions').innerHTML = nav;
 
   // Fetch this user's roster and existing starter selections in parallel
@@ -277,7 +294,7 @@ function renderEventBanner() {
   el.innerHTML =
     '<div class="this-week-card" style="margin-bottom: var(--space-8);">' +
       '<div class="this-week-card__event">' +
-        '<p class="this-week-card__eyebrow">Set Your Lineup</p>' +
+        '<p class="this-week-card__eyebrow">' + (isViewMode ? escapeHtml(viewedMember.team_name) + '\'s Lineup' : 'Set Your Lineup') + '</p>' +
         '<p class="this-week-card__name">' + escapeHtml(eventName) + '</p>' +
         (eventDate    ? '<p class="this-week-card__date">'    + eventDate + '</p>' : '') +
         (eventMatchup ? '<p class="this-week-card__matchup">' + escapeHtml(eventMatchup) + '</p>' : '') +
@@ -354,7 +371,7 @@ function buildStarterCard(fighter, slotNum) {
         '<p class="fighter-card__division">' + escapeHtml(divLabel) + '</p>' +
         '<p class="fighter-card__name">' + escapeHtml(fighter.name) + '</p>' +
         '<p class="fighter-card__record">' + record + '</p>' +
-        (isLocked
+        (isLocked || isViewMode
           ? '<span class="lineup-starter-badge">Starter ' + slotNum + '</span>'
           : '<button class="lineup-bench-btn" data-fighter-id="' + fighter.id + '">Bench</button>') +
       '</div>' +
@@ -506,7 +523,9 @@ function renderRosterRow(fighter, ctx, slotType) {
     : '';
 
   let btnHtml;
-  if (isLocked) {
+  if (isViewMode) {
+    btnHtml = isStarted ? '<span class="lineup-starter-badge">Starter</span>' : '';
+  } else if (isLocked) {
     btnHtml = isStarted
       ? '<span class="lineup-starter-badge">Starter</span>'
       : '<span class="lineup-bench-badge">Bench</span>';
@@ -528,19 +547,17 @@ function renderRosterRow(fighter, ctx, slotType) {
     : ctx.flexDivisions.indexOf(fighter.primary_division) !== -1;
   var flexEligible = !isLocked && slotType !== 'any_flex' &&
     (ctx.flexCount < 2 || flexSwapExists);
-  var flexBtn = flexEligible
+  var flexBtn = (!isViewMode && flexEligible)
     ? '<button class="lineup-flex-btn" data-flex-id="' + fighter.id + '" title="Move to Any-Division Flex">&rarr; Flex</button>'
     : '';
 
-  // "← Out": shown only on any_flex fighters when lineup isn't locked
-  var unflexBtn = (!isLocked && slotType === 'any_flex')
+  var unflexBtn = (!isViewMode && !isLocked && slotType === 'any_flex')
     ? '<button class="lineup-flex-btn" data-unflex-id="' + fighter.id + '" title="Move back to division slot">&larr; Out</button>'
     : '';
 
-  // Drop button is hidden while the lineup is locked
-  const dropBtn = isLocked
-    ? ''
-    : '<button class="lineup-drop-btn" data-drop-id="' + fighter.id + '" title="Drop from roster">Drop</button>';
+  const dropBtn = (!isViewMode && !isLocked)
+    ? '<button class="lineup-drop-btn" data-drop-id="' + fighter.id + '" title="Drop from roster">Drop</button>'
+    : '';
 
   return (
     '<div class="lineup-roster-row' + rowClass + '" id="roster-row-' + fighter.id + '">' +

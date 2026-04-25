@@ -4252,3 +4252,121 @@ body {
 
 .fight-history-pts--mid  { color: var(--accent-gold); }
 .fight-history-pts--high { color: #4ade80; }
+
+/* ========================================================================
+   STANDINGS PAGE
+   ======================================================================== */
+
+/* Cage-textured card that wraps the table */
+.standings-card {
+  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  overflow: hidden;
+  background:
+    repeating-linear-gradient( 45deg, transparent, transparent 18px, rgba(255,255,255,0.016) 18px, rgba(255,255,255,0.016) 19px),
+    repeating-linear-gradient(-45deg, transparent, transparent 18px, rgba(255,255,255,0.016) 18px, rgba(255,255,255,0.016) 19px),
+    var(--bg-secondary);
+}
+
+.standings-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.standings-th {
+  padding: var(--space-3) var(--space-4);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-tertiary);
+  background: rgba(0, 0, 0, 0.25);
+  border-bottom: 1px solid var(--border-subtle);
+  white-space: nowrap;
+}
+
+.standings-th--rank { width: 48px; text-align: center; }
+.standings-th--team { text-align: left; }
+.standings-th--pts  { width: 110px; text-align: right; }
+
+.standings-row {
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background 0.15s;
+}
+
+/* Alternate rows with a slight dark wash so they read against the cage texture */
+.standings-row:nth-child(odd)  { background: rgba(0, 0, 0, 0.18); }
+.standings-row:nth-child(even) { background: rgba(0, 0, 0, 0.06); }
+
+.standings-row:hover { background: rgba(255, 255, 255, 0.05); }
+.standings-row:last-child { border-bottom: none; }
+
+.standings-row--me { background: rgba(193, 59, 46, 0.12) !important; }
+.standings-row--me:hover { background: rgba(193, 59, 46, 0.18) !important; }
+
+.standings-rank-cell {
+  padding: var(--space-4);
+  text-align: center;
+  width: 48px;
+}
+
+.standings-rank {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  color: var(--text-tertiary);
+  letter-spacing: 0.02em;
+}
+
+.standings-rank--gold   { color: var(--accent-gold); }
+.standings-rank--silver { color: #C0C0C0; }
+.standings-rank--bronze { color: #CD7F32; }
+
+.standings-team-cell {
+  padding: var(--space-4);
+}
+
+.standings-team-link {
+  font-weight: 600;
+  color: var(--text-primary);
+  text-decoration: none;
+  font-size: var(--text-body);
+}
+
+.standings-team-link:hover { color: var(--accent-crimson); text-decoration: underline; }
+
+.standings-you {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent-crimson);
+  background: rgba(193, 59, 46, 0.12);
+  padding: 2px 6px;
+  border-radius: 3px;
+  margin-left: var(--space-3);
+}
+
+.standings-pts-cell {
+  padding: var(--space-4);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-body);
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.standings-delta {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.standings-delta--up   { color: #4ade80; }
+.standings-delta--zero { color: var(--text-tertiary); font-weight: 400; }
+
+.standings-empty-note {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  padding: var(--space-4) 0;
+  margin-bottom: var(--space-4);
+}
