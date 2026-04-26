@@ -108,7 +108,7 @@ async function initSettings() {
   // for any key the JSONB is missing)
   const { data: league, error: leagueError } = await supabaseClient
     .from('leagues')
-    .select('id, name, format, draft_format, season_start_date, season_end_date, invite_code, commissioner_id, max_managers, roster_size, draft_started, scoring_config')
+    .select('id, name, format, draft_format, season_start_date, season_end_date, invite_code, commissioner_id, max_managers, roster_size, pick_timer_seconds, draft_started, scoring_config')
     .eq('id', leagueId)
     .single();
 
@@ -147,6 +147,7 @@ async function initSettings() {
   document.getElementById('inputDraftFormat').value = league.draft_format || 'snake';
   document.getElementById('inputMaxManagers').value = league.max_managers || 8;
   document.getElementById('inputRosterSize').value  = league.roster_size  || 20;
+  document.getElementById('inputPickTimer').value   = league.pick_timer_seconds || 90;
 
   if (league.season_start_date) {
     // Date input expects YYYY-MM-DD; Supabase returns it in that format already
@@ -173,8 +174,10 @@ async function initSettings() {
   if (league.draft_started) {
     document.getElementById('inputDraftFormat').disabled = true;
     document.getElementById('inputRosterSize').disabled  = true;
+    document.getElementById('inputPickTimer').disabled   = true;
     document.getElementById('draftFormatHint').style.display = '';
     document.getElementById('rosterSizeHint').style.display  = '';
+    document.getElementById('pickTimerHint').style.display   = '';
   }
 
   if (isCommissioner) {
@@ -236,7 +239,7 @@ async function initSettings() {
 
   } else {
     // Non-commissioner: make all inputs read-only and hide the save button
-    ['inputName', 'inputFormat', 'inputDraftFormat', 'inputStartDate', 'inputEndDate', 'inputMaxManagers', 'inputRosterSize'].forEach(function(id) {
+    ['inputName', 'inputFormat', 'inputDraftFormat', 'inputStartDate', 'inputEndDate', 'inputMaxManagers', 'inputRosterSize', 'inputPickTimer'].forEach(function(id) {
       document.getElementById(id).disabled = true;
     });
     // Lock every scoring input too — members can VIEW the rules but only
@@ -278,8 +281,9 @@ async function initSettings() {
 
     // Only include draft-locked fields if the draft hasn't started yet
     if (!league.draft_started) {
-      updates.draft_format = document.getElementById('inputDraftFormat').value;
-      updates.roster_size  = parseInt(document.getElementById('inputRosterSize').value, 10);
+      updates.draft_format       = document.getElementById('inputDraftFormat').value;
+      updates.roster_size        = parseInt(document.getElementById('inputRosterSize').value, 10);
+      updates.pick_timer_seconds = parseInt(document.getElementById('inputPickTimer').value, 10);
     }
 
     const { error } = await supabaseClient

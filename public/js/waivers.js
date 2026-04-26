@@ -52,7 +52,7 @@ async function initWaivers() {
   var results = await Promise.all([
     supabaseClient
       .from('leagues')
-      .select('id, name, commissioner_id, draft_started')
+      .select('id, name, commissioner_id, draft_started, draft_completed')
       .eq('id', leagueId)
       .single(),
     supabaseClient
@@ -294,6 +294,12 @@ function fighterRollingClearTime(fighterId) {
 //   { mode: 'instant' }
 //   { mode: 'claim', reason: 'window_pre' | 'window_post' | 'rolling', closesAt }
 function decideAddMode(fighterId) {
+  // Pre-draft: nothing can be added. The Add button stays disabled in the
+  // UI; this case lets us short-circuit the rest of the logic and gives
+  // the modal opener a clean signal to refuse opening.
+  if (!league.draft_completed) {
+    return { mode: 'predraft' };
+  }
   if (phaseInfo.phase === 'WINDOW_PRE') {
     return { mode: 'claim', reason: 'window_pre',  closesAt: phaseInfo.closesAt };
   }
@@ -304,7 +310,16 @@ function decideAddMode(fighterId) {
   if (fighterOnRollingWaiver(fighterId)) {
     return { mode: 'claim', reason: 'rolling', closesAt: fighterRollingClearTime(fighterId) };
   }
-  return { mode: 'instant' };
+  // Post-draft "everyone on waivers" rule: even in FA phase, the first
+  // pickup after the draft should be a claim, not an instant add. We force
+  // claim mode whenever the draft is complete and we're between event
+  // windows — claims pile up until the next WINDOW_PRE opens (or, if no
+  // upcoming event, can be processed manually by the commissioner).
+  return {
+    mode:     'claim',
+    reason:   'post_draft',
+    closesAt: phaseInfo.opensAt
+  };
 }
 
 // ========================================================================
@@ -318,7 +333,16 @@ function renderPhaseBanner() {
   var now = new Date();
 
   var title, body, variant;
-  if (phaseInfo.phase === 'WINDOW_PRE') {
+  // Pre-draft state takes precedence over the event-driven phase. Until the
+  // draft completes, free agency is closed entirely — there's no roster
+  // for fighters to be added to yet.
+  if (!league.draft_completed) {
+    variant = 'phase-banner--window';
+    title   = 'Free agency closed';
+    body    = 'Free agency opens once the draft completes. ' +
+              'Until then, every fighter not yet drafted will go through ' +
+              'waivers as a claim once the draft ends.';
+  } else if (phaseInfo.phase === 'WINDOW_PRE') {
     variant = 'phase-banner--window';
     title   = 'Pre-event waivers open';
     body    = 'All adds are claims. Roster cap is ' + rosterCap + '. ' +
@@ -331,15 +355,18 @@ function renderPhaseBanner() {
               'Claims process ' + formatEtDateTime(phaseInfo.closesAt) +
               ' (' + formatRelativeShort(phaseInfo.closesAt, now) + ').';
   } else {
-    variant = 'phase-banner--fa';
-    title   = 'Free agency';
+    // Post-draft FA phase: per the post-draft waivers rule, every pickup
+    // is still a claim until the next regular waiver window. We surface
+    // this in the banner instead of the old "instant adds" copy.
+    variant = 'phase-banner--window';
+    title   = 'Post-draft waivers';
     var nextOpen = phaseInfo.opensAt
-      ? 'Next waiver window opens ' + formatEtDateTime(phaseInfo.opensAt) +
+      ? 'Next regular waiver window opens ' + formatEtDateTime(phaseInfo.opensAt) +
         ' (' + formatRelativeShort(phaseInfo.opensAt, now) + ')'
-      : 'No upcoming waiver window';
-    body = 'Free agents can be added instantly. Recently dropped fighters ' +
-           'still run on waivers for ~48 hours. ' + nextOpen + '. ' +
-           'Roster cap is ' + rosterCap + '.';
+      : 'No upcoming waiver window scheduled';
+    body = 'All free-agent pickups go through waivers as claims. ' +
+           'Claims are resolved in inverse-standings priority. ' +
+           nextOpen + '. Roster cap is ' + rosterCap + '.';
   }
 
   el.className = 'phase-banner ' + variant;
@@ -768,12 +795,22 @@ function renderAvailableFighters() {
       ? '<img class="lineup-roster-row__photo" src="' + escapeHtml(f.photo_url) + '" alt="' + escapeHtml(f.name) + '" onerror="this.style.display=\'none\'">'
       : '';
 
-    var btnLabel = addMode.mode === 'instant' ? '+ Add' : '+ Claim';
-    var btn = myPendingIds.has(f.id)
-      ? '<button class="btn-secondary lineup-row-btn" disabled>Claimed</button>'
-      : '<button class="btn-secondary lineup-row-btn waiver-claim-btn" data-fighter-id="' + f.id + '">' +
-          btnLabel +
-        '</button>';
+    // Button label depends on mode:
+    //   * predraft → "Add" but disabled, with a tooltip explaining why
+    //   * instant  → "+ Add" (only possible post-draft, post-window, no rolling waiver)
+    //   * claim    → "+ Claim"
+    var btn;
+    if (addMode.mode === 'predraft') {
+      btn = '<button class="btn-secondary lineup-row-btn" disabled ' +
+              'title="Available after the draft completes">+ Add</button>';
+    } else if (myPendingIds.has(f.id)) {
+      btn = '<button class="btn-secondary lineup-row-btn" disabled>Claimed</button>';
+    } else {
+      var btnLabel = addMode.mode === 'instant' ? '+ Add' : '+ Claim';
+      btn = '<button class="btn-secondary lineup-row-btn waiver-claim-btn" data-fighter-id="' + f.id + '">' +
+              btnLabel +
+            '</button>';
+    }
 
     html +=
       '<div class="lineup-roster-row">' +
@@ -1037,6 +1074,14 @@ function renderProcessingQueue() {
 function openClaimModal(fighterId) {
   claimingFighter = allFighters.find(function(f) { return f.id === fighterId; });
   if (!claimingFighter) return;
+
+  // Hard guard: if the draft hasn't completed, no adds are allowed at all.
+  // The button is rendered as disabled, but this defends against direct
+  // calls (e.g., the league-page Top Free Agents shortcut at line ~163).
+  if (!league.draft_completed) {
+    alert('Free agency opens once the draft completes.');
+    return;
+  }
 
   var existing = document.getElementById('claimModal');
   if (existing) existing.remove();

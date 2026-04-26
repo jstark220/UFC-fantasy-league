@@ -95,6 +95,16 @@
               <input class="form-input" type="number" id="inputRosterSize" min="5" max="30">
               <p class="form-hint" id="rosterSizeHint" style="display: none;">Locked after the draft starts.</p>
             </div>
+
+            <div class="form-group">
+              <label class="form-label" for="inputPickTimer">Seconds per Pick</label>
+              <!-- Range matches the SQL CHECK constraint (30–600). Default 90
+                   is the PRD value. Locked once the draft has started so the
+                   timer doesn't change mid-draft. -->
+              <input class="form-input" type="number" id="inputPickTimer" min="30" max="600" step="5">
+              <p class="form-hint">How long each manager has to make their pick during the draft. Default: 90.</p>
+              <p class="form-hint" id="pickTimerHint" style="display: none;">Locked after the draft starts.</p>
+            </div>
           </div>
 
           <!-- Right: invite code + danger zone -->
@@ -274,6 +284,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/supabase-config.js"></script>
   <script src="js/auth-guard.js"></script>
+  <script src="js/chat-nav.js"></script>
   <script src="js/commissioner.js"></script>
   <script src="js/activity.js"></script>
   <script src="js/league-settings.js"></script>

@@ -49,10 +49,12 @@ async function initLeague() {
   leagueIdRef = leagueId;
 
   // ---- Fetch league data ----
-  // draft_started, draft_completed, draft_order, roster_size added to support draft setup UI
+  // draft_started, draft_completed, draft_order, draft_scheduled_at, roster_size
+  // are all needed for the draft setup UI (status, order preview, scheduled
+  // countdown).
   const { data: league, error: leagueError } = await supabaseClient
     .from('leagues')
-    .select('id, name, format, draft_format, season_start_date, invite_code, commissioner_id, max_managers, draft_started, draft_completed, draft_order, roster_size')
+    .select('id, name, format, draft_format, season_start_date, invite_code, commissioner_id, max_managers, draft_started, draft_completed, draft_order, draft_scheduled_at, roster_size')
     .eq('id', leagueId)
     .single();
 
@@ -67,7 +69,7 @@ async function initLeague() {
   // Declared with let so the remove handler can update the local copy without reloading
   let { data: members, error: membersError } = await supabaseClient
     .from('league_members')
-    .select('id, team_name, user_id')
+    .select('id, team_name, user_id, is_commissioner, chat_last_seen_at')
     .eq('league_id', leagueId);
 
   if (membersError) {
@@ -121,7 +123,14 @@ async function initLeague() {
 
   // ---- Render nav links in the page header ----
   // Standings is always visible. Lineup/Waivers/Trades appear once the draft starts.
-  var navHtml = '<a href="standings.html?id=' + leagueId + '" class="btn-secondary">Standings</a>';
+  // Chat is a primary CTA — always visible, leads with an unread count badge that
+  // we fill in below once the count comes back from the DB.
+  var navHtml =
+    '<a href="chat.html?id=' + leagueId + '" class="btn-primary chat-cta" id="chatCtaLink">' +
+      'Chat' +
+      '<span class="chat-cta__badge" id="chatUnreadBadge" hidden></span>' +
+    '</a>';
+  navHtml += '<a href="standings.html?id=' + leagueId + '" class="btn-secondary">Standings</a>';
   if (league.draft_started && !league.draft_completed) {
     navHtml += '<a href="draft.html?id=' + leagueId + '" class="btn-primary">Draft Room</a>';
   }
@@ -136,6 +145,11 @@ async function initLeague() {
     navHtml += '<a href="score-event.html?league=' + leagueId + '" class="btn-secondary">Score Event</a>';
   }
   document.getElementById('headerActions').innerHTML = navHtml;
+
+  // Fire-and-forget unread fetch. We pass the user's chat_last_seen_at;
+  // null means "they have never opened chat", so every existing message
+  // counts as unread. Failure leaves the badge hidden — no big deal.
+  refreshChatUnreadBadge(leagueId, myMember.chat_last_seen_at);
 
   // ---- Render details grid ----
   const formatDisplay    = league.format === 'dynasty' ? 'Dynasty' : 'Season-Long';
@@ -212,30 +226,58 @@ function renderDraftSection() {
     return;
   }
 
-  // Draft has not started yet
-  const orderHtml = renderDraftOrderList();
+  // Draft has not started yet. Tear down any prior countdown interval so we
+  // don't leak timers when the section re-renders (Realtime updates, etc.).
+  stopDraftCountdown();
+
+  const orderHtml      = renderDraftOrderList();
+  const isScheduled    = !!leagueData.draft_scheduled_at;
+  const orderIsSet     = !!leagueData.draft_order;
+  const timeBtnLabel   = isScheduled ? 'Change Draft Time' : 'Set Draft Time';
+  const timeBtnDisabled = orderIsSet ? '' : ' disabled';
+
+  // The scheduled section (countdown + absolute time + lobby link) shows the
+  // same to everyone — commissioner and members — when a time has been set.
+  // The Enter Draft Room link lets managers enter the lobby and watch the
+  // countdown together inside the draft room before the draft starts.
+  const scheduledHtml = isScheduled
+    ? '<div class="draft-schedule" id="draftSchedule">' +
+        '<p class="draft-schedule__label">Draft starts</p>' +
+        '<p class="draft-schedule__when" id="draftScheduleWhen">' + escapeHtml(formatScheduledLocal(leagueData.draft_scheduled_at)) + '</p>' +
+        '<p class="draft-schedule__countdown" id="draftScheduleCountdown">' + escapeHtml(formatCountdown(leagueData.draft_scheduled_at)) + '</p>' +
+        '<a href="draft.html?id=' + leagueIdRef + '" class="btn-secondary draft-schedule__enter">Enter Draft Room</a>' +
+      '</div>'
+    : '';
 
   if (isCommissioner) {
-    // Commissioner controls: randomize order, preview it, then start
-    // Start Draft button is disabled until a draft order has been saved
-    const startDisabled = !leagueData.draft_order ? ' disabled' : '';
-
+    // Commissioner controls: set draft order, then set draft time. The
+    // "Set Draft Time" button is disabled until a draft order has been
+    // saved (you can't start a draft with no pick order).
     el.innerHTML =
-      '<p class="draft-status-note">Set the draft order, then start the draft when all managers have joined.</p>' +
+      '<p class="draft-status-note">Set the draft order, then set a time to start the draft (or start it now).</p>' +
       '<div id="draftOrderPreview">' + orderHtml + '</div>' +
+      scheduledHtml +
       '<div class="draft-actions">' +
-        '<button class="btn-secondary" id="randomizeBtn">Randomize Order</button>' +
-        '<button class="btn-primary" id="startDraftBtn"' + startDisabled + '>Start Draft</button>' +
+        '<button class="btn-secondary" id="setOrderBtn">Set Draft Order</button>' +
+        '<button class="btn-primary" id="setTimeBtn"' + timeBtnDisabled + '>' + timeBtnLabel + '</button>' +
       '</div>';
 
-    document.getElementById('randomizeBtn').addEventListener('click', randomizeDraftOrder);
-    document.getElementById('startDraftBtn').addEventListener('click', startDraft);
+    document.getElementById('setOrderBtn').addEventListener('click', openDraftOrderModal);
+    document.getElementById('setTimeBtn').addEventListener('click', openDraftTimeModal);
   } else {
-    // Non-commissioner sees the order (if set) and a waiting message
+    // Non-commissioner sees the order (if set), the scheduled time (if any),
+    // and a waiting message.
+    const waitMsg = isScheduled
+      ? 'Draft scheduled. The commissioner will start it at the scheduled time.'
+      : 'Waiting for the commissioner to start the draft.';
     el.innerHTML =
-      '<p class="draft-status-note">Waiting for the commissioner to start the draft.</p>' +
-      '<div id="draftOrderPreview">' + orderHtml + '</div>';
+      '<p class="draft-status-note">' + waitMsg + '</p>' +
+      '<div id="draftOrderPreview">' + orderHtml + '</div>' +
+      scheduledHtml;
   }
+
+  // If a schedule exists, kick off the live countdown so seconds tick.
+  if (isScheduled) startDraftCountdown();
 }
 
 // Returns an HTML string showing the draft pick order as a numbered list,
@@ -256,66 +298,424 @@ function renderDraftOrderList() {
 }
 
 // ========================================================================
-// RANDOMIZE DRAFT ORDER
-// Fisher-Yates shuffle of the current member IDs, then saves the result
-// to leagues.draft_order. Re-renders the draft section on success.
+// DRAFT ORDER MODAL
+// Lets the commissioner manually reorder managers (up/down arrows) or
+// randomize the order. Working order is held in module-level state while
+// the modal is open and only persisted on Save.
 // ========================================================================
-async function randomizeDraftOrder() {
-  const btn = document.getElementById('randomizeBtn');
-  btn.disabled = true;
-  btn.textContent = 'Randomizing...';
 
-  // Build an array of member IDs and shuffle it in place
-  const order = membersData.map(function(m) { return m.id; });
-  for (let i = order.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    const temp = order[i];
-    order[i] = order[j];
-    order[j] = temp;
+// Working copy of the order while the modal is open. Empty when closed.
+let draftOrderWorking = [];
+
+// Renders the modal HTML for the current draftOrderWorking array. Pulled
+// out into its own function so we can re-render the list in place after
+// each arrow click or randomize without rebuilding the whole modal.
+function renderDraftOrderEditList() {
+  const items = draftOrderWorking.map(function(memberId, idx) {
+    const member = membersData.find(function(m) { return m.id === memberId; });
+    const name = member ? escapeHtml(member.team_name) : '(departed member)';
+    // Arrow disabled at the boundaries so the user can't move the top
+    // entry up or the bottom entry down (would be a no-op anyway).
+    const upDisabled   = idx === 0                              ? ' disabled' : '';
+    const downDisabled = idx === draftOrderWorking.length - 1   ? ' disabled' : '';
+    return '<li class="draft-order-edit__item">' +
+      '<span class="draft-order-edit__pos">' + (idx + 1) + '</span>' +
+      '<span class="draft-order-edit__name">' + name + '</span>' +
+      '<button class="draft-order-edit__arrow" data-action="up" data-idx="' + idx + '"' + upDisabled + ' aria-label="Move up">&#8593;</button>' +
+      '<button class="draft-order-edit__arrow" data-action="down" data-idx="' + idx + '"' + downDisabled + ' aria-label="Move down">&#8595;</button>' +
+      '</li>';
+  });
+  return items.join('');
+}
+
+// Re-renders just the <ol> contents and re-wires its arrows. Called after
+// each manual swap or randomize so the displayed positions stay in sync
+// with draftOrderWorking.
+function refreshDraftOrderEditList() {
+  const list = document.getElementById('draftOrderEditList');
+  if (!list) return;
+  list.innerHTML = renderDraftOrderEditList();
+  wireDraftOrderArrows();
+}
+
+// Attaches click handlers to every up/down arrow currently in the modal.
+// Re-run after each refresh because innerHTML wipes the old listeners.
+function wireDraftOrderArrows() {
+  document.querySelectorAll('.draft-order-edit__arrow').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      if (btn.disabled) return;
+      const action = btn.getAttribute('data-action');
+      const idx    = parseInt(btn.getAttribute('data-idx'), 10);
+
+      // Swap with the neighbor in the appropriate direction
+      if (action === 'up' && idx > 0) {
+        const tmp = draftOrderWorking[idx - 1];
+        draftOrderWorking[idx - 1] = draftOrderWorking[idx];
+        draftOrderWorking[idx]     = tmp;
+      } else if (action === 'down' && idx < draftOrderWorking.length - 1) {
+        const tmp = draftOrderWorking[idx + 1];
+        draftOrderWorking[idx + 1] = draftOrderWorking[idx];
+        draftOrderWorking[idx]     = tmp;
+      }
+      refreshDraftOrderEditList();
+    });
+  });
+}
+
+// Builds the working order from either the existing saved order, or the
+// current member list as a fallback. Then renders the modal into the DOM
+// and wires every interactive element.
+function openDraftOrderModal() {
+  // Seed the working order. If a saved order exists and includes ALL
+  // current members, use it as-is. Otherwise rebuild from membersData
+  // so newly-joined managers don't get silently excluded from the editor.
+  const memberIds = membersData.map(function(m) { return m.id; });
+  if (leagueData.draft_order &&
+      leagueData.draft_order.length === memberIds.length &&
+      leagueData.draft_order.every(function(id) { return memberIds.indexOf(id) !== -1; })) {
+    draftOrderWorking = leagueData.draft_order.slice();
+  } else {
+    draftOrderWorking = memberIds.slice();
   }
+
+  const overlay = document.createElement('div');
+  overlay.className = 'draft-order-modal-overlay';
+  overlay.id        = 'draftOrderModalOverlay';
+  overlay.innerHTML =
+    '<div class="draft-order-modal">' +
+      '<div class="draft-order-modal__header">' +
+        '<h3 class="draft-order-modal__title">Set Draft Order</h3>' +
+        '<button class="draft-order-modal__close" id="draftOrderModalClose" aria-label="Close">&times;</button>' +
+      '</div>' +
+      '<div class="draft-order-modal__body">' +
+        '<p class="draft-order-modal__help">Use the arrows to reorder, or click Randomize.</p>' +
+        '<ol class="draft-order-edit" id="draftOrderEditList">' + renderDraftOrderEditList() + '</ol>' +
+      '</div>' +
+      '<div class="draft-order-modal__actions">' +
+        '<button class="btn-secondary" id="draftOrderRandomBtn">Randomize</button>' +
+        '<div class="draft-order-modal__actions-right">' +
+          '<button class="btn-secondary" id="draftOrderCancelBtn">Cancel</button>' +
+          '<button class="btn-primary" id="draftOrderSaveBtn">Save Order</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(overlay);
+
+  // Backdrop click closes (only when target is the overlay itself, not the modal card)
+  overlay.addEventListener('click', function(e) {
+    if (e.target === overlay) closeDraftOrderModal();
+  });
+
+  document.getElementById('draftOrderModalClose').addEventListener('click', closeDraftOrderModal);
+  document.getElementById('draftOrderCancelBtn').addEventListener('click', closeDraftOrderModal);
+  document.getElementById('draftOrderRandomBtn').addEventListener('click', randomizeDraftOrderInModal);
+  document.getElementById('draftOrderSaveBtn').addEventListener('click', saveDraftOrderFromModal);
+  wireDraftOrderArrows();
+}
+
+// Fisher-Yates shuffle of the working order. Doesn't persist — the user
+// still has to hit Save.
+function randomizeDraftOrderInModal() {
+  for (let i = draftOrderWorking.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const temp = draftOrderWorking[i];
+    draftOrderWorking[i] = draftOrderWorking[j];
+    draftOrderWorking[j] = temp;
+  }
+  refreshDraftOrderEditList();
+}
+
+// Persists the working order to leagues.draft_order, then closes the
+// modal and re-renders the draft section so the preview updates.
+async function saveDraftOrderFromModal() {
+  const saveBtn = document.getElementById('draftOrderSaveBtn');
+  saveBtn.disabled    = true;
+  saveBtn.textContent = 'Saving...';
 
   const { error } = await supabaseClient
     .from('leagues')
-    .update({ draft_order: order })
+    .update({ draft_order: draftOrderWorking })
     .eq('id', leagueIdRef);
 
   if (error) {
     alert('Error saving draft order: ' + error.message);
-    btn.disabled = false;
-    btn.textContent = 'Randomize Order';
+    saveBtn.disabled    = false;
+    saveBtn.textContent = 'Save Order';
     return;
   }
 
-  // Update local state and re-render so the new order appears immediately
-  leagueData.draft_order = order;
+  leagueData.draft_order = draftOrderWorking.slice();
+  closeDraftOrderModal();
   renderDraftSection();
 }
 
-// ========================================================================
-// START DRAFT
-// Sets draft_started = true in the DB. The commissioner is redirected here
-// immediately; all other members are redirected via the Realtime subscription.
-// ========================================================================
-async function startDraft() {
-  if (!confirm('Start the draft? This cannot be undone.')) return;
+// Removes the modal from the DOM and clears the working state.
+function closeDraftOrderModal() {
+  const overlay = document.getElementById('draftOrderModalOverlay');
+  if (overlay) overlay.remove();
+  draftOrderWorking = [];
+}
 
-  const btn = document.getElementById('startDraftBtn');
-  btn.disabled = true;
+// ========================================================================
+// DRAFT TIME MODAL
+// Lets the commissioner either start the draft immediately or schedule
+// it for a future time. A scheduled draft is auto-started by the
+// start-scheduled-drafts pg_cron job (see SQL migration). The commissioner
+// can also clear an existing schedule from this same modal.
+// ========================================================================
+
+// Renders the modal HTML. Shape changes slightly when a schedule already
+// exists (we show the current time + a Clear option above the picker).
+function buildDraftTimeModalHtml() {
+  const isScheduled  = !!leagueData.draft_scheduled_at;
+  const currentLabel = isScheduled
+    ? '<div class="draft-time-modal__current">' +
+        '<p class="draft-time-modal__current-label">Currently scheduled for</p>' +
+        '<p class="draft-time-modal__current-when">' + escapeHtml(formatScheduledLocal(leagueData.draft_scheduled_at)) + '</p>' +
+        '<button class="btn-ghost" id="draftTimeClearBtn">Clear schedule</button>' +
+      '</div>'
+    : '';
+
+  // Default the picker to "one hour from now" rounded to the next 5 minutes,
+  // unless a schedule already exists — then prefill it for editing.
+  const defaultIso = isScheduled
+    ? toLocalDatetimeInput(new Date(leagueData.draft_scheduled_at))
+    : toLocalDatetimeInput(roundUpToNext5Minutes(new Date(Date.now() + 60 * 60 * 1000)));
+
+  return '<div class="draft-time-modal">' +
+    '<div class="draft-time-modal__header">' +
+      '<h3 class="draft-time-modal__title">Set Draft Time</h3>' +
+      '<button class="draft-time-modal__close" id="draftTimeModalClose" aria-label="Close">&times;</button>' +
+    '</div>' +
+    '<div class="draft-time-modal__body">' +
+      currentLabel +
+      '<div class="draft-time-modal__option">' +
+        '<p class="draft-time-modal__option-label">Start the draft now</p>' +
+        '<button class="btn-primary" id="draftTimeStartNowBtn">Start Now</button>' +
+      '</div>' +
+      '<div class="draft-time-modal__divider"><span>or</span></div>' +
+      '<div class="draft-time-modal__option">' +
+        '<p class="draft-time-modal__option-label">Schedule for later</p>' +
+        '<input type="datetime-local" class="draft-time-modal__input" id="draftTimeInput" value="' + defaultIso + '">' +
+        '<p class="draft-time-modal__hint">Time is in your local timezone.</p>' +
+        '<button class="btn-primary" id="draftTimeScheduleBtn">' + (isScheduled ? 'Update Schedule' : 'Schedule Draft') + '</button>' +
+      '</div>' +
+    '</div>' +
+    '<div class="draft-time-modal__actions">' +
+      '<button class="btn-secondary" id="draftTimeCancelBtn">Cancel</button>' +
+    '</div>' +
+  '</div>';
+}
+
+function openDraftTimeModal() {
+  if (!leagueData.draft_order) {
+    alert('Set the draft order before scheduling the draft.');
+    return;
+  }
+
+  const overlay = document.createElement('div');
+  overlay.className = 'draft-time-modal-overlay';
+  overlay.id        = 'draftTimeModalOverlay';
+  overlay.innerHTML = buildDraftTimeModalHtml();
+  document.body.appendChild(overlay);
+
+  overlay.addEventListener('click', function(e) {
+    if (e.target === overlay) closeDraftTimeModal();
+  });
+
+  document.getElementById('draftTimeModalClose').addEventListener('click', closeDraftTimeModal);
+  document.getElementById('draftTimeCancelBtn').addEventListener('click', closeDraftTimeModal);
+  document.getElementById('draftTimeStartNowBtn').addEventListener('click', startDraftNow);
+  document.getElementById('draftTimeScheduleBtn').addEventListener('click', scheduleDraft);
+
+  const clearBtn = document.getElementById('draftTimeClearBtn');
+  if (clearBtn) clearBtn.addEventListener('click', clearDraftSchedule);
+}
+
+function closeDraftTimeModal() {
+  const overlay = document.getElementById('draftTimeModalOverlay');
+  if (overlay) overlay.remove();
+}
+
+// Immediate start. Same DB write as the original startDraft did, plus we
+// clear any pending schedule so the cron job won't fight us. Redirects
+// the commissioner to the draft room; other members follow via Realtime.
+async function startDraftNow() {
+  if (!confirm('Start the draft now? This cannot be undone.')) return;
+
+  const btn = document.getElementById('draftTimeStartNowBtn');
+  btn.disabled    = true;
   btn.textContent = 'Starting...';
 
   const { error } = await supabaseClient
     .from('leagues')
-    .update({ draft_started: true })
+    .update({
+      draft_started:      true,
+      draft_started_at:   new Date().toISOString(),
+      draft_scheduled_at: null
+    })
     .eq('id', leagueIdRef);
 
   if (error) {
     alert('Error starting draft: ' + error.message);
-    btn.disabled = false;
-    btn.textContent = 'Start Draft';
+    btn.disabled    = false;
+    btn.textContent = 'Start Now';
     return;
   }
 
   window.location.href = 'draft.html?id=' + leagueIdRef;
+}
+
+// Save a future draft time. Validates that the chosen time is in the
+// future (a stale picker value can produce a past time once the user
+// gets around to clicking).
+async function scheduleDraft() {
+  const input = document.getElementById('draftTimeInput');
+  if (!input || !input.value) {
+    alert('Pick a date and time first.');
+    return;
+  }
+
+  // datetime-local values have no tz info; new Date(value) interprets
+  // them in the browser's local tz, which is exactly what we want.
+  const when = new Date(input.value);
+  if (isNaN(when.getTime())) {
+    alert('That date/time is invalid.');
+    return;
+  }
+  if (when.getTime() <= Date.now() + 60 * 1000) {
+    alert('Pick a time at least a minute in the future. To start the draft right away, use Start Now.');
+    return;
+  }
+
+  const btn = document.getElementById('draftTimeScheduleBtn');
+  const originalLabel = btn.textContent;
+  btn.disabled    = true;
+  btn.textContent = 'Saving...';
+
+  const { error } = await supabaseClient
+    .from('leagues')
+    .update({ draft_scheduled_at: when.toISOString() })
+    .eq('id', leagueIdRef);
+
+  if (error) {
+    alert('Error scheduling draft: ' + error.message);
+    btn.disabled    = false;
+    btn.textContent = originalLabel;
+    return;
+  }
+
+  leagueData.draft_scheduled_at = when.toISOString();
+  closeDraftTimeModal();
+  renderDraftSection();
+}
+
+// Removes a pending schedule. Doesn't start the draft.
+async function clearDraftSchedule() {
+  if (!confirm('Clear the scheduled draft time?')) return;
+
+  const btn = document.getElementById('draftTimeClearBtn');
+  btn.disabled    = true;
+  btn.textContent = 'Clearing...';
+
+  const { error } = await supabaseClient
+    .from('leagues')
+    .update({ draft_scheduled_at: null })
+    .eq('id', leagueIdRef);
+
+  if (error) {
+    alert('Error clearing schedule: ' + error.message);
+    btn.disabled    = false;
+    btn.textContent = 'Clear schedule';
+    return;
+  }
+
+  leagueData.draft_scheduled_at = null;
+  closeDraftTimeModal();
+  renderDraftSection();
+}
+
+// ========================================================================
+// SCHEDULED DRAFT COUNTDOWN
+// Live "Starts in Xd Xh Xm Xs" timer rendered next to the absolute time.
+// Updates every second; cleared whenever renderDraftSection() runs again.
+// ========================================================================
+
+let draftCountdownInterval = null;
+
+function startDraftCountdown() {
+  stopDraftCountdown();
+  draftCountdownInterval = setInterval(function() {
+    const el = document.getElementById('draftScheduleCountdown');
+    if (!el) {
+      // Element was removed (page navigated, section re-rendered without
+      // a schedule). Defensive cleanup.
+      stopDraftCountdown();
+      return;
+    }
+    el.textContent = formatCountdown(leagueData.draft_scheduled_at);
+  }, 1000);
+}
+
+function stopDraftCountdown() {
+  if (draftCountdownInterval) {
+    clearInterval(draftCountdownInterval);
+    draftCountdownInterval = null;
+  }
+}
+
+// Returns a "Mon, Apr 28 at 7:30 PM" style string in the viewer's local tz.
+function formatScheduledLocal(iso) {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const datePart = d.toLocaleDateString(undefined, {
+    weekday: 'short', month: 'short', day: 'numeric'
+  });
+  const timePart = d.toLocaleTimeString(undefined, {
+    hour: 'numeric', minute: '2-digit'
+  });
+  return datePart + ' at ' + timePart;
+}
+
+// Returns "Starts in 1d 2h 3m 4s" / "Starts in 4m 12s" / "Starting..."
+function formatCountdown(iso) {
+  const target = new Date(iso).getTime();
+  const diffMs = target - Date.now();
+  if (diffMs <= 0) return 'Starting...';
+
+  const totalSec = Math.floor(diffMs / 1000);
+  const days = Math.floor(totalSec / 86400);
+  const hrs  = Math.floor((totalSec % 86400) / 3600);
+  const mins = Math.floor((totalSec % 3600) / 60);
+  const secs = totalSec % 60;
+
+  // Drop higher units when they're zero so short countdowns don't look
+  // cluttered ("Starts in 12s" beats "Starts in 0d 0h 0m 12s").
+  let parts = [];
+  if (days > 0)               parts.push(days + 'd');
+  if (days > 0 || hrs  > 0)   parts.push(hrs  + 'h');
+  if (days > 0 || hrs  > 0 || mins > 0) parts.push(mins + 'm');
+  parts.push(secs + 's');
+  return 'Starts in ' + parts.join(' ');
+}
+
+// Rounds a Date up to the next 5-minute mark. Used to seed a sane
+// default in the picker.
+function roundUpToNext5Minutes(d) {
+  const ms = 5 * 60 * 1000;
+  return new Date(Math.ceil(d.getTime() / ms) * ms);
+}
+
+// Converts a Date into the value format <input type="datetime-local">
+// expects: "YYYY-MM-DDTHH:mm" in local time. We can't use toISOString()
+// because that's UTC; the input would jump tz.
+function toLocalDatetimeInput(d) {
+  const pad = function(n) { return n < 10 ? '0' + n : '' + n; };
+  return d.getFullYear() + '-' +
+    pad(d.getMonth() + 1) + '-' +
+    pad(d.getDate()) + 'T' +
+    pad(d.getHours()) + ':' +
+    pad(d.getMinutes());
 }
 
 // ========================================================================
@@ -500,14 +900,22 @@ async function loadFreeAgents() {
     if (!latestDropByFighter[d.fighter_id]) latestDropByFighter[d.fighter_id] = d.dropped_at;
   });
 
+  // Pre-draft, free agency is closed entirely — surface this directly on
+  // the Top Free Agents widget so users don't get bounced into the waivers
+  // page just to see the closed-banner message.
+  const fasClosed = !leagueData.draft_completed;
+
   function buttonLabel(fighter) {
+    if (fasClosed) return 'Add';
     if (inClaimWindow) return 'Claim';
     var droppedAt = latestDropByFighter[fighter.id];
     if (droppedAt && typeof isOnRollingWaiver === 'function' &&
         isOnRollingWaiver(new Date(droppedAt), now)) {
       return 'Claim';
     }
-    return 'Add';
+    // Post-draft FA still routes through waivers as a claim (matches
+    // the waivers page logic — see decideAddMode in waivers.js).
+    return 'Claim';
   }
 
   // Show top 5 available fighters
@@ -532,6 +940,7 @@ async function loadFreeAgents() {
         '</div>' +
         '<span class="free-agent-row__ovr">' + badge + '</span>' +
         '<button class="btn-secondary free-agent-row__add" ' +
+          (fasClosed ? 'disabled title="Available after the draft completes" ' : '') +
           'data-fighter-id="'   + fighter.id                    + '" ' +
           'data-fighter-name="' + escapeHtml(fighter.name)      + '">' +
           escapeHtml(label) +
@@ -589,6 +998,36 @@ async function refreshPerformerPhotos() {
     if (url) img.src = url;
     // No url? Leave the img blank — onerror will hide it as before.
   });
+}
+
+// ========================================================================
+// CHAT UNREAD BADGE
+// Queries league_messages for the count of rows newer than the viewer's
+// chat_last_seen_at. We use { count: 'exact', head: true } so Postgres
+// returns just the number — no payload, no row scan beyond the count.
+// Caps at "9+" so the badge stays visually compact.
+// ========================================================================
+async function refreshChatUnreadBadge(leagueId, lastSeenAtIso) {
+  var badge = document.getElementById('chatUnreadBadge');
+  if (!badge) return;
+
+  // null lastSeenAt means "never opened chat" — count every message in
+  // the league. We pass a sentinel ISO from the epoch so the gt() filter
+  // works either way without an OR branch.
+  var lastSeen = lastSeenAtIso || '1970-01-01T00:00:00Z';
+
+  var { count, error } = await supabaseClient
+    .from('league_messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('league_id', leagueId)
+    .gt('created_at', lastSeen);
+
+  if (error || count == null || count === 0) {
+    badge.hidden = true;
+    return;
+  }
+  badge.textContent = count > 9 ? '9+' : String(count);
+  badge.hidden = false;
 }
 
 initLeague();

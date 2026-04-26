@@ -161,6 +161,27 @@ async function showFighterModal(fighterId) {
     });
   }
 
+  // Wire the Queue toggle button (only present on the draft page).
+  // Async because addToQueue / removeFromQueue both await a Supabase call;
+  // we update the button label after the call resolves so the visible
+  // state matches the actual queue.
+  var queueBtn = document.getElementById('fighterModalQueueBtn');
+  if (queueBtn) {
+    queueBtn.addEventListener('click', async function() {
+      var id = queueBtn.getAttribute('data-queue-fighter');
+      queueBtn.disabled = true;
+      if (window.isQueued(id)) {
+        await window.removeFromQueue(id);
+      } else {
+        await window.addToQueue(id);
+      }
+      queueBtn.disabled = false;
+      var nowQueued = window.isQueued(id);
+      queueBtn.innerHTML = nowQueued ? 'Queued &#x2715;' : '+ Queue';
+      queueBtn.classList.toggle('fighter-modal__queue-btn--queued', nowQueued);
+    });
+  }
+
   // Wire click + keyboard handlers on every Pts cell so the per-fight
   // score breakdown row beneath each fight can expand/collapse. Scoped
   // to the fighter-modal node so it only finds toggles inside the modal.
@@ -311,27 +332,46 @@ function buildFighterModalHtml(fighter, fights, fighterId, opponentMap, tradeCtx
             var age = _modalAgeFromDob(fighter.date_of_birth);
             return '<p class="fighter-modal__country">Age ' + (age != null ? age : '[age]') + '</p>';
           })() +
-          // CTAs — at most one shows at a time.
+          // CTAs — multiple may show at once.
           //
           //   Draft (during active draft, only on the draft page where
           //   window.makePick is exposed): visible for unowned fighters.
           //
+          //   Queue toggle (pre-draft and during active draft, only on
+          //   the draft page where window.addToQueue is exposed):
+          //   visible for unowned fighters until the draft completes.
+          //
           //   Propose Trade (after draft completes): visible for fighters
           //   on someone's roster.
           (function() {
+            var html = '';
             var canDraft = tradeCtx.draftActive
                         && !tradeCtx.ownerMemberId
                         && typeof window.makePick === 'function';
             if (canDraft) {
-              return '<button class="btn-primary fighter-modal__draft-btn" ' +
-                       'id="fighterModalDraftBtn" data-draft-fighter="' +
-                       _mEsc(fighterId) + '">Draft Fighter</button>';
+              html += '<button class="btn-primary fighter-modal__draft-btn" ' +
+                        'id="fighterModalDraftBtn" data-draft-fighter="' +
+                        _mEsc(fighterId) + '">Draft Fighter</button>';
+            }
+            var canQueue = !tradeCtx.ownerMemberId
+                        && !tradeCtx.draftCompleted
+                        && typeof window.addToQueue === 'function'
+                        && typeof window.isQueued === 'function';
+            if (canQueue) {
+              var alreadyQueued = window.isQueued(fighterId);
+              var label = alreadyQueued ? 'Queued &#x2715;' : '+ Queue';
+              var queuedClass = alreadyQueued ? ' fighter-modal__queue-btn--queued' : '';
+              html += '<button class="btn-secondary fighter-modal__queue-btn' + queuedClass + '" ' +
+                        'id="fighterModalQueueBtn" data-queue-fighter="' +
+                        _mEsc(fighterId) + '">' + label + '</button>';
             }
             if (tradeCtx.ownerMemberId && tradeCtx.draftCompleted) {
-              return '<button class="btn-secondary fighter-modal__trade-btn" ' +
-                       'id="fighterModalTradeBtn">Propose Trade</button>';
+              html += '<button class="btn-secondary fighter-modal__trade-btn" ' +
+                        'id="fighterModalTradeBtn">Propose Trade</button>';
             }
-            return '';
+            // Wrap any CTAs in a flex row so multiple buttons sit side-by-side
+            // instead of stacking inside the hero's flex column.
+            return html ? '<div class="fighter-modal__cta-row">' + html + '</div>' : '';
           })() +
         '</div>' +
       '</div>' +

@@ -183,6 +183,12 @@ async function initCreateLeague() {
     const maxManagers      = parseInt(document.getElementById('maxManagers').value, 10) || 8;
     const rosterSize       = parseInt(document.getElementById('rosterSize').value, 10) || 20;
     const startersPerEvent = parseInt(document.getElementById('startersPerEvent').value, 10) || 3;
+    // Pick timer — clamp to the same 30–600 range the DB enforces, falling
+    // back to the PRD default if the field is somehow blank or outside range.
+    let pickTimerSeconds   = parseInt(document.getElementById('pickTimer').value, 10);
+    if (isNaN(pickTimerSeconds) || pickTimerSeconds < 30 || pickTimerSeconds > 600) {
+      pickTimerSeconds = 90;
+    }
     const scoringConfig    = readScoringConfig();
     const submitBtn        = document.getElementById('submitBtn');
 
@@ -220,6 +226,7 @@ async function initCreateLeague() {
           max_managers:       maxManagers,
           roster_size:        rosterSize,
           starters_per_event: startersPerEvent,
+          pick_timer_seconds: pickTimerSeconds,
           scoring_config:     scoringConfig
         };
       };

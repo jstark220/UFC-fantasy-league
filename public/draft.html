@@ -33,58 +33,36 @@
       </div>
     </nav>
 
-    <!-- Whose-turn strip + pick counter. Stays compact so the panels get room. -->
+    <!-- Whose-turn strip + pick counter + countdown timer. Stays compact
+         so the panels get room. The timer is anchored server-side via the
+         most recent pick's created_at; draft.js handles the countdown. -->
     <div class="draft-status">
       <div class="draft-status__inner">
         <p class="draft-status__turn" id="turnInfo">Loading draft...</p>
-        <p class="draft-status__counter" id="pickCounter"></p>
+        <div class="draft-status__right">
+          <div class="draft-timer" id="draftTimer" hidden>
+            <span class="draft-timer__label">Pick clock</span>
+            <span class="draft-timer__value" id="draftTimerValue">--</span>
+          </div>
+          <p class="draft-status__counter" id="pickCounter"></p>
+        </div>
       </div>
     </div>
 
     <!-- Mobile/narrow tab bar — switches which panel is visible.
-         On wide screens all three panels render side-by-side and this bar hides. -->
+         On wide screens, the layout is stacked (board top, panels bottom)
+         and this bar hides. -->
     <div class="waiver-tabs draft-tabs" id="draftTabs">
+      <button class="waiver-tab waiver-tab--active" data-panel="panel-board">Board</button>
       <button class="waiver-tab" data-panel="panel-fighters">Fighters</button>
-      <button class="waiver-tab waiver-tab--active" data-panel="panel-board">Draft Board</button>
       <button class="waiver-tab" data-panel="panel-roster">My Roster</button>
-      <button class="waiver-tab" data-panel="split">Split</button>
     </div>
 
-    <!-- Three-panel draft room; each panel scrolls independently. -->
-    <div class="draft-room">
+    <!-- Stacked draft room: board on top (full width), fighters + queue/roster
+         side-by-side beneath. Each section scrolls independently. -->
+    <div class="draft-room draft-room--stacked">
 
-      <!-- LEFT: available fighter pool -->
-      <div class="draft-panel panel-fighters">
-        <div class="draft-panel__header draft-panel__header--with-action">
-          <p class="section-label">Available Fighters</p>
-          <button class="btn-ghost draft-view-all-btn" id="viewAllBtn">View All →</button>
-        </div>
-        <div class="draft-panel__controls">
-          <input type="text" id="fighterSearch" class="waiver-search" placeholder="Search fighters...">
-          <select id="sortBy" class="waiver-filter">
-            <option value="rank">Sort: Rank</option>
-            <option value="record">Sort: Record</option>
-            <option value="points_year">Sort: Points (Year)</option>
-            <option value="points_proj">Sort: Projected Pts</option>
-          </select>
-          <select id="divisionFilter" class="waiver-filter">
-            <option value="all">All Divisions</option>
-          </select>
-          <select id="statusFilter" class="waiver-filter">
-            <option value="all">All Fighters</option>
-            <option value="undefeated">Undefeated</option>
-            <option value="top5">Top 5</option>
-            <option value="top10">Top 10</option>
-            <option value="unranked">Unranked</option>
-          </select>
-        </div>
-        <div class="draft-panel__body" id="fighterPool"></div>
-      </div>
-
-      <!-- Resize handle: fighters ↔ board -->
-      <div class="draft-resize-handle" id="resizeLeft" aria-hidden="true"></div>
-
-      <!-- CENTER: snake draft board (default tab on narrow screens) -->
+      <!-- TOP: snake draft board (full width) -->
       <div class="draft-panel panel-board waiver-tab--active">
         <div class="draft-panel__header">
           <p class="section-label">Draft Board</p>
@@ -92,18 +70,70 @@
         <div class="draft-panel__body" id="draftBoard"></div>
       </div>
 
-      <!-- Resize handle: board ↔ roster -->
-      <div class="draft-resize-handle" id="resizeRight" aria-hidden="true"></div>
+      <!-- Resize handle: board ↕ bottom row. Lets the commish (or anyone)
+           drag the divider up/down to make the board taller or shorter
+           and give the panel section more or less room. -->
+      <div class="draft-resize-handle draft-resize-handle--horizontal" id="resizeBoard" aria-hidden="true"></div>
 
-      <!-- RIGHT: your roster slot progress + drafted fighters -->
-      <div class="draft-panel panel-roster">
-        <div class="draft-panel__header">
-          <p class="section-label">
-            My Roster
-            <span class="section-label__count">(<span id="myPickCount">0</span> / 20)</span>
-          </p>
+      <!-- BOTTOM: fighter pool + queue/roster, with a resize handle between -->
+      <div class="draft-bottom">
+
+        <!-- LEFT: available fighter pool -->
+        <div class="draft-panel panel-fighters">
+          <div class="draft-panel__header draft-panel__header--with-action">
+            <p class="section-label">Available Fighters</p>
+            <button class="btn-ghost draft-view-all-btn" id="viewAllBtn">View All →</button>
+          </div>
+          <div class="draft-panel__controls">
+            <input type="text" id="fighterSearch" class="waiver-search" placeholder="Search fighters...">
+            <select id="sortBy" class="waiver-filter">
+              <option value="rank">Sort: Rank</option>
+              <option value="record">Sort: Record</option>
+              <option value="points_year">Sort: Points (Year)</option>
+              <option value="points_proj">Sort: Projected Pts</option>
+            </select>
+            <select id="divisionFilter" class="waiver-filter">
+              <option value="all">All Divisions</option>
+            </select>
+            <select id="statusFilter" class="waiver-filter">
+              <option value="all">All Fighters</option>
+              <option value="undefeated">Undefeated</option>
+              <option value="top5">Top 5</option>
+              <option value="top10">Top 10</option>
+              <option value="unranked">Unranked</option>
+            </select>
+          </div>
+          <div class="draft-panel__body" id="fighterPool"></div>
         </div>
-        <div class="draft-panel__body" id="myRoster"></div>
+
+        <!-- Resize handle: fighters ↔ roster -->
+        <div class="draft-resize-handle" id="resizeMid" aria-hidden="true"></div>
+
+        <!-- RIGHT: queue + your roster. Both live in the same panel because
+             they're both "you" — what you've drafted and what you intend to
+             draft next. The queue body sits at the top so it gets attention
+             during the draft; the roster grows beneath it. -->
+        <div class="draft-panel panel-roster">
+
+          <div class="draft-panel__header draft-panel__header--with-action">
+            <p class="section-label">
+              My Queue
+              <span class="section-label__count">(<span id="queueCount">0</span>)</span>
+            </p>
+            <span class="draft-panel__hint" id="queueHint">Empty</span>
+          </div>
+          <div class="draft-panel__body draft-panel__body--queue" id="queueList"></div>
+
+          <div class="draft-panel__header">
+            <p class="section-label">
+              My Roster
+              <span class="section-label__count">(<span id="myPickCount">0</span> / 20)</span>
+            </p>
+          </div>
+          <div class="draft-panel__body" id="myRoster"></div>
+
+        </div>
+
       </div>
 
     </div>
@@ -112,6 +142,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/supabase-config.js"></script>
   <script src="js/auth-guard.js"></script>
+  <script src="js/chat-nav.js"></script>
   <script src="js/scoring.js"></script>
   <script src="js/score-breakdown.js"></script>
   <script src="js/fighter-modal.js"></script>
@@ -125,25 +156,45 @@
       btn.textContent = theme === 'light' ? '☀' : '☾';
     });
 
-    // ---- Drag-to-resize: only active on wide screens (>= 900px) ----
+    // ---- Drag-to-resize handles. Two flavors:
+    //      * vertical handle (between Fighters and Roster) → resizes
+    //        roster width left/right
+    //      * horizontal handle (between Board and bottom row) → resizes
+    //        board height up/down
+    //      Only active on wide screens (>= 900px); on narrow screens the
+    //      panels stack via tabs and both handles are hidden. ----
     document.querySelectorAll('.draft-resize-handle').forEach(function(handle) {
       handle.addEventListener('mousedown', function(e) {
         if (window.innerWidth <= 899) return;
 
-        var isLeft = handle.id === 'resizeLeft';
-        var panel  = document.querySelector(isLeft ? '.panel-fighters' : '.panel-roster');
-        var startX = e.clientX;
-        var startW = panel.getBoundingClientRect().width;
+        var isHorizontal = handle.classList.contains('draft-resize-handle--horizontal');
+        var panel = document.querySelector(isHorizontal ? '.panel-board' : '.panel-roster');
+        var startCoord = isHorizontal ? e.clientY : e.clientX;
+        var startSize  = isHorizontal
+          ? panel.getBoundingClientRect().height
+          : panel.getBoundingClientRect().width;
+        // The room's total inner height bounds the board's max size on the
+        // vertical drag (we leave at least 160px for the bottom row so the
+        // fighter pool stays usable).
+        var room = document.querySelector('.draft-room');
+        var roomSize = room.getBoundingClientRect().height;
 
         handle.classList.add('draft-resize-handle--active');
-        document.body.style.cursor     = 'col-resize';
+        document.body.style.cursor     = isHorizontal ? 'row-resize' : 'col-resize';
         document.body.style.userSelect = 'none';
 
         function onMove(ev) {
-          var delta    = isLeft ? (ev.clientX - startX) : (startX - ev.clientX);
-          var newWidth = Math.max(180, Math.min(600, startW + delta));
-          panel.style.width      = newWidth + 'px';
-          panel.style.flexShrink = '0';
+          if (isHorizontal) {
+            var delta     = ev.clientY - startCoord;
+            var newHeight = Math.max(160, Math.min(roomSize - 200, startSize + delta));
+            panel.style.flex   = '0 0 ' + newHeight + 'px';
+            panel.style.height = newHeight + 'px';
+          } else {
+            var deltaX   = startCoord - ev.clientX;
+            var newWidth = Math.max(240, Math.min(560, startSize + deltaX));
+            panel.style.width      = newWidth + 'px';
+            panel.style.flexShrink = '0';
+          }
         }
         function onUp() {
           handle.classList.remove('draft-resize-handle--active');
@@ -164,26 +215,14 @@
       if (!btn) return;
 
       var panelKey = btn.getAttribute('data-panel');
-      var room     = document.querySelector('.draft-room');
 
       document.querySelectorAll('#draftTabs .waiver-tab').forEach(function(b) {
         b.classList.toggle('waiver-tab--active', b === btn);
       });
 
-      if (panelKey === 'split') {
-        // Side-by-side: fighters + roster, board hidden
-        room.classList.add('draft-room--split');
-        document.querySelectorAll('.draft-panel').forEach(function(p) {
-          var on = p.classList.contains('panel-fighters') ||
-                   p.classList.contains('panel-roster');
-          p.classList.toggle('waiver-tab--active', on);
-        });
-      } else {
-        room.classList.remove('draft-room--split');
-        document.querySelectorAll('.draft-panel').forEach(function(p) {
-          p.classList.toggle('waiver-tab--active', p.classList.contains(panelKey));
-        });
-      }
+      document.querySelectorAll('.draft-panel').forEach(function(p) {
+        p.classList.toggle('waiver-tab--active', p.classList.contains(panelKey));
+      });
     });
   </script>
 

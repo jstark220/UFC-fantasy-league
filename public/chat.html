@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <script src="js/theme.js"></script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="styles/tokens.css">
+  <link rel="stylesheet" href="styles/components.css">
+
+  <title>Chat - Knockdown Fantasy</title>
+</head>
+<body>
+
+  <div class="dashboard-page" id="pageContent" style="display: none;">
+
+    <nav class="top-nav">
+      <a href="index.html" class="top-nav__logo">
+        <span class="kf-red">Knockdown</span> Fantasy
+      </a>
+      <div class="top-nav__links">
+        <a href="#" class="btn-ghost" id="leagueBackLink">← League</a>
+      </div>
+      <div class="top-nav__actions">
+        <button class="btn-theme" onclick="toggleTheme()" aria-label="Toggle theme">☾</button>
+        <button id="globalLogoutBtn" class="btn-ghost" onclick="logOut()">Log out</button>
+      </div>
+    </nav>
+
+    <div class="league-header">
+      <div class="league-header__inner">
+        <h1 class="league-header__name" id="leagueName">Chat</h1>
+      </div>
+    </div>
+
+    <!-- Chat-page-specific layout: fills the remaining viewport so the
+         message list scrolls inside its own frame and the composer stays
+         pinned at the bottom. Two-column on desktop: thread sidebar left,
+         message window right. Stacks on narrow viewports. -->
+    <div class="chat-page">
+
+      <!-- Thread sidebar — League Chat + per-manager DMs. Rendered by
+           chat.js. The active row gets .chat-thread--active. -->
+      <aside class="chat-sidebar" id="chatSidebar"></aside>
+
+      <div class="chat-window">
+
+        <!-- Header bar shows the current thread name (League Chat /
+             DM with Stark 2). chat.js updates the text on thread switch. -->
+        <div class="chat-header" id="chatHeader">
+          <span class="chat-header__title" id="chatHeaderTitle">League Chat</span>
+          <span class="chat-header__sub"   id="chatHeaderSub"></span>
+        </div>
+
+        <!-- Scrolling message list. Empty state and loading state both
+             render into here before the first batch arrives. -->
+        <div id="chatMessages" class="chat-messages" aria-live="polite">
+          <p class="chat-state">Loading chat...</p>
+        </div>
+
+        <!-- Composer — textarea + Send button. Cmd/Ctrl+Enter sends.
+             Placeholder swaps based on active thread. -->
+        <form id="chatForm" class="chat-composer" autocomplete="off">
+          <textarea
+            id="chatInput"
+            class="chat-composer__input"
+            rows="1"
+            maxlength="2000"
+            placeholder="Send a message to the league..."
+            aria-label="Message"></textarea>
+          <button type="submit" class="btn-primary chat-composer__send" id="chatSendBtn">Send</button>
+        </form>
+
+      </div>
+    </div>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/auth-guard.js"></script>
+  <script src="js/chat.js"></script>
+
+  <script>
+    document.querySelectorAll('.btn-theme').forEach(function(btn) {
+      var theme = document.documentElement.getAttribute('data-theme');
+      btn.textContent = theme === 'light' ? '☀' : '☾';
+    });
+  </script>
+
+</body>
+</html>

@@ -965,6 +965,353 @@ body {
   flex-shrink: 0;
 }
 
+/* ========================================================================
+   DRAFT ORDER MODAL
+   Commissioner-only modal for manually reordering managers (up/down) or
+   randomizing. Reuses fadeIn/slideUp keyframes defined later in this file.
+   ======================================================================== */
+.draft-order-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  padding: var(--space-4);
+  animation: fadeIn 0.15s ease;
+}
+
+.draft-order-modal {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 420px;
+  overflow: hidden;
+  animation: slideUp 0.2s ease;
+}
+
+.draft-order-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.draft-order-modal__title {
+  font-family: var(--font-display);
+  font-size: var(--text-h3);
+  color: var(--accent-gold);
+  letter-spacing: 0.04em;
+  margin: 0;
+}
+
+.draft-order-modal__close {
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+  transition: color 0.15s ease;
+}
+
+.draft-order-modal__close:hover { color: var(--text-primary); }
+
+.draft-order-modal__body {
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.draft-order-modal__help {
+  font-size: var(--text-body-sm);
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.draft-order-edit {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.draft-order-edit__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 10px var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--bg-tertiary);
+}
+
+.draft-order-edit__pos {
+  font-family: var(--font-display);
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  width: 24px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.draft-order-edit__name {
+  flex: 1;
+  font-size: var(--text-body-sm);
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.draft-order-edit__arrow {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.95rem;
+  line-height: 1;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+  flex-shrink: 0;
+}
+
+.draft-order-edit__arrow:hover:not(:disabled) {
+  border-color: var(--accent-gold);
+  color: var(--accent-gold);
+}
+
+.draft-order-edit__arrow:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.draft-order-modal__actions {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+  flex-wrap: wrap;
+}
+
+.draft-order-modal__actions-right {
+  display: flex;
+  gap: var(--space-3);
+  margin-left: auto;
+}
+
+/* ========================================================================
+   SCHEDULED DRAFT DISPLAY
+   Inline block on the league page when a draft has been scheduled but
+   hasn't started yet. Visible to all members.
+   ======================================================================== */
+.draft-schedule {
+  margin: var(--space-4) 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-tertiary);
+}
+
+.draft-schedule__label {
+  font-size: var(--text-caption);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-tertiary);
+  margin: 0 0 4px 0;
+  font-weight: 600;
+}
+
+.draft-schedule__when {
+  font-family: var(--font-display);
+  font-size: var(--text-h4, 1.05rem);
+  color: var(--text-primary);
+  margin: 0 0 2px 0;
+}
+
+.draft-schedule__countdown {
+  font-size: var(--text-body-sm);
+  color: var(--accent-gold);
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.draft-schedule__enter {
+  display: inline-block;
+  margin-top: var(--space-3);
+}
+
+
+/* ========================================================================
+   DRAFT TIME MODAL
+   Two-path modal: Start Now or schedule for a future time. Reuses the
+   same fadeIn/slideUp animations as the draft order modal.
+   ======================================================================== */
+.draft-time-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  padding: var(--space-4);
+  animation: fadeIn 0.15s ease;
+}
+
+.draft-time-modal {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 440px;
+  overflow: hidden;
+  animation: slideUp 0.2s ease;
+}
+
+.draft-time-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.draft-time-modal__title {
+  font-family: var(--font-display);
+  font-size: var(--text-h3);
+  color: var(--accent-gold);
+  letter-spacing: 0.04em;
+  margin: 0;
+}
+
+.draft-time-modal__close {
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+  transition: color 0.15s ease;
+}
+
+.draft-time-modal__close:hover { color: var(--text-primary); }
+
+.draft-time-modal__body {
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.draft-time-modal__current {
+  padding: var(--space-3);
+  border: 1px solid var(--accent-gold);
+  border-radius: 6px;
+  background: rgba(212, 168, 75, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+
+.draft-time-modal__current-label {
+  font-size: var(--text-caption);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-tertiary);
+  margin: 0;
+  font-weight: 600;
+}
+
+.draft-time-modal__current-when {
+  font-family: var(--font-display);
+  font-size: var(--text-body);
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.draft-time-modal__option {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--bg-tertiary);
+}
+
+.draft-time-modal__option-label {
+  font-size: var(--text-body-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.draft-time-modal__hint {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  margin: 0;
+}
+
+.draft-time-modal__input {
+  width: 100%;
+  padding: 10px var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: var(--text-body-sm);
+  font-family: inherit;
+  /* Make the native picker look at home in the dark theme */
+  color-scheme: dark;
+}
+
+.draft-time-modal__input:focus {
+  outline: none;
+  border-color: var(--accent-gold);
+}
+
+.draft-time-modal__divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--text-tertiary);
+  font-size: var(--text-caption);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.draft-time-modal__divider::before,
+.draft-time-modal__divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border-subtle);
+}
+
+.draft-time-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+}
+
 /* Members table */
 .league-table {
   width: 100%;
@@ -4208,12 +4555,28 @@ body {
   margin: 0;
 }
 
-.fighter-modal__trade-btn,
-.fighter-modal__draft-btn {
+/* Wrapper around the modal's CTA buttons. Hero-info is a flex column, so
+   without this wrapper multiple buttons would stack vertically; the row
+   keeps Draft / Queue / Trade side-by-side and wraps if the modal is narrow. */
+.fighter-modal__cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
   margin-top: var(--space-3);
+  align-self: flex-start;
+}
+
+.fighter-modal__trade-btn,
+.fighter-modal__draft-btn,
+.fighter-modal__queue-btn {
   padding: 8px 18px;
   font-size: var(--text-body-sm);
-  align-self: flex-start;
+}
+
+/* Queued state: dimmer to read as "this is already in the queue, click
+   again to remove" rather than as a primary call to action. */
+.fighter-modal__queue-btn--queued {
+  opacity: 0.7;
 }
 
 /* ---- Career stat tiles ---- */
@@ -5184,6 +5547,182 @@ body {
 .draft-status__mine     { color: var(--accent-crimson); }
 .draft-status__team     { color: var(--accent-gold); }
 .draft-status__complete { color: var(--accent-gold); }
+.draft-status__pre      { color: var(--accent-crimson); font-variant-numeric: tabular-nums; }
+
+/* Right-side cluster: pick timer + counter */
+.draft-status__right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+/* Pick clock — sits next to the pick counter on the right side of the
+   draft status bar. Color states (low/critical/expired) tighten the
+   visual urgency as the clock approaches zero. */
+.draft-timer {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(74, 222, 128, 0.12);
+  border: 1px solid rgba(74, 222, 128, 0.4);
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+.draft-timer__label {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #4ade80;
+}
+.draft-timer__value {
+  font-family: var(--font-display);
+  font-size: 18px;
+  letter-spacing: 0.04em;
+  color: #4ade80;
+  font-variant-numeric: tabular-nums;
+  min-width: 42px;
+  text-align: right;
+}
+
+/* < 30s — gold warning */
+.draft-timer--low {
+  background: var(--accent-gold-subtle);
+  border-color: rgba(212, 168, 75, 0.5);
+}
+.draft-timer--low .draft-timer__label,
+.draft-timer--low .draft-timer__value {
+  color: var(--accent-gold);
+}
+
+/* < 10s — crimson, slow pulse to draw the eye */
+.draft-timer--critical {
+  background: rgba(193, 59, 46, 0.15);
+  border-color: rgba(193, 59, 46, 0.6);
+  animation: draft-timer-pulse 1s ease-in-out infinite;
+}
+.draft-timer--critical .draft-timer__label,
+.draft-timer--critical .draft-timer__value {
+  color: var(--accent-crimson);
+}
+
+/* 0:00 — solid crimson, no animation. The pick is "expired" but still open
+   in v1 since we don't auto-pick yet. */
+.draft-timer--expired {
+  background: rgba(193, 59, 46, 0.22);
+  border-color: var(--accent-crimson);
+}
+.draft-timer--expired .draft-timer__label,
+.draft-timer--expired .draft-timer__value {
+  color: var(--accent-crimson);
+}
+
+@keyframes draft-timer-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(193, 59, 46, 0.4); }
+  50%      { box-shadow: 0 0 0 6px rgba(193, 59, 46, 0); }
+}
+
+/* ============================================================
+   DRAFT QUEUE
+   Personal pre-draft list rendered into the right panel of the
+   draft room above "My Roster". Each row gets reorder arrows
+   and a remove button; the current top of queue gets a "Pick"
+   shortcut when it's the user's turn.
+   ============================================================ */
+
+/* Tighten the queue body so 5–6 rows fit without scrolling and
+   the roster section beneath it stays visible too. */
+.draft-panel__body--queue {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+/* Subtle hint text on the queue header (right side) */
+.draft-panel__hint {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-tertiary);
+}
+
+/* Queue toggle button on fighter pool rows. Different from the Pick
+   button — this is always present, neutral by default, gold-tinted
+   when the fighter is already queued. */
+.draft-queue-btn {
+  font-size: 10px !important;
+  letter-spacing: 0.04em;
+  padding: 4px 8px !important;
+  white-space: nowrap;
+}
+.draft-queue-btn--queued {
+  color: var(--accent-gold);
+  border-color: rgba(212, 168, 75, 0.4);
+}
+
+/* One queue row — visually similar to other lineup rows but with the
+   position number on the left and reorder/remove controls on the right. */
+.draft-queue-row {
+  position: relative;
+}
+.draft-queue-row__pos {
+  font-family: var(--font-display);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+  min-width: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.draft-queue-row__controls {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-right: var(--space-1);
+}
+.draft-queue-row__arrow {
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: 3px;
+  color: var(--text-tertiary);
+  font-size: 8px;
+  padding: 2px 6px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease;
+}
+.draft-queue-row__arrow:hover:not(:disabled) {
+  color: var(--accent-gold);
+  border-color: rgba(212, 168, 75, 0.4);
+}
+.draft-queue-row__arrow:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.draft-queue-row__remove {
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  color: var(--text-tertiary);
+  font-size: 14px;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-left: var(--space-2);
+  transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+}
+.draft-queue-row__remove:hover {
+  color: var(--accent-crimson);
+  border-color: rgba(193, 59, 46, 0.4);
+  background: rgba(193, 59, 46, 0.08);
+}
 
 /* Tab bar — only visible on narrow screens (overrides .waiver-tabs default) */
 .draft-tabs {
@@ -5193,8 +5732,9 @@ body {
   margin-bottom: 0;
 }
 
-/* Three-panel room. Using an explicit calc'd height on the room (rather
-   than relying on flex:1 stretch from .draft-page) so that the panels
+/* Stacked draft room: board on top (full width), fighters + queue/roster
+   side-by-side beneath. We keep an explicit calc'd height on the room
+   (rather than relying on flex:1 stretch from .draft-page) so the panels
    inside have a definite height to work against. The flex:1 chain was
    inconsistent across browsers when paired with min-height: 0 and
    overflow: hidden — the grid 1fr body row wouldn't always pick up a
@@ -5202,6 +5742,27 @@ body {
 .draft-room {
   display: flex;
   height: calc(100dvh - var(--nav-height) - 60px); /* 60px ≈ status strip */
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Stacked variant: board on top, bottom row beneath */
+.draft-room--stacked {
+  flex-direction: column;
+}
+
+/* Top: board fills full width and takes about half the room. The
+   horizontal resize handle below provides the visual divider, so the
+   board itself doesn't need a border-bottom. */
+.draft-room--stacked .panel-board {
+  flex: 0 0 50%;
+  width: 100%;
+}
+
+/* Bottom row: fighters | resize handle | roster */
+.draft-bottom {
+  flex: 1 1 auto;
+  display: flex;
   min-height: 0;
   overflow: hidden;
 }
@@ -5226,9 +5787,10 @@ body {
   background: var(--bg-primary);
 }
 
-.panel-fighters { width: 320px; flex-shrink: 0; border-right: 1px solid var(--border-subtle); }
-.panel-board    { flex: 1; }
-.panel-roster   { width: 320px; flex-shrink: 0; border-left:  1px solid var(--border-subtle); }
+/* In the stacked layout the roster gets a fixed width on the right; the
+   fighter pool flexes to fill the rest of the bottom row. */
+.draft-bottom .panel-fighters { flex: 1 1 auto; }
+.draft-bottom .panel-roster   { flex: 0 0 360px; border-left: 1px solid var(--border-subtle); }
 
 .draft-panel__header {
   padding: var(--space-4) var(--space-4) var(--space-3);
@@ -5860,18 +6422,28 @@ label .form-label__hint {
 }
 
 .draft-panel__controls {
+  /* Two rows: search input on top (full width), three dropdowns below
+     sharing the row equally. The 1fr 1fr 1fr template applies to the
+     filters; the search spans all three columns via grid-column. */
   display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
 }
+.draft-panel__controls .waiver-search {
+  grid-column: 1 / -1;
+}
 /* Override the row-sized flex defaults on .waiver-search / .waiver-filter
-   so they sit at their natural input height in this stacked context. */
+   so they sit at their natural input height in this stacked context, and
+   set min-width: 0 so the selects can shrink to fit narrow panels
+   without overflowing. */
 .draft-panel__controls .waiver-search,
 .draft-panel__controls .waiver-filter {
   flex: 0 0 auto;
   width: 100%;
+  min-width: 0;
 }
 
 .draft-panel__body {
@@ -5904,6 +6476,23 @@ label .form-label__hint {
   background: rgba(193, 59, 46, 0.15);
 }
 
+/* Horizontal variant — the divider between the board and the bottom row.
+   Width swaps to height; the inner 1px line goes from vertical to
+   horizontal so the affordance reads as "drag up/down". */
+.draft-resize-handle--horizontal {
+  width: auto;
+  height: 6px;
+  cursor: row-resize;
+}
+.draft-resize-handle--horizontal::before {
+  top: 50%;
+  left: 0; right: 0;
+  bottom: auto;
+  width: auto;
+  height: 1px;
+  transform: translateY(-50%);
+}
+
 /* Fighter pool rows — extends .lineup-roster-row */
 .draft-pool-row {
   margin-bottom: var(--space-2);
@@ -5915,53 +6504,193 @@ label .form-label__hint {
   opacity: 0.45;
 }
 
-/* Draft board — extends .standings-card / .standings-table */
-.draft-board { overflow-x: auto; }
-.draft-board__table th,
-.draft-board__table td {
-  padding: var(--space-2) var(--space-3);
-  text-align: center;
-  font-size: var(--text-caption);
-  white-space: nowrap;
-}
-.draft-board__round {
-  font-weight: 700;
-  color: var(--text-tertiary);
-  background: var(--bg-secondary);
-}
-.draft-board__col-mine {
-  color: var(--accent-crimson) !important;
-}
-.draft-board__cell--mine    { background: rgba(193, 59, 46, 0.06); }
-.draft-board__cell--made    { color: var(--text-primary); font-weight: 500; }
-.draft-board__cell--current {
-  background: rgba(212, 175, 55, 0.18);
-  color: var(--accent-gold);
-  font-weight: 600;
-}
-.draft-board__cell--empty   { color: var(--text-tertiary); }
-.draft-board__on-clock {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+/* ============================================================
+   DRAFT BOARD (Sleeper-inspired)
+   Each cell is a self-contained card with a photo, name, and
+   division · rank line. Tier classes tint the background subtly
+   so a glance over the board reads as a value chart. The table
+   uses border-spacing (instead of border-collapse) so each cell
+   is visually separate with rounded corners.
+   ============================================================ */
+
+.draft-board {
+  padding: var(--space-3);
+  overflow: auto;
+  height: 100%;
+  background: var(--bg-primary);
 }
 
-/* Inline button for clicked-fighter cells on the draft board — looks like
-   plain text but acts as a button (opens the fighter modal). */
-.draft-board__pick-name {
+.draft-board__table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 6px;
+  table-layout: fixed;
+}
+
+/* Manager headers along the top of the board */
+.draft-board__col-header {
+  padding: 10px var(--space-3);
+  text-align: center;
+  font-size: var(--text-caption);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  /* Sticky so the header row stays visible while the body scrolls
+     vertically — handy when the panel has 20 rounds of draft slots. */
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.draft-board__col-header--mine {
+  color: var(--accent-crimson);
+  background: rgba(193, 59, 46, 0.10);
+}
+
+/* Cells — each one is a card */
+.draft-board__cell {
+  position: relative;
+  padding: 0;
+  height: 76px;
+  min-width: 110px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  vertical-align: middle;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+/* Tier tints (only applied when a pick has been made). Subtle alpha
+   tints so cells stay legible against the background but still read
+   as "this column has high-value picks" at a distance. */
+.draft-board__cell--champion { background: rgba(212, 168, 75, 0.18); }
+.draft-board__cell--top5     { background: rgba(193, 59, 46, 0.14); }
+.draft-board__cell--top15    { background: rgba(74, 157, 111, 0.10); }
+.draft-board__cell--unranked { background: var(--bg-tertiary); }
+
+/* Empty slots are dimmer than picked ones so the eye gets pulled to
+   the activity. */
+.draft-board__cell--empty {
+  background: var(--bg-secondary);
+  opacity: 0.55;
+}
+
+/* Active pick — gold ring + brighter background */
+.draft-board__cell--current {
+  background: rgba(212, 168, 75, 0.22);
+  outline: 2px solid var(--accent-gold);
+  outline-offset: -2px;
+}
+
+/* "Mine" cells get a crimson hairline on the left edge so you can
+   trace your column at a glance. */
+.draft-board__cell--mine::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: var(--accent-crimson);
+  border-top-left-radius: 8px;
+  border-bottom-left-radius: 8px;
+}
+
+/* Lift on hover for clickable cells */
+.draft-board__cell--made:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+
+/* Pick label "1.1" / "2.5" in the top-right corner */
+.draft-board__pick-num {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  font-size: 10px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+
+/* The clickable inner button that fills a made cell */
+.draft-board__pick {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  height: 100%;
+  padding: var(--space-2) var(--space-3);
   background: none;
   border: 0;
-  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  border-radius: 8px;
   font: inherit;
   color: inherit;
-  cursor: pointer;
-  text-align: center;
-  width: 100%;
-  transition: color 0.15s ease;
 }
-.draft-board__pick-name:hover {
-  color: var(--accent-crimson);
-  text-decoration: underline;
+.draft-board__pick:focus-visible {
+  outline: 2px solid var(--accent-gold);
+  outline-offset: -2px;
+}
+
+.draft-board__cell-photo {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--bg-tertiary);
+  flex-shrink: 0;
+}
+.draft-board__cell-photo--placeholder {
+  display: block;
+}
+
+.draft-board__pick-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.draft-board__pick-name {
+  font-size: var(--text-body-sm);
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.01em;
+}
+
+.draft-board__pick-meta {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* "On the clock" label in the active cell */
+.draft-board__on-clock {
+  display: block;
+  text-align: center;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--accent-gold);
+  font-weight: 700;
+  line-height: 76px; /* match cell height so it vertically centers */
 }
 
 /* My roster slot grid */
@@ -6011,13 +6740,22 @@ label .form-label__hint {
   margin-right: var(--space-2);
 }
 
-/* ---- Narrow-screen behavior ---- */
+/* ---- Narrow-screen behavior ----
+   On narrow screens we collapse the stacked + split structure so only one
+   panel is visible at a time (selected by the tab bar). The .draft-bottom
+   wrapper uses display:contents so its children flatten into the
+   .draft-room flex column — that way .panel-fighters and .panel-roster
+   participate in the same layout as .panel-board and the active tab can
+   grow to fill the whole room. */
 @media (max-width: 899px) {
   .draft-tabs {
     display: flex;
   }
   .draft-resize-handle {
     display: none;
+  }
+  .draft-bottom {
+    display: contents;
   }
   .draft-panel {
     display: none;
@@ -6029,12 +6767,10 @@ label .form-label__hint {
     display: grid;
     flex: 1;
   }
-  .draft-room--split .draft-panel.waiver-tab--active {
+  /* Override the wide-screen 50% height on the board so it can fill the
+     full room when it's the active tab on narrow screens. */
+  .draft-room--stacked .panel-board {
     flex: 1;
-    border-right: 1px solid var(--border-subtle);
-  }
-  .draft-room--split .draft-panel.waiver-tab--active:last-child {
-    border-right: 0;
   }
 }
 
@@ -6644,5 +7380,390 @@ label .form-label__hint {
 }
 .lineups-slot__pts--empty {
   color: var(--text-tertiary);
+}
+
+/* ============================================================
+   LEAGUE CHAT
+   Standalone full-height chat page. Layout fills the viewport
+   so the message list scrolls inside its own frame and the
+   composer stays pinned at the bottom regardless of how long
+   the conversation gets.
+   ============================================================ */
+
+/* Outer container — eats the rest of the viewport below the
+   header. 100dvh handles mobile browsers' shifting toolbars.
+   Two-column grid on desktop: thread sidebar | message window.
+   Stacks (sidebar above window) on narrow viewports. */
+.chat-page {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: var(--space-4);
+  height: calc(100dvh - 180px);
+  min-height: 480px;
+  padding: var(--space-6);
+  max-width: var(--content-max);
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+@media (max-width: 720px) {
+  .chat-page {
+    grid-template-columns: 1fr;
+    /* Cap the sidebar height on mobile so the conversation stays usable */
+  }
+  .chat-sidebar { max-height: 220px; }
+}
+
+/* Card framing for the chat itself */
+.chat-window {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+/* Scrolling message list */
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* Empty / loading / error states inside the message list */
+.chat-state {
+  margin: auto;
+  color: var(--text-tertiary);
+  font-size: var(--text-caption);
+  text-align: center;
+}
+.chat-state--error { color: var(--accent-crimson); }
+
+/* Day separator between batches of messages */
+.chat-divider {
+  align-self: center;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-tertiary);
+  padding: var(--space-1) var(--space-3);
+  margin: var(--space-2) 0;
+  background: var(--bg-tertiary);
+  border-radius: 999px;
+}
+
+/* One message: avatar + bubble, left-aligned by default. Flex (not grid)
+   so the bubble shrink-wraps to its content instead of filling the row.
+   The whole message caps at 70% of the container to keep long messages
+   readable on wide screens — bubbles can be shorter than that for short
+   messages, and long ones wrap inside the cap. */
+.chat-message {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  max-width: 70%;
+}
+/* Own messages: bubble on the right, avatar on the right edge. flex-end
+   keeps everything pinned to the right side of the chat window. */
+.chat-message--mine {
+  flex-direction: row-reverse;
+  margin-left: auto;
+}
+
+.chat-message__avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-strong);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+
+.chat-message__bubble {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: var(--space-2) var(--space-3);
+  min-width: 0;
+}
+.chat-message--mine .chat-message__bubble {
+  background: rgba(212, 168, 75, 0.08);
+  border-color: rgba(212, 168, 75, 0.25);
+}
+
+.chat-message__meta {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin-bottom: 2px;
+}
+.chat-message__name {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-primary);
+}
+.chat-message--mine .chat-message__name { color: var(--accent-gold); }
+.chat-message__time {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.chat-message__body {
+  color: var(--text-primary);
+  font-size: var(--text-body-sm);
+  line-height: 1.4;
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+}
+
+/* Composer — pinned to the bottom of the chat window */
+.chat-composer {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-end;
+  padding: var(--space-3);
+  background: var(--bg-tertiary);
+  border-top: 1px solid var(--border-subtle);
+}
+.chat-composer__input {
+  flex: 1;
+  resize: none;
+  min-height: 38px;
+  max-height: 160px;
+  padding: 8px 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: var(--text-body-sm);
+  line-height: 1.4;
+}
+.chat-composer__input:focus {
+  outline: none;
+  border-color: var(--accent-gold);
+}
+.chat-composer__send {
+  flex-shrink: 0;
+  padding: 8px 18px;
+}
+
+/* ============================================================
+   CHAT CTA + UNREAD BADGE
+   The primary "Chat" button on league.html. Same .btn-primary
+   shape as the existing nav buttons; the badge sits inside.
+   ============================================================ */
+
+.chat-cta {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.chat-cta__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #F5F5F0;
+  color: var(--accent-crimson);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.chat-cta__badge[hidden] { display: none; }
+
+/* ============================================================
+   TOP NAV CHAT LINK
+   Injected by chat-nav.js into the top-nav links container of
+   every authenticated page that has a league context. Smaller
+   than the page-level Chat CTA on league.html — this is a
+   persistent affordance, not a primary call-to-action.
+   ============================================================ */
+
+.top-nav__chat {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  /* Override .btn-primary's default padding so it fits the nav bar */
+  padding: 5px 12px !important;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+}
+.top-nav__chat-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #F5F5F0;
+  color: var(--accent-crimson);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.top-nav__chat-badge[hidden] { display: none; }
+
+/* ============================================================
+   CHAT SIDEBAR — League Chat + per-manager DM threads
+   ============================================================ */
+
+.chat-sidebar {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  overflow-y: auto;
+  padding: var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-height: 0;
+}
+
+.chat-sidebar__section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.chat-sidebar__section-label {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-tertiary);
+  padding: var(--space-2) var(--space-2) 4px;
+}
+
+/* One thread row — looks like a list-button. Active row gets a tinted
+   background so the user always knows which thread they're in. */
+.chat-thread {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-2);
+  align-items: start;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  color: inherit;
+  font-family: inherit;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.chat-thread:hover {
+  background: var(--bg-tertiary);
+}
+.chat-thread--active {
+  background: var(--bg-tertiary);
+  border-color: rgba(212, 168, 75, 0.4);
+}
+
+.chat-thread__main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.chat-thread__name {
+  font-size: var(--text-body-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chat-thread--active .chat-thread__name {
+  color: var(--accent-gold);
+}
+.chat-thread__sub {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-thread__meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.chat-thread__when {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.chat-thread__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--accent-crimson);
+  color: #F5F5F0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+/* ============================================================
+   CHAT HEADER — name of the active thread, sits at the top of
+   the chat-window, above the message list.
+   ============================================================ */
+
+.chat-header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-secondary);
+  flex-shrink: 0;
+}
+.chat-header__title {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+.chat-header__sub {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 

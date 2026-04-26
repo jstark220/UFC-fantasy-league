@@ -11,7 +11,7 @@ const SUPABASE_URL = 'https://zfffboipbdegrzyyzoto.supabase.co';
 // Anyone can view this in source, but RLS policies control what they
 // can actually read or write in the database.
 // NEVER put the service role key here.
-const SUPABASE_ANON_KEY = 'sb_publishable_f58saCGut6ALNzE2IJ7YNA_81tKmyvG';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpmZmZib2lwYmRlZ3J6eXl6b3RvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MTEwMDcsImV4cCI6MjA5MjM4NzAwN30.OVn8I84m7cZvoit_uGhYnHFiSJxFdm_Fkw0pxuS5hdY';
 
 // Create the Supabase client. Named supabaseClient (not supabase) to avoid
 // a naming conflict with window.supabase, which is the CDN library object itself.

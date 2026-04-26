@@ -44,6 +44,13 @@ let statusFilter   = 'all';
 let sortBy         = 'rank';
 let searchQuery = '';
 let picking = false; // blocks a second pick while a request is in flight
+let pickTimerInterval = null; // setInterval handle for the countdown
+
+// Personal pre-draft queue — array of { fighter_id, position } sorted by
+// position ascending. Auto-cleaned by a Postgres trigger when a fighter
+// is drafted; we mirror that with a realtime subscription so the local
+// state stays in sync without a manual refetch.
+let queue = [];
 
 // View All modal — independent filter / sort state so the modal can be
 // browsed without disturbing the side panel's controls.
@@ -73,7 +80,7 @@ async function initDraft() {
   const [leagueRes, membersRes, fightersRes, picksRes] = await Promise.all([
     supabaseClient
       .from('leagues')
-      .select('id, name, draft_order, draft_started, draft_completed, roster_size, max_managers')
+      .select('id, name, draft_order, draft_started, draft_completed, draft_started_at, draft_scheduled_at, roster_size, max_managers, pick_timer_seconds')
       .eq('id', leagueId)
       .single(),
     supabaseClient
@@ -87,7 +94,7 @@ async function initDraft() {
       .order('current_rank', { nullsFirst: false }),
     supabaseClient
       .from('draft_picks')
-      .select('id, league_member_id, fighter_id, draft_pick, draft_round')
+      .select('id, league_member_id, fighter_id, draft_pick, draft_round, created_at')
       .eq('league_id', leagueId)
       .order('draft_pick')
   ]);
@@ -102,32 +109,55 @@ async function initDraft() {
   allFighters = fightersRes.data || [];
   picks    = picksRes.data    || [];
 
-  // If the draft hasn't started yet, there's nothing to show here
-  if (!league.draft_started) {
-    window.location.href = 'league.html?id=' + leagueId;
-    return;
-  }
-
-  // Build O(1) lookup maps so rendering doesn't need to scan arrays
+  // Build the member-id lookup map up front; the lobby and live-draft views
+  // both need it (lobby uses it to label the draft order list).
   memberMap = {};
   members.forEach(function(m) { memberMap[m.id] = m; });
 
-  fighterMap = {};
-  allFighters.forEach(function(f) { fighterMap[f.id] = f; });
-
-  // Identify the current user's league_member_id
+  // Verify the current user is a member of this league before showing
+  // anything (lobby or live). RLS on league_members already gates this on
+  // the server, but the client check gives a cleaner UX (redirect vs error).
   const myMember = members.find(function(m) { return m.user_id === user.id; });
   if (!myMember) { window.location.href = 'dashboard.html'; return; }
   myMemberId = myMember.id;
 
+  // No live draft AND no schedule → nothing to render here, bounce back.
+  if (!league.draft_started && !league.draft_scheduled_at) {
+    window.location.href = 'league.html?id=' + leagueId;
+    return;
+  }
+
+  // Both pre-draft (scheduled) and live-draft states share the same panels:
+  // the fighter pool, the draft board (with empty slots pre-draft), and the
+  // user's queue + roster. The only differences are (a) the status bar
+  // header text, (b) whether picks can actually be made, and (c) whether
+  // we listen for incoming picks vs the start flip.
+  fighterMap = {};
+  allFighters.forEach(function(f) { fighterMap[f.id] = f; });
+
   // Populate the division filter dropdown before first render
   populateDivisionFilter();
 
-  // Render all three panels
+  // Load the user's draft queue (private — RLS limits this to their own rows).
+  // Awaited so the first render shows the queue panel populated.
+  await loadQueue();
+
+  // Render all three panels. Pre-draft this still works: the board shows
+  // empty slots labelled with manager names, the fighter pool shows every
+  // fighter as available (no picks yet), and My Roster is empty.
   renderAll();
 
-  // Subscribe to live pick events
-  subscribeToRealtime();
+  // Pre-draft we only watch the leagues row (for the start flip + schedule
+  // changes) and the personal queue. Live draft additionally subscribes to
+  // incoming picks. Splitting these means we don't open a picks channel
+  // for nothing during the lobby phase.
+  subscribeToQueue();
+  if (league.draft_started) {
+    subscribeToRealtime();
+  } else {
+    subscribeToLobbyFlip();
+    startPredraftCountdown();
+  }
 
   // One delegated listener: any element with data-open-fighter opens the
   // fighter modal regardless of which renderer emitted it. Avoids re-wiring
@@ -151,6 +181,10 @@ async function initDraft() {
 
     // Validate up front so we can give a clear message instead of a silent
     // no-op from inside makePick.
+    if (!league.draft_started) {
+      alert("The draft hasn't started yet.");
+      return;
+    }
     if (!isMyTurn()) {
       alert("It's not your pick yet.");
       return;
@@ -360,6 +394,7 @@ function renderAll() {
   renderFighterPool();
   renderDraftBoard();
   renderMyRoster();
+  renderQueue();
   // If the View All modal is open, refresh it too so newly drafted fighters
   // disappear from its list in real time.
   if (document.getElementById('viewAllOverlay')) renderViewAllList();
@@ -374,9 +409,23 @@ function renderHeader() {
   const turnInfoEl    = document.getElementById('turnInfo');
   const pickCounterEl = document.getElementById('pickCounter');
 
+  // Pre-draft: show a live countdown + the absolute scheduled time. The
+  // <span class="draft-status__pre"> is the target the predraft countdown
+  // interval updates every second; we re-render the surrounding markup
+  // only when renderHeader runs (initial load + lobby state changes).
+  if (!league.draft_started && league.draft_scheduled_at) {
+    turnInfoEl.innerHTML =
+      '<span class="draft-status__pre">' + escapeHtml(formatCountdown(league.draft_scheduled_at)) + '</span>' +
+      ' · Draft starts ' + escapeHtml(formatScheduledLocal(league.draft_scheduled_at));
+    pickCounterEl.textContent = '0 / ' + totalPicks + ' picks';
+    stopPickTimer();
+    return;
+  }
+
   if (league.draft_completed || picks.length >= totalPicks) {
     turnInfoEl.innerHTML = '<span class="draft-status__complete">Draft Complete</span>';
     pickCounterEl.textContent = '';
+    stopPickTimer();
     return;
   }
 
@@ -392,6 +441,79 @@ function renderHeader() {
   }
 
   pickCounterEl.textContent = 'Pick ' + currentPickNum + ' of ' + totalPicks;
+
+  // Restart the pick clock anchored to the current pick's start time.
+  startPickTimer();
+}
+
+// ========================================================================
+// PICK TIMER
+// Counts down from league.pick_timer_seconds, anchored server-side to:
+//   * The previous pick's created_at (for picks 2..N)
+//   * league.draft_started_at      (for pick 1)
+// All clients see the same remaining time (modulo clock skew). The timer
+// is informational in v1 — we don't auto-pick on expiry; that's a follow-up.
+// ========================================================================
+
+// Returns when the active pick clock started (Date), or null if we can't
+// determine — in which case the timer hides itself.
+function getActivePickStartedAt() {
+  if (picks.length === 0) {
+    return league.draft_started_at ? new Date(league.draft_started_at) : null;
+  }
+  // Sorted by draft_pick asc; the last element is the most recent pick.
+  const last = picks[picks.length - 1];
+  return last.created_at ? new Date(last.created_at) : null;
+}
+
+function startPickTimer() {
+  stopPickTimer();
+  const containerEl = document.getElementById('draftTimer');
+  const valueEl     = document.getElementById('draftTimerValue');
+  if (!containerEl || !valueEl) return;
+
+  // No anchor → hide the timer entirely (e.g., legacy league with no
+  // draft_started_at and no picks yet).
+  const started = getActivePickStartedAt();
+  if (!started) { containerEl.hidden = true; return; }
+
+  const totalSec = league.pick_timer_seconds || 90;
+  containerEl.hidden = false;
+
+  function tick() {
+    const elapsedSec = (Date.now() - started.getTime()) / 1000;
+    const remaining  = Math.max(0, Math.ceil(totalSec - elapsedSec));
+
+    valueEl.textContent = formatMmSs(remaining);
+
+    // Color states — gold/yellow at 30s, crimson at 10s, "EXPIRED" at 0.
+    containerEl.classList.remove('draft-timer--low', 'draft-timer--critical', 'draft-timer--expired');
+    if (remaining === 0)        containerEl.classList.add('draft-timer--expired');
+    else if (remaining <= 10)   containerEl.classList.add('draft-timer--critical');
+    else if (remaining <= 30)   containerEl.classList.add('draft-timer--low');
+
+    // Once expired we leave the badge showing 0:00 and stop ticking.
+    // Auto-pick is intentionally not implemented here — that's a separate
+    // follow-up that needs roster-construction validation + write race
+    // handling.
+    if (remaining === 0) stopPickTimer();
+  }
+
+  tick(); // paint immediately so users don't see "--" for a second
+  pickTimerInterval = setInterval(tick, 1000);
+}
+
+function stopPickTimer() {
+  if (pickTimerInterval) {
+    clearInterval(pickTimerInterval);
+    pickTimerInterval = null;
+  }
+}
+
+function formatMmSs(totalSec) {
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return m + ':' + (s < 10 ? '0' : '') + s;
 }
 
 // ========================================================================
@@ -485,6 +607,18 @@ function renderFighterPool() {
       pickBtn   = '<button class="btn-secondary lineup-row-btn" disabled>No slot</button>';
     }
 
+    // Queue toggle — shown next to the pick button regardless of whose
+    // turn it is. If already queued, the button reads "Queued ✕" and
+    // removes; otherwise "+ Queue" adds.
+    const inQueue = isQueued(f.id);
+    const queueBtnLabel = inQueue ? 'Queued &#x2715;' : '+ Queue';
+    const queueBtnClass = inQueue
+      ? 'btn-ghost lineup-row-btn draft-queue-btn draft-queue-btn--queued'
+      : 'btn-ghost lineup-row-btn draft-queue-btn';
+    const queueBtn = '<button class="' + queueBtnClass + '" data-queue-fighter-id="' + f.id + '">' +
+                       queueBtnLabel +
+                     '</button>';
+
     html +=
       '<div class="lineup-roster-row' + rowMods + '"' + titleAttr + '>' +
         '<div class="lineup-roster-row__photo-wrap">' + photoHtml + '</div>' +
@@ -496,6 +630,7 @@ function renderFighterPool() {
           '<span class="lineup-roster-row__division">' + escapeHtml(divLabel) + '</span>' +
         '</div>' +
         '<span class="lineup-roster-row__record">' + record + '</span>' +
+        queueBtn +
         pickBtn +
       '</div>';
   });
@@ -507,6 +642,16 @@ function renderFighterPool() {
     btn.addEventListener('click', function() {
       const fighter = fighterMap[btn.getAttribute('data-fighter-id')];
       if (fighter) makePick(fighter);
+    });
+  });
+
+  // Wire queue toggle buttons. Same fighter id either adds or removes
+  // depending on whether it's already in the local queue cache.
+  poolEl.querySelectorAll('.draft-queue-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      const fighterId = btn.getAttribute('data-queue-fighter-id');
+      if (isQueued(fighterId)) removeFromQueue(fighterId);
+      else                     addToQueue(fighterId);
     });
   });
 }
@@ -726,20 +871,27 @@ function renderDraftBoard() {
     pickMap[p.draft_pick] = p.fighter_id;
   });
 
-  let html = '<div class="standings-card draft-board"><table class="standings-table draft-board__table"><thead><tr>';
-  html += '<th class="standings-th standings-th--rank">Rd</th>';
+  // Draft board rebuilt as a Sleeper-style grid:
+  //   * Manager team names along the top (column headers)
+  //   * Each cell is a card with a photo, name, and division/rank meta
+  //   * Pick number ("1.1", "2.5"...) lives in the top-right corner
+  //   * Tier classes color-tint the background subtly: champion / top5 /
+  //     top15 / unranked, so the board reads as "value chart" at a glance
+  //   * The whole cell is clickable when a pick has been made (opens the
+  //     fighter modal via the existing data-open-fighter delegate)
+  let html = '<div class="draft-board"><table class="draft-board__table"><thead><tr>';
 
   league.draft_order.forEach(function(memberId) {
     const member = memberMap[memberId];
     const isMe   = memberId === myMemberId;
-    html += '<th class="standings-th' + (isMe ? ' draft-board__col-mine' : '') + '">';
+    html += '<th class="draft-board__col-header' + (isMe ? ' draft-board__col-header--mine' : '') + '">';
     html += escapeHtml(member ? member.team_name : '?');
     html += '</th>';
   });
   html += '</tr></thead><tbody>';
 
   for (let round = 1; round <= totalRounds; round++) {
-    html += '<tr class="standings-row"><td class="draft-board__round">' + round + '</td>';
+    html += '<tr>';
 
     for (let managerIdx = 0; managerIdx < n; managerIdx++) {
       // Map (round, managerIdx) to the absolute pick number.
@@ -750,21 +902,53 @@ function renderDraftBoard() {
 
       const memberId  = league.draft_order[managerIdx];
       const isMe      = memberId === myMemberId;
-      const isCurrent = pickNum === currentPickNum && picks.length < totalPicks;
+      // No "on the clock" highlight pre-draft — the cell at pick #1 isn't
+      // an active pick yet, just the slot for whoever drafts first when it
+      // starts.
+      const isCurrent = league.draft_started && pickNum === currentPickNum && picks.length < totalPicks;
+      const positionInRound = ((pickNum - 1) % n) + 1;
+
+      // Determine tier (only relevant for made picks; influences cell tint)
+      let tierClass = '';
+      const fighter = pickMap[pickNum] ? fighterMap[pickMap[pickNum]] : null;
+      if (fighter) {
+        if (fighter.is_champion)                                tierClass = ' draft-board__cell--champion';
+        else if (fighter.current_rank && fighter.current_rank <= 5)  tierClass = ' draft-board__cell--top5';
+        else if (fighter.current_rank && fighter.current_rank <= 15) tierClass = ' draft-board__cell--top15';
+        else                                                          tierClass = ' draft-board__cell--unranked';
+      }
 
       let cellClass = 'draft-board__cell';
-      if (isMe)     cellClass += ' draft-board__cell--mine';
-      if (pickMap[pickNum]) cellClass += ' draft-board__cell--made';
+      if (isMe)             cellClass += ' draft-board__cell--mine';
+      if (pickMap[pickNum]) cellClass += ' draft-board__cell--made' + tierClass;
       else if (isCurrent)   cellClass += ' draft-board__cell--current';
       else                  cellClass += ' draft-board__cell--empty';
 
       html += '<td class="' + cellClass + '">';
-      if (pickMap[pickNum]) {
-        var fighter = fighterMap[pickMap[pickNum]];
-        var name    = fighter ? fighter.name : '?';
+      // "round.position" label in the top-right of every cell. Snake-aware:
+      // round 2 reads 2.1, 2.2, ... right-to-left, matching pick order.
+      // Suppressed on the on-the-clock cell so it doesn't compete visually
+      // with the "On the clock" label.
+      if (!isCurrent) {
+        html += '<span class="draft-board__pick-num">' + round + '.' + positionInRound + '</span>';
+      }
+
+      if (fighter) {
+        const divLabel  = DIVISION_LABELS[fighter.primary_division] || fighter.primary_division;
+        const rankLabel = fighter.is_champion
+          ? 'Champion'
+          : (fighter.current_rank ? '#' + fighter.current_rank : 'Unranked');
+        const photoHtml = fighter.photo_url
+          ? '<img class="draft-board__cell-photo" src="' + escapeHtml(fighter.photo_url) + '" alt="" onerror="this.style.visibility=\'hidden\'">'
+          : '<div class="draft-board__cell-photo draft-board__cell-photo--placeholder"></div>';
+
         html +=
-          '<button class="draft-board__pick-name" data-open-fighter="' + pickMap[pickNum] + '">' +
-            escapeHtml(name) +
+          '<button class="draft-board__pick" data-open-fighter="' + pickMap[pickNum] + '">' +
+            photoHtml +
+            '<div class="draft-board__pick-info">' +
+              '<span class="draft-board__pick-name">' + escapeHtml(fighter.name) + '</span>' +
+              '<span class="draft-board__pick-meta">' + escapeHtml(divLabel) + ' · ' + rankLabel + '</span>' +
+            '</div>' +
           '</button>';
       } else if (isCurrent) {
         html += '<span class="draft-board__on-clock">On the clock</span>';
@@ -909,6 +1093,345 @@ function populateDivisionFilter() {
     sortBy = this.value;
     renderFighterPool();
   });
+}
+
+// ========================================================================
+// DRAFT QUEUE
+// Personal pre-draft list of fighters this user wants to target. Reads
+// from / writes to public.draft_queue. Auto-cleaned by a Postgres trigger
+// on draft_picks insert; we mirror that with a realtime subscription so
+// the UI reflects "fighter X just got drafted, removing from your queue"
+// without a manual refresh.
+// ========================================================================
+
+async function loadQueue() {
+  const { data, error } = await supabaseClient
+    .from('draft_queue')
+    .select('fighter_id, position')
+    .eq('league_member_id', myMemberId)
+    .order('position');
+  if (error) {
+    console.warn('[queue] load failed:', error.message);
+    queue = [];
+    return;
+  }
+  queue = data || [];
+}
+
+function isQueued(fighterId) {
+  return queue.some(function(q) { return q.fighter_id === fighterId; });
+}
+
+// Insert at the end of the queue. Position = max(existing) + 1 so we
+// don't collide with existing rows. The DB unique key (member, fighter)
+// prevents a double-add.
+async function addToQueue(fighterId) {
+  if (isQueued(fighterId)) return;
+  // Skip if the fighter has already been drafted (shouldn't happen
+  // because we hide the toggle in that case, but defensive)
+  if (picks.some(function(p) { return p.fighter_id === fighterId; })) return;
+
+  const nextPos = queue.length === 0
+    ? 1
+    : (queue[queue.length - 1].position + 1);
+
+  const { error } = await supabaseClient.from('draft_queue').insert({
+    league_id:        leagueId,
+    league_member_id: myMemberId,
+    fighter_id:       fighterId,
+    position:         nextPos
+  });
+  if (error) {
+    console.warn('[queue] add failed:', error.message);
+    return;
+  }
+  // Optimistic local update — realtime will eventually mirror, but the
+  // user expects immediate feedback when they click.
+  queue.push({ fighter_id: fighterId, position: nextPos });
+  renderFighterPool();
+  renderQueue();
+}
+
+async function removeFromQueue(fighterId) {
+  const { error } = await supabaseClient
+    .from('draft_queue')
+    .delete()
+    .eq('league_member_id', myMemberId)
+    .eq('fighter_id', fighterId);
+  if (error) {
+    console.warn('[queue] remove failed:', error.message);
+    return;
+  }
+  queue = queue.filter(function(q) { return q.fighter_id !== fighterId; });
+  renderFighterPool();
+  renderQueue();
+}
+
+// Move a queue entry up (delta -1) or down (delta +1). Does this by
+// swapping positions with the adjacent neighbor. We update both rows
+// in two sequential UPDATEs — small race window if the user clicks
+// twice rapidly, but acceptable for a personal queue.
+async function reorderQueue(fighterId, delta) {
+  const idx = queue.findIndex(function(q) { return q.fighter_id === fighterId; });
+  if (idx === -1) return;
+  const target = idx + delta;
+  if (target < 0 || target >= queue.length) return;
+
+  const a = queue[idx];
+  const b = queue[target];
+
+  // Swap positions in the DB via two updates. We assign each to a
+  // temporary high value first to avoid the (member, position) collisions
+  // — but since there's no unique constraint on position itself, we can
+  // just swap directly.
+  const errA = (await supabaseClient.from('draft_queue').update({ position: b.position })
+    .eq('league_member_id', myMemberId).eq('fighter_id', a.fighter_id)).error;
+  const errB = (await supabaseClient.from('draft_queue').update({ position: a.position })
+    .eq('league_member_id', myMemberId).eq('fighter_id', b.fighter_id)).error;
+  if (errA || errB) {
+    console.warn('[queue] reorder failed:', errA || errB);
+    // Reload to be safe — local state may be inconsistent.
+    await loadQueue();
+    renderQueue();
+    return;
+  }
+
+  // Swap locally
+  const tmp = a.position; a.position = b.position; b.position = tmp;
+  queue.sort(function(x, y) { return x.position - y.position; });
+  renderQueue();
+}
+
+// Render the queue panel. Called from renderAll so it stays in sync with
+// every other render path (pick made, queue changed, etc.).
+function renderQueue() {
+  const listEl  = document.getElementById('queueList');
+  const countEl = document.getElementById('queueCount');
+  const hintEl  = document.getElementById('queueHint');
+  if (!listEl) return;
+
+  countEl.textContent = queue.length;
+  hintEl.textContent  = queue.length === 0
+    ? 'Empty'
+    : (isMyTurn() ? 'Your pick — draft from queue or pool' : 'Queued for upcoming picks');
+
+  if (queue.length === 0) {
+    listEl.innerHTML =
+      '<p class="draft-empty" style="padding: var(--space-4) 0">' +
+        'Add fighters here while waiting for your turn. They auto-clear when drafted.' +
+      '</p>';
+    return;
+  }
+
+  const myTurn         = isMyTurn() && !picking;
+  const myPickFighters = getMyPickFighters();
+
+  let html = '';
+  queue.forEach(function(q, idx) {
+    const f = fighterMap[q.fighter_id];
+    if (!f) return; // fighter not in cache (shouldn't happen)
+
+    const rankLabel = f.is_champion ? 'C' : (f.current_rank ? '#' + f.current_rank : 'NR');
+    const rankClass = f.is_champion ? 'rank-champion' : (f.current_rank ? 'rank-ranked' : 'rank-unranked');
+    const divLabel  = DIVISION_LABELS[f.primary_division] || f.primary_division;
+
+    // When it's my turn AND the fighter is a legal pick, the queue row
+    // gets a "Pick" shortcut that drafts them straight from the queue.
+    let pickShortcut = '';
+    if (myTurn && canPick(f, myPickFighters)) {
+      pickShortcut = '<button class="btn-primary lineup-row-btn draft-queue-pick-btn" ' +
+                       'data-queue-pick-id="' + f.id + '">Pick</button>';
+    }
+
+    const upDisabled   = idx === 0                  ? ' disabled' : '';
+    const downDisabled = idx === queue.length - 1   ? ' disabled' : '';
+
+    html +=
+      '<div class="lineup-roster-row draft-queue-row">' +
+        '<span class="draft-queue-row__pos">' + (idx + 1) + '</span>' +
+        '<span class="lineup-roster-row__rank ' + rankClass + '">' + escapeHtml(rankLabel) + '</span>' +
+        '<div class="lineup-roster-row__info">' +
+          '<button class="lineup-roster-row__name" data-open-fighter="' + f.id + '">' +
+            escapeHtml(f.name) +
+          '</button>' +
+          '<span class="lineup-roster-row__division">' + escapeHtml(divLabel) + '</span>' +
+        '</div>' +
+        '<div class="draft-queue-row__controls">' +
+          '<button class="draft-queue-row__arrow" data-queue-up="' + f.id + '"' + upDisabled + ' aria-label="Move up">&#9650;</button>' +
+          '<button class="draft-queue-row__arrow" data-queue-down="' + f.id + '"' + downDisabled + ' aria-label="Move down">&#9660;</button>' +
+        '</div>' +
+        pickShortcut +
+        '<button class="draft-queue-row__remove" data-queue-remove="' + f.id + '" aria-label="Remove from queue">&times;</button>' +
+      '</div>';
+  });
+
+  listEl.innerHTML = html;
+
+  // Wire row interactions
+  listEl.querySelectorAll('[data-queue-up]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      reorderQueue(btn.getAttribute('data-queue-up'), -1);
+    });
+  });
+  listEl.querySelectorAll('[data-queue-down]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      reorderQueue(btn.getAttribute('data-queue-down'), +1);
+    });
+  });
+  listEl.querySelectorAll('[data-queue-remove]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      removeFromQueue(btn.getAttribute('data-queue-remove'));
+    });
+  });
+  listEl.querySelectorAll('.draft-queue-pick-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      const fighter = fighterMap[btn.getAttribute('data-queue-pick-id')];
+      if (fighter) makePick(fighter);
+    });
+  });
+}
+
+// Subscribe to changes on draft_queue for THIS user. Insert + delete are
+// the only events we care about. RLS ensures we only see our own rows.
+// The trigger that auto-removes on pick will fire deletes here; we react
+// by trimming the local cache.
+function subscribeToQueue() {
+  supabaseClient
+    .channel('draft_queue_' + leagueId + '_' + myMemberId)
+    .on('postgres_changes', {
+      event:  '*',
+      schema: 'public',
+      table:  'draft_queue',
+      filter: 'league_member_id=eq.' + myMemberId
+    }, function(payload) {
+      // INSERT: append if not already present (we do optimistic adds locally)
+      // DELETE: drop the matching row.
+      // UPDATE: update position; re-sort.
+      if (payload.eventType === 'INSERT') {
+        const row = payload.new;
+        if (!queue.some(function(q) { return q.fighter_id === row.fighter_id; })) {
+          queue.push({ fighter_id: row.fighter_id, position: row.position });
+          queue.sort(function(a, b) { return a.position - b.position; });
+        }
+      } else if (payload.eventType === 'DELETE') {
+        const row = payload.old;
+        queue = queue.filter(function(q) { return q.fighter_id !== row.fighter_id; });
+      } else if (payload.eventType === 'UPDATE') {
+        const row = payload.new;
+        const item = queue.find(function(q) { return q.fighter_id === row.fighter_id; });
+        if (item) {
+          item.position = row.position;
+          queue.sort(function(a, b) { return a.position - b.position; });
+        }
+      }
+      renderQueue();
+      renderFighterPool();
+    })
+    .subscribe();
+}
+
+// ========================================================================
+// PRE-DRAFT (LOBBY) STATE
+// When the draft is scheduled but not yet started, the room renders just
+// like an active draft — empty board, all fighters available, queue
+// editable — except the status bar shows a countdown instead of a turn
+// indicator, and pick attempts alert "draft hasn't started yet."
+// ========================================================================
+
+let predraftCountdownInterval = null;
+
+// Updates the .draft-status__pre span (rendered by renderHeader) once
+// per second so the countdown ticks. We update only the text node, not
+// the whole turnInfo, to avoid flashing the surrounding text.
+function startPredraftCountdown() {
+  stopPredraftCountdown();
+  predraftCountdownInterval = setInterval(function() {
+    const el = document.querySelector('.draft-status__pre');
+    if (!el) {
+      // turnInfo moved past pre-draft state; nothing more to update.
+      stopPredraftCountdown();
+      return;
+    }
+    el.textContent = formatCountdown(league.draft_scheduled_at);
+  }, 1000);
+}
+
+function stopPredraftCountdown() {
+  if (predraftCountdownInterval) {
+    clearInterval(predraftCountdownInterval);
+    predraftCountdownInterval = null;
+  }
+}
+
+// Watch the leagues row so the room reacts to schedule changes and to
+// the draft actually starting. Three transitions to handle:
+//   * draft_started flips true → reload to enter the live draft cleanly
+//     (picks subscription, queue mirror trigger, etc. all get a fresh start)
+//   * draft_scheduled_at changes (commish edited it) → update local state
+//     and re-render the header so the new time shows
+//   * draft_scheduled_at cleared while still not started → bounce back to
+//     the league page (no schedule = nothing to show in the room)
+function subscribeToLobbyFlip() {
+  supabaseClient
+    .channel('lobby_' + leagueId)
+    .on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'leagues',
+      filter: 'id=eq.' + leagueId
+    }, function(payload) {
+      const updated = payload.new;
+
+      if (updated.draft_started) {
+        window.location.reload();
+        return;
+      }
+
+      if (updated.draft_scheduled_at !== league.draft_scheduled_at) {
+        league.draft_scheduled_at = updated.draft_scheduled_at;
+        if (!league.draft_scheduled_at) {
+          window.location.href = 'league.html?id=' + leagueId;
+          return;
+        }
+        renderHeader();
+      }
+    })
+    .subscribe();
+}
+
+// "Mon, Apr 28 at 7:30 PM" in the viewer's local timezone. Mirrors the
+// helper of the same name in league.js — kept here so draft.js doesn't
+// have to depend on league.js being loaded.
+function formatScheduledLocal(iso) {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const datePart = d.toLocaleDateString(undefined, {
+    weekday: 'short', month: 'short', day: 'numeric'
+  });
+  const timePart = d.toLocaleTimeString(undefined, {
+    hour: 'numeric', minute: '2-digit'
+  });
+  return datePart + ' at ' + timePart;
+}
+
+// "Starts in 1d 2h 3m 4s" / "Starts in 12s" / "Starting..."
+function formatCountdown(iso) {
+  const target = new Date(iso).getTime();
+  const diffMs = target - Date.now();
+  if (diffMs <= 0) return 'Starting...';
+
+  const totalSec = Math.floor(diffMs / 1000);
+  const days = Math.floor(totalSec / 86400);
+  const hrs  = Math.floor((totalSec % 86400) / 3600);
+  const mins = Math.floor((totalSec % 3600) / 60);
+  const secs = totalSec % 60;
+
+  let parts = [];
+  if (days > 0)                          parts.push(days + 'd');
+  if (days > 0 || hrs  > 0)              parts.push(hrs  + 'h');
+  if (days > 0 || hrs  > 0 || mins > 0)  parts.push(mins + 'm');
+  parts.push(secs + 's');
+  return 'Starts in ' + parts.join(' ');
 }
 
 // ========================================================================

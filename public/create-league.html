@@ -129,6 +129,17 @@
                      value="3" min="1" max="10" step="1" required>
               <p class="form-label__hint">Default: 3</p>
             </div>
+
+            <div class="form-group">
+              <label for="pickTimer">Seconds / Pick</label>
+              <!-- Range matches the SQL CHECK constraint on
+                   leagues.pick_timer_seconds (30–600). 90 is the PRD
+                   default. Editable later in League Settings until the
+                   draft starts, after which it's locked. -->
+              <input type="number" id="pickTimer" class="input"
+                     value="90" min="30" max="600" step="5" required>
+              <p class="form-label__hint">Default: 90 — how long each manager has to pick.</p>
+            </div>
           </div>
 
           <p class="form-section__note">
