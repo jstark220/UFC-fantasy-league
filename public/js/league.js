@@ -86,7 +86,10 @@ async function initLeague() {
   membersData = members;
   myMemberId  = myMember.id;
 
-  const isCommissioner = league.commissioner_id === user.id;
+  // True for the primary owner OR any co-commissioner. Co-commissioners
+  // get the same UI affordances (invite code visibility, settings access,
+  // commissioner-only nav buttons) as the primary.
+  const isCommissioner = Commissioner.isCommissioner(league, members, user.id);
 
   // ---- Reveal the page now that we've confirmed membership ----
   document.getElementById('pageContent').style.display = 'block';
@@ -101,6 +104,20 @@ async function initLeague() {
   document.getElementById('rosterLink').href  = 'lineup.html?id='    + leagueId;
   document.getElementById('waiverLink').href  = 'waivers.html?id='   + leagueId;
   document.getElementById('settingsLink').href = 'league-settings.html?id=' + leagueId;
+
+  // ---- Wire the activity card ----
+  // The card itself is in league.html; we point the "See all" link at the
+  // standalone activity page and ask the shared module to render the
+  // last 8 events into the embedded slot. Fire-and-forget — failures
+  // surface inside the feed widget, not as a page-level error.
+  document.getElementById('activitySeeAllLink').href = 'activity.html?id=' + leagueId;
+  if (typeof LeagueActivity !== 'undefined') {
+    LeagueActivity.renderFeed(
+      document.getElementById('leagueActivityFeed'),
+      leagueId,
+      { limit: 8 }
+    );
+  }
 
   // ---- Render nav links in the page header ----
   // Standings is always visible. Lineup/Waivers/Trades appear once the draft starts.
@@ -179,7 +196,7 @@ async function initLeague() {
 // ========================================================================
 function renderDraftSection() {
   const el = document.getElementById('draftContent');
-  const isCommissioner = leagueData.commissioner_id === userRef.id;
+  const isCommissioner = Commissioner.isCommissioner(leagueData, membersData, userRef.id);
 
   if (leagueData.draft_completed) {
     el.innerHTML =
@@ -343,9 +360,17 @@ function renderMembers(members, league, user, isCommissioner) {
   tbody.innerHTML = '';
 
   members.forEach(function(member) {
-    const memberIsCommissioner = member.user_id === league.commissioner_id;
-    const badgeClass = memberIsCommissioner ? 'badge-commissioner' : 'badge-member';
-    const roleLabel  = memberIsCommissioner ? 'Commissioner' : 'Member';
+    // Three-tier role badge: primary owner, co-commissioner, plain member.
+    // Only the primary can promote/demote others (handled in league-settings).
+    const isPrimary = Commissioner.isPrimaryCommissioner(league, member.user_id);
+    const isCoCommish = !isPrimary && member.is_commissioner === true;
+    var badgeClass, roleLabel;
+    if (isPrimary)         { badgeClass = 'badge-commissioner';     roleLabel = 'Commissioner'; }
+    else if (isCoCommish)  { badgeClass = 'badge-co-commissioner';  roleLabel = 'Co-commissioner'; }
+    else                   { badgeClass = 'badge-member';           roleLabel = 'Member'; }
+    // Pre-existing call sites in this function reference the boolean —
+    // keep that shape so the conditionals below don't have to change.
+    const memberIsCommissioner = isPrimary;
 
     const row = document.createElement('tr');
 
@@ -410,8 +435,12 @@ function renderMembers(members, league, user, isCommissioner) {
 async function loadFreeAgents() {
   const el = document.getElementById('freeAgentList');
 
-  // Fetch all roster rows for this league and all fighters in parallel
-  const [rostersRes, fightersRes] = await Promise.all([
+  // Fetch rosters, fighters, the next event (for phase math), and recent
+  // roster_drops (for the per-fighter rolling-waiver check) in parallel.
+  // The next-event date drives whether we're in WINDOW_PRE / WINDOW_POST
+  // (in which case ALL adds are claims) or in plain free agency.
+  const todayISO = new Date().toISOString().split('T')[0];
+  const [rostersRes, fightersRes, nextEventRes, dropsRes] = await Promise.all([
     supabaseClient
       .from('rosters')
       .select('fighter_id, league_member_id')
@@ -421,7 +450,19 @@ async function loadFreeAgents() {
       .select('id, name, primary_division, current_rank, is_champion, photo_url')
       .order('is_champion', { ascending: false })
       .order('current_rank', { ascending: true, nullsFirst: false })
-      .order('name')
+      .order('name'),
+    supabaseClient
+      .from('ufc_events')
+      .select('event_date')
+      .gte('event_date', todayISO)
+      .order('event_date', { ascending: true })
+      .limit(1)
+      .maybeSingle(),
+    supabaseClient
+      .from('roster_drops')
+      .select('fighter_id, dropped_at')
+      .eq('league_id', leagueIdRef)
+      .order('dropped_at', { ascending: false })
   ]);
 
   if (rostersRes.error || fightersRes.error) {
@@ -432,16 +473,41 @@ async function loadFreeAgents() {
   // Which fighters are already owned by someone in this league?
   const ownedIds = new Set(rostersRes.data.map(function(r) { return r.fighter_id; }));
 
-  // How many fighters is the current user already carrying?
-  const myRosterCount = rostersRes.data.filter(function(r) {
-    return r.league_member_id === myMemberId;
-  }).length;
-
   const available = fightersRes.data.filter(function(f) { return !ownedIds.has(f.id); });
 
   if (available.length === 0) {
     el.innerHTML = '<p class="draft-empty">No free agents available.</p>';
     return;
+  }
+
+  // Decide button label per fighter. Two conditions force "Claim":
+  //   1. League is currently in WINDOW_PRE / WINDOW_POST — every add this
+  //      window queues as a claim and processes at the cutoff.
+  //   2. The fighter was dropped within the rolling-waiver window
+  //      (until 3am ET on drop_date_ET + 2 days).
+  // If neither applies, the add is instant and the button reads "Add".
+  const now = new Date();
+  const nextEventDate = (nextEventRes && nextEventRes.data) ? nextEventRes.data.event_date : null;
+  const phaseInfo = (typeof getWaiverPhase === 'function')
+    ? getWaiverPhase(now, nextEventDate)
+    : { phase: 'FA' };
+  const inClaimWindow = phaseInfo.phase === 'WINDOW_PRE' || phaseInfo.phase === 'WINDOW_POST';
+
+  // Build a fighter_id -> most recent dropped_at lookup. The query is
+  // ordered desc, so the first hit per id is the freshest drop.
+  const latestDropByFighter = {};
+  (dropsRes && dropsRes.data ? dropsRes.data : []).forEach(function(d) {
+    if (!latestDropByFighter[d.fighter_id]) latestDropByFighter[d.fighter_id] = d.dropped_at;
+  });
+
+  function buttonLabel(fighter) {
+    if (inClaimWindow) return 'Claim';
+    var droppedAt = latestDropByFighter[fighter.id];
+    if (droppedAt && typeof isOnRollingWaiver === 'function' &&
+        isOnRollingWaiver(new Date(droppedAt), now)) {
+      return 'Claim';
+    }
+    return 'Add';
   }
 
   // Show top 5 available fighters
@@ -451,6 +517,7 @@ async function loadFreeAgents() {
                 : fighter.current_rank ? '#' + fighter.current_rank
                 : 'NR';
     const divLabel = DIVISION_LABELS[fighter.primary_division] || fighter.primary_division;
+    const label    = buttonLabel(fighter);
 
     return (
       '<div class="free-agent-row">' +
@@ -467,50 +534,23 @@ async function loadFreeAgents() {
         '<button class="btn-secondary free-agent-row__add" ' +
           'data-fighter-id="'   + fighter.id                    + '" ' +
           'data-fighter-name="' + escapeHtml(fighter.name)      + '">' +
-          'Add' +
+          escapeHtml(label) +
         '</button>' +
       '</div>'
     );
   }).join('');
 
-  // Wire each Add button
+  // Wire each Add button. Hands off to the waivers page rather than
+  // doing the insert inline — the waivers page is the single source of
+  // truth for add/claim gating (rolling waivers on recently-dropped
+  // fighters, claim windows, roster construction validation). Doing
+  // an inline insert here previously let users re-add fighters they
+  // had just dropped, bypassing the 48h rolling waiver hold.
   el.querySelectorAll('.free-agent-row__add').forEach(function(btn) {
-    btn.addEventListener('click', async function() {
-      const fighterId   = btn.getAttribute('data-fighter-id');
-      const fighterName = btn.getAttribute('data-fighter-name');
-      const rosterMax   = leagueData.roster_size || 20;
-
-      // If the roster is already full, send them to the full waivers flow
-      if (myRosterCount >= rosterMax) {
-        if (confirm(
-          'Your roster is full (' + myRosterCount + '/' + rosterMax + ').\n' +
-          'Go to the Free Agency page to drop a player first?'
-        )) {
-          window.location.href = 'waivers.html?id=' + leagueIdRef;
-        }
-        return;
-      }
-
-      btn.disabled    = true;
-      btn.textContent = 'Adding...';
-
-      const { error } = await supabaseClient
-        .from('rosters')
-        .insert({
-          league_id:        leagueIdRef,
-          league_member_id: myMemberId,
-          fighter_id:       fighterId
-        });
-
-      if (error) {
-        alert('Error adding ' + fighterName + ': ' + error.message);
-        btn.disabled    = false;
-        btn.textContent = 'Add';
-        return;
-      }
-
-      // Refresh the list so the newly-added fighter disappears
-      await loadFreeAgents();
+    btn.addEventListener('click', function() {
+      var fighterId = btn.getAttribute('data-fighter-id');
+      window.location.href = 'waivers.html?id=' + leagueIdRef +
+                             '&claim=' + encodeURIComponent(fighterId);
     });
   });
 }

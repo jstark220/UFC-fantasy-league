@@ -184,6 +184,23 @@
       </div>
 
       <!-- ================================================================
+           RECENT ACTIVITY
+           Embedded card showing last 8 league events (drops, claims,
+           trades, joins, draft picks, score pushes). "See all" links to
+           the standalone activity.html page for full history + filters.
+           Rendered by js/activity.js -> LeagueActivity.renderFeed.
+           Reuses .league-info-card so it matches the visual rhythm of
+           the panels above and below it.
+           ================================================================ -->
+      <div class="league-info-card activity-card">
+        <div class="activity-card__header">
+          <p class="section-label">Recent Activity</p>
+          <a href="#" class="activity-card__see-all" id="activitySeeAllLink">See all &rarr;</a>
+        </div>
+        <div id="leagueActivityFeed"></div>
+      </div>
+
+      <!-- ================================================================
            LEAGUE INFO (secondary — demoted below the live content)
            Two-column layout: details + draft left, invite + managers right.
            ================================================================ -->
@@ -235,6 +252,9 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/supabase-config.js"></script>
   <script src="js/auth-guard.js"></script>
+  <script src="js/commissioner.js"></script>
+  <script src="js/activity.js"></script>
+  <script src="js/waiver-phase.js"></script>
   <script src="js/league.js"></script>
 
   <script>

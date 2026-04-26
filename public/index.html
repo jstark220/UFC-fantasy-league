@@ -204,6 +204,134 @@
         </div>
       </div><!-- /slide 2 -->
 
+      <!-- ---- Slide 3: Set your lineup ---- -->
+      <div class="hero-carousel__slide" data-slide="2">
+        <div class="hero-carousel__inner">
+
+          <div class="hero-slide__left">
+            <p class="hero__eyebrow">GAMEDAY</p>
+            <h2 class="hero__title">
+              Set your starters.<br>Score in <span class="kf-red">real time.</span>
+            </h2>
+            <p class="hero__subtitle">
+              Pick three fighters from your roster every Saturday. Watch their points
+              tick up live as the card unfolds. Lock-in is at the first prelim.
+            </p>
+            <div class="hero__actions">
+              <a href="signup.html" class="btn-primary">Start your league free</a>
+              <a href="#scoring" class="btn-secondary">See how scoring works</a>
+            </div>
+          </div>
+
+          <div class="hero-slide__right">
+            <!-- Lineup screen mockup: browser chrome + event header + 3 starter cards.
+                 Reuses the real .fighter-card classes so this stays visually
+                 in sync with the app — only the size is scaled down via the
+                 .lineup-mockup parent so 3 cards fit comfortably. -->
+            <div class="lineup-mockup">
+              <div class="app-mockup__chrome">
+                <span class="app-mockup__dot" style="background:#ff5f57"></span>
+                <span class="app-mockup__dot" style="background:#febc2e"></span>
+                <span class="app-mockup__dot" style="background:#28c840"></span>
+                <span class="app-mockup__url">knockdownfantasy.com/lineup</span>
+              </div>
+
+              <div class="lineup-mockup__header">
+                <div>
+                  <p class="lineup-mockup__eyebrow">SET YOUR LINEUP</p>
+                  <p class="lineup-mockup__event">UFC 327 &middot; Topuria vs Holloway</p>
+                </div>
+                <div class="lineup-mockup__status">
+                  <span class="lineup-mockup__status-dot"></span>
+                  Live &middot; 169.5 pts
+                </div>
+              </div>
+
+              <div class="lineup-mockup__cards">
+
+                <!-- Card 1: Topuria — champion tier (gold border) -->
+                <div class="fighter-card fighter-card--champion">
+                  <div class="fighter-card__photo-wrap">
+                    <img class="fighter-card__photo"
+                         src="https://ufc.com/images/styles/athlete_bio_full_body/s3/2024-10/TOPURIA_ILIA_L_BELT_10-26.png?itok=q7gCuWWe"
+                         alt="Ilia Topuria"
+                         onerror="this.style.display='none'">
+                  </div>
+                  <div class="fighter-card__rating">
+                    <span class="fighter-card__rating-num">C</span>
+                    <span class="fighter-card__rating-label">CHAMP</span>
+                  </div>
+                  <span class="fighter-card__badge-champ">Champ</span>
+                  <div class="fighter-card__info">
+                    <p class="fighter-card__division">Men's Lightweight</p>
+                    <p class="fighter-card__name">Ilia Topuria</p>
+                    <div class="fighter-card__stat-row">
+                      <p class="fighter-card__record">17-0</p>
+                      <span class="fighter-card__pts">
+                        <span class="fighter-card__pts-val">89.5</span>
+                        <span class="fighter-card__pts-label">PTS</span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Card 2: O'Malley — top-5 tier (silver border) -->
+                <div class="fighter-card fighter-card--top5">
+                  <div class="fighter-card__photo-wrap">
+                    <img class="fighter-card__photo"
+                         src="https://ufc.com/images/styles/athlete_bio_full_body/s3/2026-01/OMALLEY_SEAN_L_01-24.png?itok=rrhehnzb"
+                         alt="Sean O'Malley"
+                         onerror="this.style.display='none'">
+                  </div>
+                  <div class="fighter-card__rating">
+                    <span class="fighter-card__rating-num">#3</span>
+                    <span class="fighter-card__rating-label">RANK</span>
+                  </div>
+                  <div class="fighter-card__info">
+                    <p class="fighter-card__division">Men's Bantamweight</p>
+                    <p class="fighter-card__name">Sean O'Malley</p>
+                    <div class="fighter-card__stat-row">
+                      <p class="fighter-card__record">19-3</p>
+                      <span class="fighter-card__pts">
+                        <span class="fighter-card__pts-val">47.8</span>
+                        <span class="fighter-card__pts-label">PTS</span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Card 3: Lopes — top-5 tier -->
+                <div class="fighter-card fighter-card--top5">
+                  <div class="fighter-card__photo-wrap">
+                    <img class="fighter-card__photo"
+                         src="https://ufc.com/images/styles/athlete_bio_full_body/s3/2026-02/LOPES_DIEGO_L_01-31.png?itok=iqRkGaBJ"
+                         alt="Diego Lopes"
+                         onerror="this.style.display='none'">
+                  </div>
+                  <div class="fighter-card__rating">
+                    <span class="fighter-card__rating-num">#2</span>
+                    <span class="fighter-card__rating-label">RANK</span>
+                  </div>
+                  <div class="fighter-card__info">
+                    <p class="fighter-card__division">Men's Featherweight</p>
+                    <p class="fighter-card__name">Diego Lopes</p>
+                    <div class="fighter-card__stat-row">
+                      <p class="fighter-card__record">27-8</p>
+                      <span class="fighter-card__pts">
+                        <span class="fighter-card__pts-val">32.2</span>
+                        <span class="fighter-card__pts-label">PTS</span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div><!-- /slide 3 -->
+
       <!-- Arrow nav: abs-positioned inside viewport, fade in on hero hover -->
       <button class="hero-carousel__arrow hero-carousel__arrow--prev" id="heroPrev" aria-label="Previous slide">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -222,6 +350,7 @@
     <div class="hero-carousel__nav">
       <button class="hero-carousel__dot hero-carousel__dot--active" data-slide="0" aria-label="Slide 1: Your roster rated"></button>
       <button class="hero-carousel__dot" data-slide="1" aria-label="Slide 2: Beat your friends"></button>
+      <button class="hero-carousel__dot" data-slide="2" aria-label="Slide 3: Set your lineup"></button>
     </div>
 
   </section>
@@ -502,117 +631,6 @@
     </div>
   </section>
 
-  <!-- ================================================================
-       UFC 329 FIGHT CARD
-       True poster layout: fighters face each other across a VS center.
-       Main event is larger. Title fights get a gold top border.
-       ================================================================ -->
-  <section class="home-section">
-    <div class="home-section__header">
-      <p class="home-section__eyebrow">UFC 329 &middot; May 3 &middot; Las Vegas</p>
-      <h2 class="home-section__title">Fight card</h2>
-      <p class="home-section__sub">
-        Four title fights on one card. Set your lineup before Saturday's first prelim.
-      </p>
-    </div>
-
-    <div class="fights-list">
-
-      <!-- Main event: visually dominant, larger type, gold title border -->
-      <div class="fight-card-row fight-card-row--main fight-card-row--title">
-        <div class="fighter-corner fighter-corner--left">
-          <div class="fighter-corner__flag">🇷🇺</div>
-          <h3 class="fighter-corner__name">Islam Makhachev</h3>
-          <p class="fighter-corner__record">(26-1) &middot; Champion</p>
-        </div>
-        <div class="fight-card-vs">
-          <span class="fight-card-vs__label">Main Event</span>
-          <span class="fight-card-vs__text">VS</span>
-          <span class="fight-card-vs__division">Lightweight Title</span>
-        </div>
-        <div class="fighter-corner fighter-corner--right">
-          <div class="fighter-corner__flag">🇦🇲</div>
-          <h3 class="fighter-corner__name">Arman Tsarukyan</h3>
-          <p class="fighter-corner__record">(22-3) &middot; #1</p>
-        </div>
-      </div>
-
-      <!-- Co-main: standard size, title border -->
-      <div class="fight-card-row fight-card-row--title">
-        <div class="fighter-corner fighter-corner--left">
-          <div class="fighter-corner__flag">🇬🇪</div>
-          <h3 class="fighter-corner__name">Ilia Topuria</h3>
-          <p class="fighter-corner__record">(17-0) &middot; Champion</p>
-        </div>
-        <div class="fight-card-vs">
-          <span class="fight-card-vs__label">Co-Main</span>
-          <span class="fight-card-vs__text">VS</span>
-          <span class="fight-card-vs__division">Featherweight Title</span>
-        </div>
-        <div class="fighter-corner fighter-corner--right">
-          <div class="fighter-corner__flag">🇺🇸</div>
-          <h3 class="fighter-corner__name">Max Holloway</h3>
-          <p class="fighter-corner__record">(26-7) &middot; Former Champ</p>
-        </div>
-      </div>
-
-      <div class="fight-card-row fight-card-row--title">
-        <div class="fighter-corner fighter-corner--left">
-          <div class="fighter-corner__flag">🇺🇸</div>
-          <h3 class="fighter-corner__name">Belal Muhammad</h3>
-          <p class="fighter-corner__record">(23-3) &middot; Champion</p>
-        </div>
-        <div class="fight-card-vs">
-          <span class="fight-card-vs__label">Main Card</span>
-          <span class="fight-card-vs__text">VS</span>
-          <span class="fight-card-vs__division">Welterweight Title</span>
-        </div>
-        <div class="fighter-corner fighter-corner--right">
-          <div class="fighter-corner__flag">🇦🇺</div>
-          <h3 class="fighter-corner__name">Jack Della Maddalena</h3>
-          <p class="fighter-corner__record">(17-2) &middot; #1</p>
-        </div>
-      </div>
-
-      <div class="fight-card-row fight-card-row--title">
-        <div class="fighter-corner fighter-corner--left">
-          <div class="fighter-corner__flag">🇬🇪</div>
-          <h3 class="fighter-corner__name">Merab Dvalishvili</h3>
-          <p class="fighter-corner__record">(18-4) &middot; Champion</p>
-        </div>
-        <div class="fight-card-vs">
-          <span class="fight-card-vs__label">Main Card</span>
-          <span class="fight-card-vs__text">VS</span>
-          <span class="fight-card-vs__division">Bantamweight Title</span>
-        </div>
-        <div class="fighter-corner fighter-corner--right">
-          <div class="fighter-corner__flag">🇺🇸</div>
-          <h3 class="fighter-corner__name">Sean O'Malley</h3>
-          <p class="fighter-corner__record">(18-2) &middot; Former Champ</p>
-        </div>
-      </div>
-
-      <!-- Non-title fight: no gold border, but still big names worth watching -->
-      <div class="fight-card-row">
-        <div class="fighter-corner fighter-corner--left">
-          <div class="fighter-corner__flag">🇧🇷</div>
-          <h3 class="fighter-corner__name">Alex Pereira</h3>
-          <p class="fighter-corner__record">(12-2) &middot; Former Champ</p>
-        </div>
-        <div class="fight-card-vs">
-          <span class="fight-card-vs__label">Main Card</span>
-          <span class="fight-card-vs__text">VS</span>
-          <span class="fight-card-vs__division">Light Heavyweight</span>
-        </div>
-        <div class="fighter-corner fighter-corner--right">
-          <div class="fighter-corner__flag">🇨🇿</div>
-          <h3 class="fighter-corner__name">Jiří Procházka</h3>
-          <p class="fighter-corner__record">(30-4-1) &middot; Former Champ</p>
-        </div>
-      </div>
-
-    </div>
-  </section>
 
   <!-- ================================================================
        FOOTER

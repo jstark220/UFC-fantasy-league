@@ -8,13 +8,10 @@
 //   ?league=LEAGUE_UUID      — optional, used for the back-navigation link
 // ========================================================================
 
-// Card position multipliers (must match score-event.js)
-const CARD_MULTIPLIERS = {
-  main_event:   1.2,
-  co_main:      1.1,
-  prelim:       1.0,
-  early_prelim: 1.0
-};
+// This league's scoring_config — populated at init when ?league= is in the
+// URL. Null when viewing a fighter outside a league context, in which case
+// the Scoring engine falls back to v1.2 defaults.
+let _scoringConfig = null;
 
 const DIVISION_LABELS = {
   strawweight:       "Women's Strawweight",
@@ -65,8 +62,10 @@ async function initFighter() {
     backLink.href = 'javascript:history.back()';
   }
 
-  // Fetch fighter details and their fight results in parallel
-  const [fighterRes, fightsRes] = await Promise.all([
+  // Fetch fighter, fights, and (optionally) the league's scoring config in
+  // parallel. The scoring config drives per-fight point displays so a league
+  // with custom rules sees its own numbers instead of hardcoded v1.2.
+  const fetchPromises = [
     supabaseClient
       .from('fighters')
       .select('id, name, nickname, primary_division, current_rank, is_champion, record_wins, record_losses, record_draws, photo_url, country')
@@ -78,7 +77,21 @@ async function initFighter() {
       .select('*, event:ufc_events(id, name, event_date)')
       .or('fighter_a_id.eq.' + fighterId + ',fighter_b_id.eq.' + fighterId)
       .order('created_at', { ascending: false })
-  ]);
+  ];
+  if (leagueId) {
+    fetchPromises.push(
+      supabaseClient
+        .from('leagues')
+        .select('scoring_config')
+        .eq('id', leagueId)
+        .single()
+    );
+  }
+  const results = await Promise.all(fetchPromises);
+  const fighterRes = results[0];
+  const fightsRes  = results[1];
+  const leagueRes  = results[2] || null;
+  _scoringConfig = (leagueRes && leagueRes.data) ? leagueRes.data.scoring_config : null;
 
   if (fighterRes.error || !fighterRes.data) {
     document.getElementById('pageContent').innerHTML = '<p style="padding:2rem">Fighter not found.</p>';
@@ -221,7 +234,7 @@ function renderFightHistory(fights, fighterId, opponentMap) {
     return;
   }
 
-  const rows = fights.map(function(fight) {
+  const rows = fights.map(function(fight, idx) {
     const isA        = fight.fighter_a_id === fighterId;
     const score      = computeFighterScore(fight, isA);
     const opponentId = isA ? fight.fighter_b_id : fight.fighter_a_id;
@@ -249,6 +262,15 @@ function renderFightHistory(fights, fighterId, opponentMap) {
     const ptsClass = score.total >= 25 ? ' fight-history-pts--high'
                    : score.total >= 10 ? ' fight-history-pts--mid' : '';
 
+    // Build the hidden breakdown row HTML via the shared score-breakdown
+    // module so the standalone fighter page and the fighter modal stay
+    // in sync.
+    const breakdownHtml = ScoreBreakdown.buildHtml(score, fight, _scoringConfig);
+
+    // Each fight produces TWO <tr>s: a clickable main row and an initially
+    // hidden detail row containing the breakdown. data-breakdown-toggle on
+    // the Pts cell pairs with data-breakdown-target on the detail row,
+    // which ScoreBreakdown.wireToggles() wires up below.
     return (
       '<tr class="fight-history-row">' +
         '<td class="fight-history-event">' +
@@ -259,7 +281,13 @@ function renderFightHistory(fights, fighterId, opponentMap) {
         '<td><span class="fight-result ' + resultClass + '">' + resultLabel + '</span></td>' +
         '<td class="fight-history-method">' + escapeHtml(method) + '</td>' +
         '<td class="fight-history-round">' + round + '</td>' +
-        '<td class="fight-history-pts' + ptsClass + '">' + score.total.toFixed(1) + '</td>' +
+        '<td class="fight-history-pts' + ptsClass + '" data-breakdown-toggle="' + idx + '" tabindex="0" role="button" aria-expanded="false">' +
+          '<span class="fight-history-pts__val">' + score.total.toFixed(1) + '</span>' +
+          '<span class="fight-history-pts__chevron" aria-hidden="true">&#9656;</span>' +
+        '</td>' +
+      '</tr>' +
+      '<tr class="fight-history-detail" data-breakdown-target="' + idx + '" hidden>' +
+        '<td colspan="6">' + breakdownHtml + '</td>' +
       '</tr>'
     );
   }).join('');
@@ -278,6 +306,9 @@ function renderFightHistory(fights, fighterId, opponentMap) {
       '</thead>' +
       '<tbody>' + rows + '</tbody>' +
     '</table>';
+
+  // Bind click + keyboard handlers on every Pts cell to toggle its detail row
+  ScoreBreakdown.wireToggles(el);
 }
 
 // ========================================================================
@@ -290,72 +321,13 @@ function renderNextFight() {
 }
 
 // ========================================================================
-// COMPUTE FIGHTER SCORE (v1.2)
-// Copied from score-event.js — must be kept in sync with that file.
-// Takes a fight_results row and isA (true = this fighter was fighter_a).
+// COMPUTE FIGHTER SCORE — delegates to the shared Scoring engine in
+// scoring.js. Uses this league's scoring_config when present (URL has
+// ?league=) so per-fight points reflect any custom rules; otherwise the
+// engine falls back to v1.2 defaults.
 // ========================================================================
 function computeFighterScore(fight, isA) {
-  const prefix   = isA ? 'fighter_a_' : 'fighter_b_';
-  const fighterId = isA ? fight.fighter_a_id : fight.fighter_b_id;
-
-  const sigStrikes   = fight[prefix + 'sig_strikes']     || 0;
-  const takedowns    = fight[prefix + 'takedowns']       || 0;
-  const knockdowns   = fight[prefix + 'knockdowns']      || 0;
-  const controlSec   = fight[prefix + 'control_seconds'] || 0;
-  const potn         = !!fight[prefix + 'potn'];
-  const opponentRank = fight[prefix + 'opponent_rank'];
-
-  const isWinner = fight.winner_id === fighterId;
-  const isDraw   = fight.outcome === 'draw';
-
-  // Base stats
-  const base = (sigStrikes * 0.1) + (takedowns * 1) +
-               (knockdowns * 2) + (controlSec * 0.01);
-
-  // Win bonus
-  let winBonus = 0;
-  if (isWinner) {
-    const isFinish = fight.outcome === 'ko_tko' || fight.outcome === 'submission';
-    if (isFinish) {
-      if      (fight.end_round === 1) winBonus = 18;
-      else if (fight.end_round === 2) winBonus = 14;
-      else if (fight.end_round === 3) winBonus = 9;
-      else                            winBonus = 8;
-      if (fight.end_round === 1 && fight.end_time_seconds != null && fight.end_time_seconds < 60) {
-        winBonus += 5;
-      }
-    } else if (fight.outcome === 'decision_u' || fight.outcome === 'decision_s' ||
-               fight.outcome === 'decision_m' || fight.outcome === 'dq') {
-      winBonus = 6;
-    }
-  } else if (isDraw) {
-    winBonus = 3;
-  }
-
-  // Title bonus
-  let titleBonus = 0;
-  if (isWinner && fight.title_type !== 'none') {
-    if (fight.title_type === 'divisional') {
-      titleBonus = fight.is_title_defense ? 5 : 10;
-    } else if (fight.title_type === 'interim' || fight.title_type === 'bmf') {
-      titleBonus = fight.is_title_defense ? 3 : 5;
-    }
-  }
-
-  // Ranked opponent bonus
-  let rankedOppBonus = 0;
-  if (isWinner && opponentRank != null) {
-    if      (opponentRank <= 5)  rankedOppBonus = 4;
-    else if (opponentRank <= 10) rankedOppBonus = 2;
-    else if (opponentRank <= 15) rankedOppBonus = 1;
-  }
-
-  const potnBonus = potn ? 6 : 0;
-  const fotnBonus = fight.fight_of_the_night ? 4 : 0;
-  const multiplier = CARD_MULTIPLIERS[fight.card_position] || 1.0;
-  const subtotal   = base + winBonus + titleBonus + rankedOppBonus + potnBonus + fotnBonus;
-
-  return { total: Math.round(subtotal * multiplier * 100) / 100 };
+  return Scoring.computeFighterScore(fight, isA, _scoringConfig);
 }
 
 // ========================================================================

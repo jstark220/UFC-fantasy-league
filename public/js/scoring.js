@@ -1,0 +1,210 @@
+// ========================================================================
+// SCORING ENGINE — pure functions, single source of truth
+//
+// Inputs: a fight_results row + a scoring_config JSONB (from leagues table).
+// Output: per-fighter score object with total + breakdown.
+//
+// Designed to run in either context:
+//   * Browser — attaches to window.Scoring
+//   * Node    — exports via module.exports (so a future API-ingestion
+//               script can require this same file unchanged)
+//
+// No DOM access, no Supabase calls, no globals beyond the module's own
+// SCORING_DEFAULTS_V1_2 constant. Pure data → number transform.
+// ========================================================================
+
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) {
+    // Node — used by a future API ingestion service
+    module.exports = factory();
+  } else {
+    // Browser
+    root.Scoring = factory();
+  }
+}(typeof self !== 'undefined' ? self : this, function () {
+
+  // -----------------------------------------------------------------------
+  // v1.2 defaults — keys match leagues.scoring_config JSONB.
+  // Used as the fallback whenever a league's scoring_config is null,
+  // missing, or missing a specific key.
+  // -----------------------------------------------------------------------
+  var SCORING_DEFAULTS_V1_2 = {
+    // Base scoring (per fight)
+    sig_strike:               0.1,
+    takedown:                 1,
+    knockdown:                2,
+    control_per_sec:          0.01,
+
+    // Win bonuses
+    finish_r1:                18,
+    finish_r2:                14,
+    finish_r3:                9,
+    finish_r4_r5:             8,
+    decision:                 6,
+    quick_win_bonus:          5,    // extra +5 if R1 finish under 60s
+    draw_points:              3,
+
+    // Title & ranked-opponent wins
+    divisional_title_win:     10,
+    divisional_title_defense: 5,
+    bmf_interim_win:          5,
+    bmf_interim_defense:      3,
+    top5_win:                 4,
+    top10_win:                2,
+    top15_win:                1,
+
+    // Performance bonuses
+    potn:                     6,
+    fotn:                     4,
+
+    // Card-position multipliers
+    main_event_mult:          1.2,
+    co_main_mult:             1.1
+  };
+
+  // Look up a config value, falling back to v1.2 if the league's config
+  // is missing or doesn't define this key. Lets leagues override partially.
+  function get(scoringConfig, key) {
+    if (scoringConfig != null && scoringConfig[key] != null) {
+      return Number(scoringConfig[key]);
+    }
+    return SCORING_DEFAULTS_V1_2[key];
+  }
+
+  // Tolerates both 'co_main' (used by fighter modal) and 'co_main_event'
+  // (used by the score-event form) — same multiplier either way.
+  function multiplierFor(cardPosition, cfg) {
+    if (cardPosition === 'main_event')                            return get(cfg, 'main_event_mult');
+    if (cardPosition === 'co_main_event' || cardPosition === 'co_main') return get(cfg, 'co_main_mult');
+    return 1.0;
+  }
+
+  // -----------------------------------------------------------------------
+  // computeFighterScore
+  //
+  // Computes one fighter's total points from a single fight.
+  //
+  // Args:
+  //   fight          — a fight_results row, with both fighter_a_* and
+  //                    fighter_b_* prefixed columns plus shared fields
+  //                    (outcome, winner_id, end_round, end_time_seconds,
+  //                    title_type, is_title_defense, fight_of_the_night,
+  //                    card_position).
+  //   isA            — true if computing for fighter A, false for B
+  //   scoringConfig  — JSONB from leagues.scoring_config; null/undefined
+  //                    falls back entirely to v1.2 defaults
+  //
+  // Returns: { fighterId, total, base_points, win_bonus, title_bonus,
+  //            ranked_opp_bonus, potn_bonus, fotn_bonus, card_multiplier,
+  //            scoring_detail }
+  // -----------------------------------------------------------------------
+  function computeFighterScore(fight, isA, scoringConfig) {
+    var cfg    = scoringConfig || null;
+    var prefix = isA ? 'fighter_a_' : 'fighter_b_';
+
+    var sigStrikes   = fight[prefix + 'sig_strikes']      || 0;
+    var takedowns    = fight[prefix + 'takedowns']        || 0;
+    var knockdowns   = fight[prefix + 'knockdowns']       || 0;
+    var controlSec   = fight[prefix + 'control_seconds']  || 0;
+    var potn         = !!fight[prefix + 'potn'];
+    var opponentRank = fight[prefix + 'opponent_rank'];   // null if unranked
+
+    var fighterId = isA ? fight.fighter_a_id : fight.fighter_b_id;
+    var isWinner  = fight.winner_id === fighterId;
+    var isDraw    = fight.outcome === 'draw';
+
+    // ---- Base stats ----
+    var base = (sigStrikes * get(cfg, 'sig_strike'))
+             + (takedowns  * get(cfg, 'takedown'))
+             + (knockdowns * get(cfg, 'knockdown'))
+             + (controlSec * get(cfg, 'control_per_sec'));
+
+    // ---- Win bonus ----
+    var winBonus = 0;
+    if (isWinner) {
+      var round    = fight.end_round;
+      var timeSec  = fight.end_time_seconds;
+      var isFinish = fight.outcome === 'ko_tko' || fight.outcome === 'submission';
+
+      if (isFinish) {
+        if      (round === 1) winBonus = get(cfg, 'finish_r1');
+        else if (round === 2) winBonus = get(cfg, 'finish_r2');
+        else if (round === 3) winBonus = get(cfg, 'finish_r3');
+        else                  winBonus = get(cfg, 'finish_r4_r5');
+        // Quick-win bonus: R1 finish inside 60 seconds
+        if (round === 1 && timeSec != null && timeSec < 60) {
+          winBonus += get(cfg, 'quick_win_bonus');
+        }
+      } else if (
+        fight.outcome === 'decision_u' || fight.outcome === 'decision_s' ||
+        fight.outcome === 'decision_m' || fight.outcome === 'dq'
+      ) {
+        winBonus = get(cfg, 'decision');
+      }
+    } else if (isDraw) {
+      winBonus = get(cfg, 'draw_points');
+    }
+
+    // ---- Title bonus (winner only) ----
+    var titleBonus = 0;
+    if (isWinner && fight.title_type && fight.title_type !== 'none') {
+      if (fight.title_type === 'divisional') {
+        titleBonus = fight.is_title_defense
+          ? get(cfg, 'divisional_title_defense')
+          : get(cfg, 'divisional_title_win');
+      } else if (fight.title_type === 'interim' || fight.title_type === 'bmf') {
+        titleBonus = fight.is_title_defense
+          ? get(cfg, 'bmf_interim_defense')
+          : get(cfg, 'bmf_interim_win');
+      }
+    }
+
+    // ---- Ranked-opponent bonus (winner only) ----
+    var rankedOppBonus = 0;
+    if (isWinner && opponentRank != null) {
+      if      (opponentRank <= 5)  rankedOppBonus = get(cfg, 'top5_win');
+      else if (opponentRank <= 10) rankedOppBonus = get(cfg, 'top10_win');
+      else if (opponentRank <= 15) rankedOppBonus = get(cfg, 'top15_win');
+    }
+
+    // ---- Performance bonuses ----
+    var potnBonus = potn ? get(cfg, 'potn') : 0;
+    var fotnBonus = fight.fight_of_the_night ? get(cfg, 'fotn') : 0;
+
+    // ---- Card-position multiplier ----
+    var multiplier = multiplierFor(fight.card_position, cfg);
+
+    var subtotal = base + winBonus + titleBonus + rankedOppBonus + potnBonus + fotnBonus;
+    var total    = Math.round(subtotal * multiplier * 100) / 100;  // 2 decimals
+
+    return {
+      fighterId:        fighterId,
+      total:            total,
+      base_points:      Math.round(base * 100) / 100,
+      win_bonus:        winBonus,
+      title_bonus:      titleBonus,
+      ranked_opp_bonus: rankedOppBonus,
+      potn_bonus:       potnBonus,
+      fotn_bonus:       fotnBonus,
+      card_multiplier:  multiplier,
+      scoring_detail: {
+        sig_strikes:      sigStrikes,
+        takedowns:        takedowns,
+        knockdowns:       knockdowns,
+        control_seconds:  controlSec,
+        opponent_rank:    opponentRank,
+        is_winner:        isWinner,
+        is_draw:          isDraw,
+        outcome:          fight.outcome,
+        end_round:        fight.end_round,
+        end_time_seconds: fight.end_time_seconds
+      }
+    };
+  }
+
+  return {
+    computeFighterScore:   computeFighterScore,
+    SCORING_DEFAULTS_V1_2: SCORING_DEFAULTS_V1_2
+  };
+
+}));

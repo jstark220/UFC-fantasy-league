@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="styles/tokens.css">
   <link rel="stylesheet" href="styles/components.css">
 
-  <title>Lineup - Knockdown Fantasy</title>
+  <title>Activity - Knockdown Fantasy</title>
 </head>
 <body>
 
@@ -34,47 +34,34 @@
 
     <div class="league-header">
       <div class="league-header__inner">
-        <h1 class="league-header__name" id="leagueName"></h1>
-        <div class="league-header__actions" id="headerActions"></div>
+        <h1 class="league-header__name" id="leagueName">Activity</h1>
       </div>
     </div>
 
     <div class="dashboard-body">
-
-      <!-- Event banner: rendered by lineup.js -->
-      <div id="eventBanner"></div>
-
-      <!-- Roster imbalance warning — shown when trades / FA leave the roster
-           out of alignment with construction rules. Populated by lineup.js. -->
-      <div id="rosterImbalanceBanner" class="roster-imbalance-banner" style="display: none;"></div>
-
-      <!-- Starter card slots -->
-      <div class="lineup-section">
-        <p class="section-label">
-          My Starters
-          <span class="section-label__count" id="starterCount">(0 / 3)</span>
-        </p>
-        <div class="lineup-starters" id="starterSlots"></div>
+      <!-- Filter bar — kind multi-select. Clicking a chip adds/removes it
+           from the filter. With nothing selected we show everything. -->
+      <div class="activity-filter" id="activityFilter">
+        <button class="activity-filter__chip activity-filter__chip--active" data-kind="all">All</button>
+        <button class="activity-filter__chip" data-kind="drop">Drops</button>
+        <button class="activity-filter__chip" data-kind="claim_won,claim_lost">Waivers</button>
+        <button class="activity-filter__chip" data-kind="trade_proposed,trade_accepted,trade_rejected">Trades</button>
+        <button class="activity-filter__chip" data-kind="draft_pick">Draft</button>
+        <button class="activity-filter__chip" data-kind="event_scored">Scoring</button>
+        <button class="activity-filter__chip" data-kind="member_joined,member_promoted,member_demoted">Managers</button>
       </div>
 
-      <!-- Full roster list -->
-      <div class="lineup-section">
-        <p class="section-label">My Roster</p>
-        <div class="lineup-roster-list" id="rosterList"></div>
-      </div>
-
+      <!-- Renders into here via LeagueActivity.renderFeed -->
+      <div id="activityFeed"></div>
     </div>
+
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/supabase-config.js"></script>
   <script src="js/auth-guard.js"></script>
-  <script src="js/scoring.js"></script>
-  <script src="js/score-breakdown.js"></script>
-  <script src="js/fighter-modal.js"></script>
-  <script src="js/waiver-phase.js"></script>
   <script src="js/activity.js"></script>
-  <script src="js/lineup.js"></script>
+  <script src="js/activity-page.js"></script>
 
   <script>
     document.querySelectorAll('.btn-theme').forEach(function(btn) {

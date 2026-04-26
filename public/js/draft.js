@@ -281,6 +281,19 @@ async function makePick(fighter) {
       .order('draft_pick');
     if (freshPicks) picks = freshPicks;
     renderAll();
+    return;
+  }
+
+  // Activity feed: draft_pick. Captures round + overall so the line reads
+  // "Mike drafted Topuria (R3 · #21)". Best-effort — failures are logged
+  // inside LeagueActivity, not surfaced to the drafter.
+  if (typeof LeagueActivity !== 'undefined') {
+    LeagueActivity.logEvent(leagueId, LeagueActivity.KINDS.DRAFT_PICK, {
+      fighter_id:    fighter.id,
+      fighter_name:  fighter.name,
+      round:         round,
+      pick_overall:  pickNum
+    }, myMemberId);
   }
   // On success: Realtime fires handleNewPick, which re-renders everything
 }

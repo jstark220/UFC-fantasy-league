@@ -57,7 +57,7 @@ async function initWaivers() {
       .single(),
     supabaseClient
       .from('league_members')
-      .select('id, user_id, team_name, waiver_priority')
+      .select('id, user_id, team_name, waiver_priority, is_commissioner')
       .eq('league_id', leagueId),
     supabaseClient
       .from('fighters')
@@ -107,7 +107,9 @@ async function initWaivers() {
   myMember = members.find(function(m) { return m.user_id === user.id; });
   if (!myMember) { window.location.href = 'dashboard.html'; return; }
   myMemberId     = myMember.id;
-  isCommissioner = league.commissioner_id === user.id;
+  // True for primary OR co-commissioner — both get the manual "Process
+  // waivers now" button and other commissioner-only controls on this page.
+  isCommissioner = Commissioner.isCommissioner(league, members, user.id);
 
   allFighters = fightersRes.data || [];
 
@@ -156,6 +158,18 @@ async function initWaivers() {
   }
 
   document.getElementById('pageContent').style.display = 'block';
+
+  // Auto-open the claim/add modal if we arrived with ?claim=FIGHTER_ID.
+  // This is how the league page's "Add" buttons in the Top Free Agents
+  // panel hand off to the proper claim flow — the league page used to
+  // do an inline insert that bypassed the rolling-waiver gate, which
+  // let users re-add a fighter they had just dropped. Routing through
+  // here ensures the same gating logic (claim window, rolling waiver,
+  // roster construction) applies to every add.
+  var claimParam = new URLSearchParams(window.location.search).get('claim');
+  if (claimParam && allFighters.some(function(f) { return f.id === claimParam; })) {
+    openClaimModal(claimParam);
+  }
 }
 
 // ========================================================================
@@ -541,15 +555,45 @@ async function processClaimBatch(claims, rosterMap) {
     }).eq('id', claim.id);
 
     claimedThisCycle.add(claim.fighter_to_add_id);
+
+    // Activity feed: claim won by this manager. Includes the dropped
+    // fighter context so the headline reads "won X, dropping Y".
+    if (typeof LeagueActivity !== 'undefined') {
+      var addedFighter   = fighterMap[claim.fighter_to_add_id];
+      var droppedFighter = claim.fighter_to_drop_id ? fighterMap[claim.fighter_to_drop_id] : null;
+      LeagueActivity.logEvent(leagueId, LeagueActivity.KINDS.CLAIM_WON, {
+        fighter_id:           claim.fighter_to_add_id,
+        fighter_name:         addedFighter ? addedFighter.name : 'a fighter',
+        dropped_fighter_id:   droppedFighter ? droppedFighter.id   : null,
+        dropped_fighter_name: droppedFighter ? droppedFighter.name : null,
+        priority:             claim.priority,
+        via:                  'waiver'
+      }, claim.league_member_id);
+    }
   }
 }
 
 async function rejectClaim(claim, reason) {
-  return supabaseClient.from('waiver_claims').update({
+  var res = await supabaseClient.from('waiver_claims').update({
     status: 'rejected',
     rejection_reason: reason,
     processed_at: new Date().toISOString()
   }).eq('id', claim.id);
+
+  // Activity feed: claim lost. We log only when the rejection reason is
+  // contention with another claimant — losing because of cap/construction
+  // is the manager's own configuration error and not interesting to the
+  // wider league. Heuristic: rejection_reason starts with "Fighter already".
+  if (typeof LeagueActivity !== 'undefined' && /^Fighter already/i.test(reason || '')) {
+    var fighter = (allFighters || []).find(function(f) { return f.id === claim.fighter_to_add_id; });
+    LeagueActivity.logEvent(leagueId, LeagueActivity.KINDS.CLAIM_LOST, {
+      fighter_id:   claim.fighter_to_add_id,
+      fighter_name: fighter ? fighter.name : 'a fighter',
+      priority:     claim.priority,
+      reason:       reason
+    }, claim.league_member_id);
+  }
+  return res;
 }
 
 // ========================================================================
@@ -1247,6 +1291,17 @@ async function submitInstantAdd() {
     });
     // Drop log failure is non-fatal — the add still proceeds
     if (dropLogRes.error) console.warn('roster_drops insert failed:', dropLogRes.error);
+
+    // Activity feed: log the drop. Look up the fighter name from the
+    // user's current roster so we can show "dropped X" in the feed.
+    if (typeof LeagueActivity !== 'undefined') {
+      var droppedFighter = (myRoster || []).find(function(f) { return f.id === dropId; });
+      LeagueActivity.logEvent(leagueId, LeagueActivity.KINDS.DROP, {
+        fighter_id:   dropId,
+        fighter_name: droppedFighter ? droppedFighter.name : 'a fighter',
+        source:       'manual'
+      }, myMemberId);
+    }
   }
 
   var addRes = await supabaseClient.from('rosters').insert({
@@ -1260,6 +1315,18 @@ async function submitInstantAdd() {
     btn.textContent = 'Add Fighter';
     alert('Error adding fighter: ' + addRes.error.message);
     return;
+  }
+
+  // Activity feed: free-agent adds are reported as a "won" claim with
+  // priority null so the line still reads cleanly in the unified feed.
+  // (We don't model "instant_add" as its own kind to avoid an extra
+  // entry-type per surface.)
+  if (typeof LeagueActivity !== 'undefined') {
+    LeagueActivity.logEvent(leagueId, LeagueActivity.KINDS.CLAIM_WON, {
+      fighter_id:   claimingFighter.id,
+      fighter_name: claimingFighter.name,
+      via:          'instant_add'
+    }, myMemberId);
   }
 
   closeClaimModal();
@@ -1327,6 +1394,16 @@ async function processWaivers() {
         rejection_reason: 'Fighter already claimed by a higher-priority team this cycle.',
         processed_at: new Date().toISOString()
       }).eq('id', claim.id);
+      // Activity feed: lost claim due to higher-priority contention.
+      if (typeof LeagueActivity !== 'undefined') {
+        var lostFighter = (allFighters || []).find(function(f) { return f.id === claim.fighter_to_add_id; });
+        LeagueActivity.logEvent(leagueId, LeagueActivity.KINDS.CLAIM_LOST, {
+          fighter_id:   claim.fighter_to_add_id,
+          fighter_name: lostFighter ? lostFighter.name : 'a fighter',
+          priority:     claim.priority,
+          reason:       'Higher-priority team won the claim this cycle.'
+        }, claim.league_member_id);
+      }
       continue;
     }
 
@@ -1429,6 +1506,20 @@ async function processWaivers() {
     if (!approvedMemberIds.includes(claim.league_member_id)) {
       approvedMemberIds.push(claim.league_member_id);
     }
+
+    // Activity feed: claim_won. Mirrors the auto-batch path above.
+    if (typeof LeagueActivity !== 'undefined') {
+      var addedFighter   = fighterMapForCheck[claim.fighter_to_add_id];
+      var droppedFighter = claim.fighter_to_drop_id ? fighterMapForCheck[claim.fighter_to_drop_id] : null;
+      LeagueActivity.logEvent(leagueId, LeagueActivity.KINDS.CLAIM_WON, {
+        fighter_id:           claim.fighter_to_add_id,
+        fighter_name:         addedFighter ? addedFighter.name : 'a fighter',
+        dropped_fighter_id:   droppedFighter ? droppedFighter.id   : null,
+        dropped_fighter_name: droppedFighter ? droppedFighter.name : null,
+        priority:             claim.priority,
+        via:                  'waiver'
+      }, claim.league_member_id);
+    }
   }
 
   // Approved claimants move to the back of the priority queue
@@ -1454,7 +1545,7 @@ async function refreshData() {
   var results = await Promise.all([
     supabaseClient.from('rosters').select('fighter_id, league_member_id, acquired_at, acquired_method').eq('league_id', leagueId),
     supabaseClient.from('waiver_claims').select('*').eq('league_id', leagueId).order('priority').order('submitted_at'),
-    supabaseClient.from('league_members').select('id, user_id, team_name, waiver_priority').eq('league_id', leagueId),
+    supabaseClient.from('league_members').select('id, user_id, team_name, waiver_priority, is_commissioner').eq('league_id', leagueId),
     supabaseClient.from('roster_drops').select('id, fighter_id, league_member_id, dropped_at, source').eq('league_id', leagueId).order('dropped_at', { ascending: false })
   ]);
 

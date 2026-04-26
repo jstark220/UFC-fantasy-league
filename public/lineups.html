@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="styles/tokens.css">
   <link rel="stylesheet" href="styles/components.css">
 
-  <title>Lineup - Knockdown Fantasy</title>
+  <title>All Lineups - Knockdown Fantasy</title>
 </head>
 <body>
 
@@ -24,7 +24,7 @@
         <span class="kf-red">Knockdown</span> Fantasy
       </a>
       <div class="top-nav__links">
-        <a href="#" class="btn-ghost" id="leagueLink">← League</a>
+        <a href="#" class="btn-ghost" id="lineupBackLink">← My lineup</a>
       </div>
       <div class="top-nav__actions">
         <button class="btn-theme" onclick="toggleTheme()" aria-label="Toggle theme">☾</button>
@@ -34,47 +34,24 @@
 
     <div class="league-header">
       <div class="league-header__inner">
-        <h1 class="league-header__name" id="leagueName"></h1>
-        <div class="league-header__actions" id="headerActions"></div>
+        <h1 class="league-header__name" id="leagueName">All Lineups</h1>
       </div>
     </div>
 
     <div class="dashboard-body">
-
-      <!-- Event banner: rendered by lineup.js -->
+      <!-- Event banner — name, date, status, picker. Rendered by lineups.js. -->
       <div id="eventBanner"></div>
 
-      <!-- Roster imbalance warning — shown when trades / FA leave the roster
-           out of alignment with construction rules. Populated by lineup.js. -->
-      <div id="rosterImbalanceBanner" class="roster-imbalance-banner" style="display: none;"></div>
-
-      <!-- Starter card slots -->
-      <div class="lineup-section">
-        <p class="section-label">
-          My Starters
-          <span class="section-label__count" id="starterCount">(0 / 3)</span>
-        </p>
-        <div class="lineup-starters" id="starterSlots"></div>
-      </div>
-
-      <!-- Full roster list -->
-      <div class="lineup-section">
-        <p class="section-label">My Roster</p>
-        <div class="lineup-roster-list" id="rosterList"></div>
-      </div>
-
+      <!-- Per-member starter cards. Rendered by lineups.js. -->
+      <div id="lineupsGrid"></div>
     </div>
+
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/supabase-config.js"></script>
   <script src="js/auth-guard.js"></script>
-  <script src="js/scoring.js"></script>
-  <script src="js/score-breakdown.js"></script>
-  <script src="js/fighter-modal.js"></script>
-  <script src="js/waiver-phase.js"></script>
-  <script src="js/activity.js"></script>
-  <script src="js/lineup.js"></script>
+  <script src="js/lineups.js"></script>
 
   <script>
     document.querySelectorAll('.btn-theme').forEach(function(btn) {

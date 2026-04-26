@@ -7,13 +7,10 @@
 // defined on the page (falls back to an inline version if not).
 // ========================================================================
 
-// Card position multipliers — must match score-event.js
-var FIGHTER_MODAL_MULTIPLIERS = {
-  main_event:   1.2,
-  co_main:      1.1,
-  prelim:       1.0,
-  early_prelim: 1.0
-};
+// Most recently fetched league.scoring_config — captured per-modal-open and
+// passed to the shared Scoring engine. Null is fine; the engine falls back
+// to v1.2 defaults.
+var _modalScoringConfig = null;
 
 var FIGHTER_MODAL_DIVISION_LABELS = {
   strawweight:       "Women's Strawweight",
@@ -99,7 +96,7 @@ async function showFighterModal(fighterId) {
       //   * never both at once
       supabaseClient
         .from('leagues')
-        .select('draft_started, draft_completed')
+        .select('draft_started, draft_completed, scoring_config')
         .eq('id', pageLeagueId)
         .single()
     );
@@ -114,6 +111,12 @@ async function showFighterModal(fighterId) {
   var ownerMemberId   = (ownershipRes && ownershipRes.data) ? ownershipRes.data.league_member_id : null;
   var draftCompleted  = !!(leagueRes && leagueRes.data && leagueRes.data.draft_completed);
   var draftActive     = !!(leagueRes && leagueRes.data && leagueRes.data.draft_started && !leagueRes.data.draft_completed);
+
+  // Stash this league's scoring_config in module scope so the score-rendering
+  // helpers below can use it without re-threading it through every call.
+  // Null when the modal is opened on a page without league context — the
+  // engine's null-safe path falls back to v1.2 defaults.
+  _modalScoringConfig = (leagueRes && leagueRes.data && leagueRes.data.scoring_config) || null;
 
   if (fighterRes.error || !fighterRes.data) {
     document.querySelector('#fighterModal .fighter-modal').innerHTML =
@@ -157,6 +160,12 @@ async function showFighterModal(fighterId) {
       window.location.href = url;
     });
   }
+
+  // Wire click + keyboard handlers on every Pts cell so the per-fight
+  // score breakdown row beneath each fight can expand/collapse. Scoped
+  // to the fighter-modal node so it only finds toggles inside the modal.
+  var modalRoot = document.querySelector('#fighterModal .fighter-modal');
+  if (modalRoot) ScoreBreakdown.wireToggles(modalRoot);
 }
 
 function closeFighterModal() {
@@ -222,7 +231,7 @@ function buildFighterModalHtml(fighter, fights, fighterId, opponentMap, tradeCtx
   if (fights.length === 0) {
     historyHtml = '<p class="draft-empty" style="padding:var(--space-4)">No fight results recorded yet.</p>';
   } else {
-    var rows = fights.map(function(fight) {
+    var rows = fights.map(function(fight, idx) {
       var isA      = fight.fighter_a_id === fighterId;
       var score    = _modalComputeScore(fight, isA);
       var oppId    = isA ? fight.fighter_b_id : fight.fighter_a_id;
@@ -247,6 +256,15 @@ function buildFighterModalHtml(fighter, fights, fighterId, opponentMap, tradeCtx
       var ptsClass  = score.total >= 25 ? ' fight-history-pts--high'
                     : score.total >= 10 ? ' fight-history-pts--mid' : '';
 
+      // Per-fight score breakdown HTML — rendered into a hidden detail row
+      // beneath the fight, surfaced when the user clicks the Pts cell.
+      // Shared with the standalone fighter page via score-breakdown.js.
+      var breakdownHtml = ScoreBreakdown.buildHtml(score, fight, _modalScoringConfig);
+
+      // Modal IDs are scoped with "m" prefix to avoid collisions with any
+      // breakdown table the host page might also render.
+      var key = 'm' + idx;
+
       return (
         '<tr class="fight-history-row">' +
           '<td class="fight-history-event">' +
@@ -257,7 +275,13 @@ function buildFighterModalHtml(fighter, fights, fighterId, opponentMap, tradeCtx
           '<td><span class="fight-result ' + resultClass + '">' + resultLabel + '</span></td>' +
           '<td class="fight-history-method">' + _mEsc(method) + '</td>' +
           '<td class="fight-history-round">' + round + '</td>' +
-          '<td class="fight-history-pts' + ptsClass + '">' + score.total.toFixed(1) + '</td>' +
+          '<td class="fight-history-pts' + ptsClass + '" data-breakdown-toggle="' + key + '" tabindex="0" role="button" aria-expanded="false">' +
+            '<span class="fight-history-pts__val">' + score.total.toFixed(1) + '</span>' +
+            '<span class="fight-history-pts__chevron" aria-hidden="true">&#9656;</span>' +
+          '</td>' +
+        '</tr>' +
+        '<tr class="fight-history-detail" data-breakdown-target="' + key + '" hidden>' +
+          '<td colspan="6">' + breakdownHtml + '</td>' +
         '</tr>'
       );
     }).join('');
@@ -342,61 +366,11 @@ function _statTile(value, label) {
 }
 
 // ========================================================================
-// SCORING (v1.2) — kept in sync with score-event.js
+// SCORING — delegates to the shared Scoring engine in scoring.js with this
+// league's scoring_config (or v1.2 defaults if no league context).
 // ========================================================================
 function _modalComputeScore(fight, isA) {
-  var prefix    = isA ? 'fighter_a_' : 'fighter_b_';
-  var fighterId = isA ? fight.fighter_a_id : fight.fighter_b_id;
-
-  var sigStrikes   = fight[prefix + 'sig_strikes']     || 0;
-  var takedowns    = fight[prefix + 'takedowns']       || 0;
-  var knockdowns   = fight[prefix + 'knockdowns']      || 0;
-  var controlSec   = fight[prefix + 'control_seconds'] || 0;
-  var potn         = !!fight[prefix + 'potn'];
-  var opponentRank = fight[prefix + 'opponent_rank'];
-
-  var isWinner = fight.winner_id === fighterId;
-  var isDraw   = fight.outcome === 'draw';
-
-  var base = (sigStrikes * 0.1) + (takedowns * 1) +
-             (knockdowns * 2)   + (controlSec * 0.01);
-
-  var winBonus = 0;
-  if (isWinner) {
-    var isFinish = fight.outcome === 'ko_tko' || fight.outcome === 'submission';
-    if (isFinish) {
-      if      (fight.end_round === 1) winBonus = 18;
-      else if (fight.end_round === 2) winBonus = 14;
-      else if (fight.end_round === 3) winBonus = 9;
-      else                            winBonus = 8;
-      if (fight.end_round === 1 && fight.end_time_seconds != null && fight.end_time_seconds < 60) winBonus += 5;
-    } else if (fight.outcome === 'decision_u' || fight.outcome === 'decision_s' ||
-               fight.outcome === 'decision_m' || fight.outcome === 'dq') {
-      winBonus = 6;
-    }
-  } else if (isDraw) {
-    winBonus = 3;
-  }
-
-  var titleBonus = 0;
-  if (isWinner && fight.title_type !== 'none') {
-    if      (fight.title_type === 'divisional') titleBonus = fight.is_title_defense ? 5 : 10;
-    else if (fight.title_type === 'interim' || fight.title_type === 'bmf') titleBonus = fight.is_title_defense ? 3 : 5;
-  }
-
-  var rankedOppBonus = 0;
-  if (isWinner && opponentRank != null) {
-    if      (opponentRank <= 5)  rankedOppBonus = 4;
-    else if (opponentRank <= 10) rankedOppBonus = 2;
-    else if (opponentRank <= 15) rankedOppBonus = 1;
-  }
-
-  var potnBonus = potn ? 6 : 0;
-  var fotnBonus = fight.fight_of_the_night ? 4 : 0;
-  var mult      = FIGHTER_MODAL_MULTIPLIERS[fight.card_position] || 1.0;
-  var subtotal  = base + winBonus + titleBonus + rankedOppBonus + potnBonus + fotnBonus;
-
-  return { total: Math.round(subtotal * mult * 100) / 100 };
+  return Scoring.computeFighterScore(fight, isA, _modalScoringConfig);
 }
 
 // ========================================================================

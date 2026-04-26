@@ -13,15 +13,6 @@
 // Depends on supabaseClient (supabase-config.js) and requireAuth (auth-guard.js).
 // ========================================================================
 
-// Card position multipliers per v1.2 scoring spec
-const CARD_MULTIPLIERS = {
-  main_event:     1.2,
-  co_main_event:  1.1,
-  main_card:      1.0,
-  prelim:         1.0,
-  early_prelim:   1.0
-};
-
 // Human-readable weight class names (mirrors lineup.js / roster.js)
 const DIVISION_LABELS = {
   strawweight:       "Women's Strawweight",
@@ -60,12 +51,12 @@ async function initScoreEvent() {
   const [leagueRes, membersRes, fightersRes] = await Promise.all([
     supabaseClient
       .from('leagues')
-      .select('id, name, commissioner_id, draft_started')
+      .select('id, name, commissioner_id, draft_started, scoring_config')
       .eq('id', leagueId)
       .single(),
     supabaseClient
       .from('league_members')
-      .select('id, user_id, team_name')
+      .select('id, user_id, team_name, is_commissioner')
       .eq('league_id', leagueId),
     supabaseClient
       .from('fighters')
@@ -81,8 +72,9 @@ async function initScoreEvent() {
   league  = leagueRes.data;
   members = membersRes.data || [];
 
-  // Commissioner-only page: redirect anyone who is not the commissioner
-  if (league.commissioner_id !== user.id) {
+  // Commissioner-only page: primary owner OR a co-commissioner can score
+  // events. Anyone else gets redirected away.
+  if (!Commissioner.isCommissioner(league, members, user.id)) {
     window.location.href = 'league.html?id=' + leagueId;
     return;
   }
@@ -94,8 +86,112 @@ async function initScoreEvent() {
 
   renderEventSelector();
   wireUpForm();
+  wireUpNewEventForm();
 
   document.getElementById('pageContent').style.display = 'block';
+}
+
+// ========================================================================
+// NEW EVENT FORM — toggle + save
+// Lets the commissioner add a UFC event without leaving the score page.
+// Note: ufc_events is GLOBAL (not per-league) — adding an event makes it
+// available to every league in the system. That's fine for the current
+// single-system scale; revisit if multi-tenant.
+// ========================================================================
+function wireUpNewEventForm() {
+  const toggleBtn = document.getElementById('toggleNewEventBtn');
+  const cancelBtn = document.getElementById('cancelNewEventBtn');
+  const saveBtn   = document.getElementById('saveNewEventBtn');
+  const formEl    = document.getElementById('newEventForm');
+
+  toggleBtn.addEventListener('click', function() {
+    var isOpen = formEl.style.display !== 'none';
+    if (isOpen) {
+      formEl.style.display = 'none';
+      toggleBtn.textContent = '+ New Event';
+    } else {
+      // Default the date to next Saturday so the commissioner usually doesn't
+      // have to touch it. UFC main cards almost always run on Saturdays.
+      var dateInput = document.getElementById('newEventDate');
+      if (!dateInput.value) dateInput.value = nextSaturdayISO();
+      formEl.style.display = 'block';
+      toggleBtn.textContent = 'Close';
+      document.getElementById('newEventName').focus();
+    }
+  });
+
+  cancelBtn.addEventListener('click', function() {
+    clearNewEventForm();
+    formEl.style.display = 'none';
+    toggleBtn.textContent = '+ New Event';
+  });
+
+  saveBtn.addEventListener('click', saveNewEvent);
+}
+
+// Returns the next Saturday as a YYYY-MM-DD string. If today is Saturday,
+// returns today.
+function nextSaturdayISO() {
+  var d = new Date();
+  // 6 = Saturday in JS getDay()
+  var diff = (6 - d.getDay() + 7) % 7;
+  d.setDate(d.getDate() + diff);
+  return d.getFullYear() + '-' +
+         String(d.getMonth() + 1).padStart(2, '0') + '-' +
+         String(d.getDate()).padStart(2, '0');
+}
+
+function clearNewEventForm() {
+  document.getElementById('newEventName').value     = '';
+  document.getElementById('newEventDate').value     = '';
+  document.getElementById('newEventFullName').value = '';
+  document.getElementById('newEventVenue').value    = '';
+}
+
+async function saveNewEvent() {
+  var name     = document.getElementById('newEventName').value.trim();
+  var date     = document.getElementById('newEventDate').value;
+  var fullName = document.getElementById('newEventFullName').value.trim() || null;
+  var venue    = document.getElementById('newEventVenue').value.trim()    || null;
+  var saveBtn  = document.getElementById('saveNewEventBtn');
+
+  if (!name) { alert('Event name is required (e.g., "UFC 315").'); return; }
+  if (!date) { alert('Event date is required.'); return; }
+
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving...';
+
+  var { data, error } = await supabaseClient
+    .from('ufc_events')
+    .insert({
+      name:       name,
+      full_name:  fullName,
+      event_date: date,
+      venue:      venue
+    })
+    .select('id')
+    .single();
+
+  saveBtn.disabled = false;
+  saveBtn.textContent = 'Save Event';
+
+  if (error) {
+    alert('Error creating event: ' + error.message);
+    return;
+  }
+
+  // Re-render the selector so the new event appears in the dropdown, then
+  // auto-select it so the commissioner can immediately start adding fights.
+  await renderEventSelector();
+  var sel = document.getElementById('eventSelect');
+  if (sel) {
+    sel.value = data.id;
+    sel.dispatchEvent(new Event('change'));
+  }
+
+  clearNewEventForm();
+  document.getElementById('newEventForm').style.display = 'none';
+  document.getElementById('toggleNewEventBtn').textContent = '+ New Event';
 }
 
 // ========================================================================
@@ -113,7 +209,7 @@ async function renderEventSelector() {
     .order('event_date', { ascending: false });
 
   if (error || !events || events.length === 0) {
-    el.innerHTML = '<p class="score-empty">No UFC events found. Seed at least one event before scoring.</p>';
+    el.innerHTML = '<p class="score-empty">No UFC events yet. Click "+ New Event" above to add one.</p>';
     return;
   }
 
@@ -211,7 +307,12 @@ function renderFightCardList() {
     html += '<td>' + escapeHtml(pos) + '</td>';
     html += '<td>' + escapeHtml(outcome) + '</td>';
     html += '<td>' + escapeHtml(method) + '</td>';
-    html += '<td><button class="btn-secondary btn-sm" data-fight-id="' + fight.id + '">Edit</button></td>';
+    html += '<td>' +
+              '<div class="fight-card-table__actions">' +
+                '<button class="btn-secondary btn-sm" data-edit-fight-id="'   + fight.id + '">Edit</button>' +
+                '<button class="btn-danger btn-sm"    data-delete-fight-id="' + fight.id + '">Delete</button>' +
+              '</div>' +
+            '</td>';
     html += '</tr>';
   });
 
@@ -219,11 +320,70 @@ function renderFightCardList() {
   el.innerHTML = html;
 
   // Wire up edit buttons
-  el.querySelectorAll('.btn-sm[data-fight-id]').forEach(function(btn) {
+  el.querySelectorAll('[data-edit-fight-id]').forEach(function(btn) {
     btn.addEventListener('click', function() {
-      openEditFight(btn.getAttribute('data-fight-id'));
+      openEditFight(btn.getAttribute('data-edit-fight-id'));
     });
   });
+
+  // Wire up delete buttons
+  el.querySelectorAll('[data-delete-fight-id]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      deleteFight(btn.getAttribute('data-delete-fight-id'));
+    });
+  });
+}
+
+// ========================================================================
+// DELETE FIGHT
+// Confirms with the commissioner, removes the fight_results row, drops it
+// from local state, and re-renders the card list + score preview.
+//
+// IMPORTANT: the scores table has a FK to fight_results.id WITHOUT
+// ON DELETE CASCADE, so we must delete any scores rows that reference
+// this fight first. Otherwise the DB rejects the delete with a foreign-
+// key violation. (A schema migration to add CASCADE would let this
+// become a single delete; see migrations/004 if/when added.)
+// ========================================================================
+async function deleteFight(fightId) {
+  const fight = fightResults.find(function(f) { return f.id === fightId; });
+  if (!fight) return;
+
+  // Build a friendly confirmation label so the commissioner knows what they're deleting
+  const fighterMap = {};
+  allFighters.forEach(function(f) { fighterMap[f.id] = f.name; });
+  const nameA = fighterMap[fight.fighter_a_id] || '(unknown)';
+  const nameB = fighterMap[fight.fighter_b_id] || '(unknown)';
+
+  if (!confirm('Delete the ' + nameA + ' vs ' + nameB + ' fight? This cannot be undone.')) {
+    return;
+  }
+
+  // Step 1: clear any saved scores that reference this fight. Standings
+  // will recalculate to 0 for those fighters until the next save-scores.
+  const scoresDel = await supabaseClient
+    .from('scores')
+    .delete()
+    .eq('fight_result_id', fightId);
+  if (scoresDel.error) {
+    alert('Error clearing related scores: ' + scoresDel.error.message);
+    return;
+  }
+
+  // Step 2: now safely delete the fight row itself
+  const fightDel = await supabaseClient
+    .from('fight_results')
+    .delete()
+    .eq('id', fightId);
+  if (fightDel.error) {
+    alert('Error deleting fight: ' + fightDel.error.message);
+    return;
+  }
+
+  // Drop from local state and re-render
+  fightResults = fightResults.filter(function(f) { return f.id !== fightId; });
+  renderFightCardList();
+  computeAndShowPreview();
 }
 
 // Helper: human-readable card position label
@@ -278,6 +438,38 @@ function wireUpForm() {
   wireSearchInput('fighterASearch', 'fighterADropdown', 'fighterAId', 'fighterASelected', 'statsHeaderA');
   // Fighter B search
   wireSearchInput('fighterBSearch', 'fighterBDropdown', 'fighterBId', 'fighterBSelected', 'statsHeaderB');
+
+  // Populate the seconds dropdown 0-59 (we only build the options once at
+  // wire-up since they never change).
+  const secEl = document.getElementById('endTimeSecondsSel');
+  if (secEl && !secEl.options.length) {
+    let html = '';
+    for (let s = 0; s < 60; s++) {
+      html += '<option value="' + s + '">' + (s < 10 ? '0' : '') + s + '</option>';
+    }
+    secEl.innerHTML = html;
+  }
+
+  // Whenever either of the time selects changes, sync the hidden combined
+  // seconds field that the rest of the code reads from.
+  function syncEndTime() {
+    const m = parseInt(document.getElementById('endTimeMinutes').value, 10) || 0;
+    const s = parseInt(document.getElementById('endTimeSecondsSel').value, 10) || 0;
+    document.getElementById('endTimeSeconds').value = String(m * 60 + s);
+  }
+  document.getElementById('endTimeMinutes').addEventListener('change', syncEndTime);
+  document.getElementById('endTimeSecondsSel').addEventListener('change', syncEndTime);
+}
+
+// Set the two time selects from a total-seconds value (used when prefilling
+// for an edit). Pass null/undefined to reset to 0:00.
+function setEndTimeFromSeconds(totalSec) {
+  const total = (totalSec != null && !isNaN(totalSec)) ? Number(totalSec) : 0;
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  document.getElementById('endTimeMinutes').value    = String(Math.min(m, 4));
+  document.getElementById('endTimeSecondsSel').value = String(s);
+  document.getElementById('endTimeSeconds').value    = String(total);
 }
 
 // ========================================================================
@@ -309,15 +501,17 @@ function wireSearchInput(searchId, dropdownId, hiddenId, selectedId, headerLabel
     let html = '';
     matches.forEach(function(f) {
       const div = DIVISION_LABELS[f.primary_division] || f.primary_division;
-      html += '<div class="fighter-dropdown-item" data-fighter-id="' + f.id + '">' +
-              escapeHtml(f.name) + '<span class="fighter-dropdown-div">' + escapeHtml(div) + '</span></div>';
+      html += '<div class="score-event-fighter-dropdown__row" data-fighter-id="' + f.id + '">' +
+                '<span>' + escapeHtml(f.name) + '</span>' +
+                '<span class="score-event-fighter-dropdown__row-meta">' + escapeHtml(div) + '</span>' +
+              '</div>';
     });
 
     dropdownEl.innerHTML = html;
     dropdownEl.style.display = 'block';
 
     // Select a fighter on click
-    dropdownEl.querySelectorAll('.fighter-dropdown-item').forEach(function(item) {
+    dropdownEl.querySelectorAll('.score-event-fighter-dropdown__row').forEach(function(item) {
       item.addEventListener('click', function() {
         const fighterId = item.getAttribute('data-fighter-id');
         const fighter   = allFighters.find(function(f) { return f.id === fighterId; });
@@ -383,7 +577,7 @@ function resetFightForm() {
   document.getElementById('outcome').value        = '';
   document.getElementById('winner').value         = '';
   document.getElementById('endRound').value       = '';
-  document.getElementById('endTimeSeconds').value = '';
+  setEndTimeFromSeconds(0);
 
   document.getElementById('fighterASearch').value  = '';
   document.getElementById('fighterAId').value      = '';
@@ -426,7 +620,7 @@ function populateFightForm(fight) {
   else if (fight.winner_id && fight.winner_id === fight.fighter_b_id) document.getElementById('winner').value = 'b';
   else                                                                  document.getElementById('winner').value = '';
   document.getElementById('endRound').value          = fight.end_round || '';
-  document.getElementById('endTimeSeconds').value    = fight.end_time_seconds != null ? fight.end_time_seconds : '';
+  setEndTimeFromSeconds(fight.end_time_seconds);
 
   // Populate fighter A
   const fighterA = allFighters.find(function(f) { return f.id === fight.fighter_a_id; });
@@ -557,107 +751,14 @@ async function handleFightFormSubmit(e) {
 }
 
 // ========================================================================
-// COMPUTE FIGHTER SCORE (v1.2)
-// Takes a fight_results row and a boolean (true = computing for fighter A).
-// Returns an object with a numeric total and a breakdown for storage in
-// scoring_detail.
+// COMPUTE FIGHTER SCORE
+// Delegates to the shared Scoring engine in scoring.js, passing this
+// league's scoring_config so any custom rules apply automatically. The
+// engine is a pure function — same input always yields same output —
+// which is what makes it safe to reuse on the API ingestion path later.
 // ========================================================================
 function computeFighterScore(fight, isA) {
-  const prefix = isA ? 'fighter_a_' : 'fighter_b_';
-  const opponentPrefix = isA ? 'fighter_b_' : 'fighter_a_';
-
-  const sigStrikes    = fight[prefix + 'sig_strikes']    || 0;
-  const takedowns     = fight[prefix + 'takedowns']      || 0;
-  const knockdowns    = fight[prefix + 'knockdowns']     || 0;
-  const controlSec    = fight[prefix + 'control_seconds'] || 0;
-  const potn          = !!fight[prefix + 'potn'];
-  const opponentRank  = fight[prefix + 'opponent_rank'];  // rank of the opponent they faced
-
-  const fighterId = isA ? fight.fighter_a_id : fight.fighter_b_id;
-  const isWinner  = fight.winner_id === fighterId;
-  const isDraw    = fight.outcome === 'draw';
-
-  // Base stats score
-  const base = (sigStrikes * 0.1) + (takedowns * 1) +
-               (knockdowns * 2) + (controlSec * 0.01);
-
-  // Win bonus (only if this fighter won)
-  let winBonus = 0;
-  if (isWinner) {
-    const outcome  = fight.outcome;
-    const round    = fight.end_round;
-    const timeSec  = fight.end_time_seconds;
-    const isFinish = outcome === 'ko_tko' || outcome === 'submission';
-
-    if (isFinish) {
-      if      (round === 1) winBonus = 18;
-      else if (round === 2) winBonus = 14;
-      else if (round === 3) winBonus = 9;
-      else                  winBonus = 8;  // R4 or R5 finish
-
-      // Extra +5 bonus for a finish inside 60 seconds of R1
-      if (round === 1 && timeSec != null && timeSec < 60) winBonus += 5;
-    } else if (outcome === 'decision_u' || outcome === 'decision_s' ||
-               outcome === 'decision_m' || outcome === 'dq') {
-      winBonus = 6;
-    }
-  } else if (isDraw) {
-    winBonus = 3;  // draws earn both fighters a small bonus
-  }
-
-  // Title bonus (only for the winner or both on defense)
-  let titleBonus = 0;
-  if (isWinner && fight.title_type !== 'none') {
-    if (fight.title_type === 'divisional') {
-      titleBonus = fight.is_title_defense ? 5 : 10;
-    } else if (fight.title_type === 'interim' || fight.title_type === 'bmf') {
-      titleBonus = fight.is_title_defense ? 3 : 5;
-    }
-  }
-
-  // Ranked opponent bonus (only for the winner)
-  let rankedOppBonus = 0;
-  if (isWinner && opponentRank != null) {
-    if      (opponentRank <= 5)  rankedOppBonus = 4;
-    else if (opponentRank <= 10) rankedOppBonus = 2;
-    else if (opponentRank <= 15) rankedOppBonus = 1;
-  }
-
-  // Performance of the Night bonus
-  const potnBonus = potn ? 6 : 0;
-
-  // Fight of the Night bonus (shared by both fighters)
-  const fotnBonus = fight.fight_of_the_night ? 4 : 0;
-
-  // Card position multiplier
-  const multiplier = CARD_MULTIPLIERS[fight.card_position] || 1.0;
-
-  const subtotal   = base + winBonus + titleBonus + rankedOppBonus + potnBonus + fotnBonus;
-  const total      = Math.round(subtotal * multiplier * 100) / 100;  // round to 2 decimals
-
-  return {
-    fighterId:      fighterId,
-    total:          total,
-    base_points:    Math.round(base * 100) / 100,
-    win_bonus:      winBonus,
-    title_bonus:    titleBonus,
-    ranked_opp_bonus: rankedOppBonus,
-    potn_bonus:     potnBonus,
-    fotn_bonus:     fotnBonus,
-    card_multiplier: multiplier,
-    scoring_detail: {
-      sig_strikes:      sigStrikes,
-      takedowns:        takedowns,
-      knockdowns:       knockdowns,
-      control_seconds:  controlSec,
-      opponent_rank:    opponentRank,
-      is_winner:        isWinner,
-      is_draw:          isDraw,
-      outcome:          fight.outcome,
-      end_round:        fight.end_round,
-      end_time_seconds: fight.end_time_seconds
-    }
-  };
+  return Scoring.computeFighterScore(fight, isA, league.scoring_config);
 }
 
 // ========================================================================
@@ -839,6 +940,18 @@ async function saveScores() {
   if (upsertErr) {
     alert('Error saving scores: ' + upsertErr.message);
     return;
+  }
+
+  // Activity feed: event_scored. One entry per push, regardless of how
+  // many starters' rows were upserted — the wider league cares that
+  // scores are now official, not which specific rosters got rows.
+  if (typeof LeagueActivity !== 'undefined') {
+    var commishMember = (members || []).find(function(m) { return m.user_id === user.id; });
+    LeagueActivity.logEvent(leagueId, LeagueActivity.KINDS.EVENT_SCORED, {
+      event_id:           selectedEvent.id,
+      event_name:         selectedEvent.name,
+      total_scores_count: upsertRows.length
+    }, commishMember ? commishMember.id : null);
   }
 
   alert('Scores saved! Visit the Standings page to see the updated results.');

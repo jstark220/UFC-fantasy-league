@@ -118,9 +118,10 @@ async function initSettings() {
   }
 
   // Confirm this user is actually a member (RLS may not catch all cases)
+  // and pull is_commissioner so co-commissioners get the same edit access.
   const { data: membership } = await supabaseClient
     .from('league_members')
-    .select('id')
+    .select('id, user_id, is_commissioner')
     .eq('league_id', leagueId)
     .eq('user_id', user.id)
     .single();
@@ -130,7 +131,11 @@ async function initSettings() {
     return;
   }
 
-  const isCommissioner = league.commissioner_id === user.id;
+  // True for primary owner OR a co-commissioner. Co-commissioners can
+  // edit the same settings the primary can; promoting/demoting other
+  // members is gated separately to primary-only.
+  const isCommissioner       = Commissioner.memberIsCommissioner(league, membership);
+  const isPrimaryCommissioner = Commissioner.isPrimaryCommissioner(league, user.id);
 
   document.getElementById('pageContent').style.display = 'block';
   document.title = league.name + ' Settings - Knockdown Fantasy';
@@ -192,6 +197,16 @@ async function initSettings() {
         }, 2000);
       });
     });
+
+    // Co-commissioner controls — only the PRIMARY owner can promote or
+    // demote others. A co-commissioner has the same daily powers but
+    // can't manage the role list (keeps the audit trail simple).
+    if (isPrimaryCommissioner) {
+      document.getElementById('coCommissionerSection').style.display = '';
+      // Pass the primary's own member id so activity-feed entries are
+      // attributed to them rather than appearing as system events.
+      renderCoCommissionerList(leagueId, league, membership.id);
+    }
 
     // Show danger zone
     document.getElementById('dangerSection').style.display = '';
@@ -295,6 +310,112 @@ function showMessage(text, type) {
   el.className = 'settings-message settings-message--' + type;
   el.style.display = 'block';
   setTimeout(function() { el.style.display = 'none'; }, 4000);
+}
+
+// ========================================================================
+// CO-COMMISSIONER LIST
+// Primary-only UI to promote/demote other members. Renders one row per
+// member (excluding the primary themselves) with a Promote / Demote
+// button that flips league_members.is_commissioner.
+// ========================================================================
+async function renderCoCommissionerList(leagueId, league, actorMemberId) {
+  const listEl = document.getElementById('coCommishList');
+
+  async function load() {
+    const { data: members, error } = await supabaseClient
+      .from('league_members')
+      .select('id, user_id, team_name, is_commissioner')
+      .eq('league_id', leagueId)
+      .order('team_name');
+
+    if (error) {
+      listEl.innerHTML = '<li class="co-commish-empty">Could not load members: ' +
+        escapeHtml(error.message) + '</li>';
+      return;
+    }
+
+    // Filter out the primary owner — they can't toggle themselves here.
+    const others = (members || []).filter(function(m) {
+      return m.user_id !== league.commissioner_id;
+    });
+
+    if (others.length === 0) {
+      listEl.innerHTML = '<li class="co-commish-empty">No other managers yet.</li>';
+      return;
+    }
+
+    listEl.innerHTML = others.map(function(m) {
+      const isCo = m.is_commissioner === true;
+      const btnClass = isCo ? 'btn-secondary' : 'btn-primary';
+      const btnLabel = isCo ? 'Demote' : 'Promote';
+      return (
+        '<li class="co-commish-row">' +
+          '<div class="co-commish-row__info">' +
+            '<span class="co-commish-row__name">' + escapeHtml(m.team_name) + '</span>' +
+            (isCo ? '<span class="badge-co-commissioner">Co-commissioner</span>' : '') +
+          '</div>' +
+          '<button class="' + btnClass + ' co-commish-row__btn" ' +
+                  'data-member-id="' + m.id + '" ' +
+                  'data-team-name="' + escapeHtml(m.team_name) + '" ' +
+                  'data-action="' + (isCo ? 'demote' : 'promote') + '">' +
+            btnLabel +
+          '</button>' +
+        '</li>'
+      );
+    }).join('');
+
+    // Wire promote/demote — single handler since the action lives on the
+    // button via data-action, so we don't have to track which row was clicked.
+    listEl.querySelectorAll('.co-commish-row__btn').forEach(function(btn) {
+      btn.addEventListener('click', function() { onToggle(btn); });
+    });
+  }
+
+  async function onToggle(btn) {
+    const memberId  = btn.getAttribute('data-member-id');
+    const teamName  = btn.getAttribute('data-team-name');
+    const action    = btn.getAttribute('data-action');
+    const promoting = action === 'promote';
+
+    const verb  = promoting ? 'Promote'  : 'Demote';
+    if (!confirm(verb + ' ' + teamName + (promoting
+        ? ' to co-commissioner? They will gain access to settings, scoring, waivers, and trades.'
+        : '? They will lose commissioner powers.'
+    ))) return;
+
+    btn.disabled = true;
+    btn.textContent = promoting ? 'Promoting...' : 'Demoting...';
+
+    const { error } = await supabaseClient
+      .from('league_members')
+      .update({ is_commissioner: promoting })
+      .eq('id', memberId);
+
+    if (error) {
+      alert('Error: ' + error.message);
+      btn.disabled = false;
+      btn.textContent = promoting ? 'Promote' : 'Demote';
+      return;
+    }
+
+    // Mirror to the activity feed. The actor is the primary commissioner
+    // (the only role allowed to call this), and the affected member's id
+    // goes into the data payload so future enhancements can render
+    // "Stark 1 promoted Stark 2 to co-commissioner".
+    if (typeof LeagueActivity !== 'undefined') {
+      LeagueActivity.logEvent(
+        leagueId,
+        promoting ? LeagueActivity.KINDS.MEMBER_PROMOTED : LeagueActivity.KINDS.MEMBER_DEMOTED,
+        { target_member_id: memberId, target_team_name: teamName },
+        actorMemberId
+      );
+    }
+
+    // Re-render so labels flip without a full page reload
+    await load();
+  }
+
+  await load();
 }
 
 initSettings();

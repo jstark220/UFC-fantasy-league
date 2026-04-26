@@ -95,17 +95,31 @@ async function initJoinLeague() {
 
       // ---- All checks passed: join the league ----
       // waiver_priority = current member count + 1 so each joiner gets
-      // a unique incrementing priority (last to join = lowest priority)
-      const { error: joinError } = await supabaseClient
+      // a unique incrementing priority (last to join = lowest priority).
+      // We .select() the new row so we can log the activity feed entry
+      // with the new member's id before navigating away.
+      const { data: newMember, error: joinError } = await supabaseClient
         .from('league_members')
         .insert({
           league_id:       league.id,
           user_id:         user.id,
           team_name:       teamName,
           waiver_priority: count + 1
-        });
+        })
+        .select('id')
+        .single();
 
       if (joinError) throw joinError;
+
+      // Activity feed: member_joined. Awaited (not fire-and-forget) so the
+      // request lands before the redirect cancels in-flight requests. We
+      // pass team_name in `data` for consistency, but the renderer prefers
+      // joining league_members at read time so future renames propagate.
+      if (typeof LeagueActivity !== 'undefined') {
+        await LeagueActivity.logEvent(league.id, LeagueActivity.KINDS.MEMBER_JOINED, {
+          team_name: teamName
+        }, newMember.id);
+      }
 
       // Joined successfully - go to the league list
       window.location.href = 'dashboard.html';

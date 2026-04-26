@@ -51,7 +51,7 @@ async function initTrades() {
 
   const [leagueRes, membersRes, fightersRes, rostersRes, tradesRes] = await Promise.all([
     supabaseClient.from('leagues').select('id, name, commissioner_id').eq('id', leagueId).single(),
-    supabaseClient.from('league_members').select('id, user_id, team_name').eq('league_id', leagueId),
+    supabaseClient.from('league_members').select('id, user_id, team_name, is_commissioner').eq('league_id', leagueId),
     supabaseClient.from('fighters').select('id, name, primary_division, current_rank, is_champion, record_wins, record_losses, record_draws, photo_url').order('name'),
     supabaseClient.from('rosters').select('fighter_id, league_member_id').eq('league_id', leagueId),
     supabaseClient.from('trades').select('*').eq('league_id', leagueId).order('proposed_at', { ascending: false })
@@ -65,7 +65,9 @@ async function initTrades() {
   const myMember = members.find(function(m) { return m.user_id === user.id; });
   if (!myMember) { window.location.href = 'dashboard.html'; return; }
   myMemberId     = myMember.id;
-  isCommissioner = league.commissioner_id === user.id;
+  // Primary OR co-commissioner — both can force-execute trades and use
+  // any other commissioner-only controls on this page.
+  isCommissioner = Commissioner.isCommissioner(league, members, user.id);
 
   // Build fighter lookup map
   (fightersRes.data || []).forEach(function(f) { allFighters[f.id] = f; });
@@ -302,23 +304,41 @@ async function proposeTrade() {
   btn.disabled = true;
   btn.textContent = 'Sending...';
 
-  var { error } = await supabaseClient.from('trades').insert({
+  var givingArr    = Array.from(giving);
+  var receivingArr = Array.from(receiving);
+
+  var insertRes = await supabaseClient.from('trades').insert({
     league_id:    leagueId,
     proposer_id:  myMemberId,
     recipient_id: partnerId,
     trade_details: {
-      proposer_gives:  Array.from(giving),
-      recipient_gives: Array.from(receiving)
+      proposer_gives:  givingArr,
+      recipient_gives: receivingArr
     },
     status:      'proposed',
     message:     message,
     proposed_at: new Date().toISOString()
-  });
+  }).select('id').single();
 
   btn.disabled = false;
   btn.textContent = 'Send Trade Offer';
 
-  if (error) { alert('Error sending trade: ' + error.message); return; }
+  if (insertRes.error) { alert('Error sending trade: ' + insertRes.error.message); return; }
+
+  // Activity feed: trade_proposed. Denormalize fighter names + recipient
+  // team name so the feed entry stays readable without joins.
+  if (typeof LeagueActivity !== 'undefined') {
+    var recipientMember = (members || []).find(function(m) { return m.id === partnerId; });
+    LeagueActivity.logEvent(leagueId, LeagueActivity.KINDS.TRADE_PROPOSED, {
+      trade_id:                  insertRes.data ? insertRes.data.id : null,
+      recipient_member_id:       partnerId,
+      recipient_team_name:       recipientMember ? recipientMember.team_name : null,
+      offered_fighter_ids:       givingArr,
+      offered_fighter_names:     givingArr.map(function(id) { return allFighters[id] ? allFighters[id].name : null; }).filter(Boolean),
+      requested_fighter_ids:     receivingArr,
+      requested_fighter_names:   receivingArr.map(function(id) { return allFighters[id] ? allFighters[id].name : null; }).filter(Boolean)
+    }, myMemberId);
+  }
 
   // Reset form
   giving.clear();
@@ -601,6 +621,26 @@ async function acceptTrade(tradeId) {
     .eq('id', tradeId);
 
   if (upd.error) { alert('Error accepting trade: ' + upd.error.message); return; }
+
+  // Activity feed: trade_accepted. Capture both sides of the swap so the
+  // feed line reads "X for Y" without a JOIN at render time.
+  if (typeof LeagueActivity !== 'undefined') {
+    var details   = trade.trade_details || {};
+    var propGives = details.proposer_gives  || [];
+    var recGives  = details.recipient_gives || [];
+    var proposer  = (members || []).find(function(m) { return m.id === trade.proposer_id;  });
+    LeagueActivity.logEvent(leagueId, LeagueActivity.KINDS.TRADE_ACCEPTED, {
+      trade_id:                trade.id,
+      proposer_member_id:      trade.proposer_id,
+      proposer_team_name:      proposer ? proposer.team_name : null,
+      // Names — from the perspective of the proposer, "offered" goes out,
+      // "requested" comes back. Mirroring the proposeTrade naming for
+      // consistency in the feed renderer.
+      offered_fighter_names:   propGives.map(function(id) { return allFighters[id] ? allFighters[id].name : null; }).filter(Boolean),
+      requested_fighter_names: recGives.map(function(id)  { return allFighters[id] ? allFighters[id].name : null; }).filter(Boolean)
+    }, myMemberId);
+  }
+
   await refreshTrades();
 }
 
@@ -727,11 +767,25 @@ async function respondToTrade(tradeId, newStatus) {
   var label = newStatus === 'cancelled' ? 'Cancel this trade offer?' : 'Reject this trade offer?';
   if (!confirm(label)) return;
 
+  var trade = myTrades.find(function(t) { return t.id === tradeId; });
+
   var { error } = await supabaseClient.from('trades')
     .update({ status: newStatus, responded_at: new Date().toISOString() })
     .eq('id', tradeId);
 
   if (error) { alert('Error updating trade: ' + error.message); return; }
+
+  // Activity feed: log only rejections. Cancellations are the proposer
+  // pulling their own offer back; not interesting to the wider league.
+  if (newStatus === 'rejected' && trade && typeof LeagueActivity !== 'undefined') {
+    var proposer = (members || []).find(function(m) { return m.id === trade.proposer_id; });
+    LeagueActivity.logEvent(leagueId, LeagueActivity.KINDS.TRADE_REJECTED, {
+      trade_id:           trade.id,
+      proposer_member_id: trade.proposer_id,
+      proposer_team_name: proposer ? proposer.team_name : null
+    }, myMemberId);
+  }
+
   await refreshTrades();
 }
 

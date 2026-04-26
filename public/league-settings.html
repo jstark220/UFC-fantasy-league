@@ -110,6 +110,15 @@
               </div>
             </div>
 
+            <!-- Co-commissioners: primary-only. Toggle is_commissioner on each
+                 member. The primary owner can't demote themselves here —
+                 transfer-of-ownership is a future, separate flow. -->
+            <div id="coCommissionerSection" style="display: none;">
+              <p class="section-label" style="margin-top: var(--space-6);">Co-commissioners</p>
+              <p class="form-hint">Co-commissioners get the same powers as you (settings, scoring, waivers, trades). The owner role stays with you.</p>
+              <ul class="co-commish-list" id="coCommishList"></ul>
+            </div>
+
             <!-- Danger zone: commissioner only, shown after invite section -->
             <div id="dangerSection" style="display: none;">
               <p class="section-label" style="margin-top: var(--space-6); color: var(--accent-crimson);">Danger Zone</p>
@@ -265,6 +274,8 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/supabase-config.js"></script>
   <script src="js/auth-guard.js"></script>
+  <script src="js/commissioner.js"></script>
+  <script src="js/activity.js"></script>
   <script src="js/league-settings.js"></script>
 
   <script>

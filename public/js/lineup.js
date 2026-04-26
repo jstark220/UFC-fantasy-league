@@ -149,8 +149,11 @@ const PLACEHOLDER_ROSTER = [
 // Module-level state
 let user, leagueId, myMemberId;
 let myRoster      = [];
-let nextEvent     = null;
-let isLocked      = false;
+let availableEvents      = [];   // every event the user can pick from (past + future)
+let selectedEvent        = null; // the event currently being viewed/edited
+let selectedEventScores  = {};   // fighter_id -> total_points scored at selectedEvent (empty if not yet scored)
+let isLocked      = false;       // true when lineup edits are blocked: lock_time passed OR event is in the past
+let isPastEvent   = false;       // true when selectedEvent.event_date is before today
 let isViewMode    = false;   // true when browsing another manager's lineup from standings
 let viewedMember  = null;    // the member object being viewed (null when viewing own lineup)
 let selections    = new Set();  // fighter IDs currently started
@@ -173,12 +176,11 @@ async function initLineup() {
   const [leagueRes, membersRes, eventRes] = await Promise.all([
     supabaseClient.from('leagues').select('id, name, draft_started').eq('id', leagueId).single(),
     supabaseClient.from('league_members').select('id, user_id, team_name').eq('league_id', leagueId),
-    // Fetch the next upcoming event (soonest event_date >= today)
+    // Fetch every event so the user can pick any of them (past or future).
+    // Newest first so the dropdown shows the most relevant cards near the top.
     supabaseClient.from('ufc_events')
       .select('id, name, full_name, event_date, venue, lineup_lock_time, is_completed')
-      .gte('event_date', new Date().toISOString().split('T')[0])
-      .order('event_date')
-      .limit(1)
+      .order('event_date', { ascending: false })
   ]);
 
   if (leagueRes.error || !leagueRes.data) {
@@ -202,11 +204,11 @@ async function initLineup() {
   myMemberId   = targetMember.id;
   viewedMember = isViewMode ? targetMember : null;
 
-  // Store the upcoming event and check lock status
-  nextEvent = (eventRes.data && eventRes.data[0]) || null;
-  if (nextEvent && nextEvent.lineup_lock_time) {
-    isLocked = new Date() >= new Date(nextEvent.lineup_lock_time);
-  }
+  // Build the event picker list and pick a sensible default — next upcoming
+  // event when one exists, otherwise the most recent past event.
+  availableEvents = eventRes.data || [];
+  selectedEvent   = pickDefaultEvent(availableEvents);
+  recomputeLockStatus(); // sets isLocked / isPastEvent based on selectedEvent
 
   document.title = (isViewMode ? targetMember.team_name : 'Lineup') + ' - ' + league.name;
   document.getElementById('leagueName').textContent = league.name;
@@ -224,24 +226,13 @@ async function initLineup() {
   nav += '<a href="lineup.html?id='   + leagueId + '" class="' + (isViewMode ? 'btn-secondary' : 'btn-primary') + '">My Lineup</a>';
   document.getElementById('headerActions').innerHTML = nav;
 
-  // Fetch this user's roster and existing starter selections in parallel
-  const [rostersRes, selectionsRes] = await Promise.all([
-    supabaseClient
-      .from('rosters')
-      .select('id, draft_pick, slot_override, acquired_at, fighters(id, name, primary_division, current_rank, is_champion, record_wins, record_losses, record_draws, photo_url)')
-      .eq('league_id', leagueId)
-      .eq('league_member_id', myMemberId)
-      .order('draft_pick'),
-
-    nextEvent
-      ? supabaseClient
-          .from('starter_selections')
-          .select('id, fighter_id, slot_position')
-          .eq('league_member_id', myMemberId)
-          .eq('event_id', nextEvent.id)
-          .order('slot_position')
-      : Promise.resolve({ data: [] })
-  ]);
+  // Fetch this user's roster ONCE — it's not event-specific.
+  const rostersRes = await supabaseClient
+    .from('rosters')
+    .select('id, draft_pick, slot_override, acquired_at, fighters(id, name, primary_division, current_rank, is_champion, record_wins, record_losses, record_draws, photo_url)')
+    .eq('league_id', leagueId)
+    .eq('league_member_id', myMemberId)
+    .order('draft_pick');
 
   if (rostersRes.error) {
     console.error('Failed to load roster:', rostersRes.error.message);
@@ -257,14 +248,8 @@ async function initLineup() {
     });
   });
 
-  // Restore any starters the user already picked for this event
-  selectionRowIds = {};
-  selectionSlots  = {};
-  (selectionsRes.data || []).forEach(function(s) {
-    selections.add(s.fighter_id);
-    selectionRowIds[s.fighter_id] = s.id;
-    selectionSlots[s.fighter_id]  = s.slot_position;
-  });
+  // Load the per-event data (starters + scores) for the default event.
+  await loadEventData();
 
   document.getElementById('pageContent').style.display = 'block';
 
@@ -274,46 +259,199 @@ async function initLineup() {
 }
 
 // ========================================================================
+// EVENT SELECTION HELPERS
+// pickDefaultEvent  — choose initial selectedEvent from availableEvents
+// recomputeLockStatus — derive isLocked/isPastEvent from selectedEvent
+// loadEventData     — fetch starter_selections + scores for selectedEvent
+// onSelectEvent     — handler bound to the event picker dropdown
+// ========================================================================
+
+// Picks the next upcoming non-completed event, falling back to the most
+// recent past event when none are upcoming. Returns null only if there
+// are no events at all.
+function pickDefaultEvent(events) {
+  if (!events || events.length === 0) return null;
+  const todayISO = new Date().toISOString().split('T')[0];
+  // events arrives sorted desc by event_date — find the latest one that's
+  // either future or today AND not completed (i.e., still in play).
+  const upcoming = events.filter(function(e) {
+    return e.event_date >= todayISO && !e.is_completed;
+  });
+  if (upcoming.length > 0) {
+    // The latest of upcoming-by-desc-sort is at the END; the soonest is also
+    // useful but for "next event" semantics we want the EARLIEST upcoming.
+    return upcoming[upcoming.length - 1];
+  }
+  return events[0]; // most recent past event
+}
+
+// Decide whether lineup edits should be blocked. True when the lock_time
+// has passed OR the event is in the past (which is always read-only).
+function recomputeLockStatus() {
+  const todayISO = new Date().toISOString().split('T')[0];
+  isPastEvent = !!(selectedEvent && selectedEvent.event_date < todayISO);
+  if (!selectedEvent) {
+    isLocked = false;
+    return;
+  }
+  const lockTimePassed = !!(selectedEvent.lineup_lock_time &&
+                            new Date() >= new Date(selectedEvent.lineup_lock_time));
+  isLocked = isPastEvent || lockTimePassed;
+}
+
+// Load everything that's tied to the selected event: the starter_selections
+// for this member at that event, plus any scores that have been saved. Used
+// by init and by the event-change handler.
+async function loadEventData() {
+  // Reset per-event state
+  selections.clear();
+  selectionRowIds = {};
+  selectionSlots  = {};
+  selectedEventScores = {};
+
+  if (!selectedEvent) return;
+
+  const [selectionsRes, scoresRes] = await Promise.all([
+    supabaseClient
+      .from('starter_selections')
+      .select('id, fighter_id, slot_position')
+      .eq('league_member_id', myMemberId)
+      .eq('event_id', selectedEvent.id)
+      .order('slot_position'),
+    supabaseClient
+      .from('scores')
+      .select('fighter_id, total_points')
+      .eq('league_member_id', myMemberId)
+      .eq('event_id', selectedEvent.id)
+  ]);
+
+  (selectionsRes.data || []).forEach(function(s) {
+    selections.add(s.fighter_id);
+    selectionRowIds[s.fighter_id] = s.id;
+    selectionSlots[s.fighter_id]  = s.slot_position;
+  });
+
+  (scoresRes.data || []).forEach(function(row) {
+    selectedEventScores[row.fighter_id] = row.total_points;
+  });
+}
+
+// Switch to a different event from the picker. Re-loads per-event state
+// and re-renders everything.
+async function onSelectEvent(eventId) {
+  const ev = availableEvents.find(function(e) { return e.id === eventId; });
+  if (!ev) return;
+  selectedEvent = ev;
+  recomputeLockStatus();
+  await loadEventData();
+  renderEventBanner();
+  renderStarterSlots();
+  renderRosterList();
+}
+
+// ========================================================================
 // RENDER EVENT BANNER
-// Uses the this-week-card CSS. Pulls name, date, and venue from nextEvent.
+// Uses the this-week-card CSS. Pulls name, date, and venue from selectedEvent.
 // ========================================================================
 function renderEventBanner() {
   const el = document.getElementById('eventBanner');
   const started = selections.size;
-  const lockLabel = isLocked
-    ? '<span style="color: var(--text-tertiary);">&#128274; Lineup locked</span>'
-    : '<span style="color: #4ade80;">&#128275; Lineup open</span>';
+
+  // Three possible status labels — past events are "Final", future events
+  // toggle between "Open" and "Locked" based on lineup_lock_time.
+  var statusLabel;
+  if (isPastEvent) {
+    statusLabel = '<span style="color: var(--accent-gold);">&#127942; Event final</span>';
+  } else if (isLocked) {
+    statusLabel = '<span style="color: var(--text-tertiary);">&#128274; Lineup locked</span>';
+  } else {
+    statusLabel = '<span style="color: #4ade80;">&#128275; Lineup open</span>';
+  }
+
+  // Right-side counter — once any scores exist for the event (past final,
+  // or live-scored mid-event, or commissioner-tested pre-event), show the
+  // running points total. Otherwise show the lock-time hint + slots set.
+  var rightSubText;
+  var anyEventScores = Object.keys(selectedEventScores).length > 0;
+  if (anyEventScores) {
+    var totalScored = 0;
+    // Sum every starter's saved points for this event (only includes
+    // fighters in selections, since selectedEventScores is keyed by them).
+    Object.keys(selectedEventScores).forEach(function(id) { totalScored += selectedEventScores[id] || 0; });
+    rightSubText = started + '/3 started &middot; ' + (Math.round(totalScored * 100) / 100).toFixed(2) + ' pts';
+  } else {
+    rightSubText = 'Locks at first prelim &middot; ' + started + '/3 set';
+  }
 
   var eventName = 'TBD';
   var eventDate = '';
   var eventMatchup = '';
-  if (nextEvent) {
-    eventName = nextEvent.name;
-    var dateObj = new Date(nextEvent.event_date + 'T12:00:00');
+  if (selectedEvent) {
+    eventName = selectedEvent.name;
+    var dateObj = new Date(selectedEvent.event_date + 'T12:00:00');
     eventDate = dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-    if (nextEvent.venue) eventDate += ' &middot; ' + escapeHtml(nextEvent.venue);
-    // Pull the matchup from "UFC 314: Volkanovski vs. Lopes" format
-    if (nextEvent.full_name && nextEvent.full_name.indexOf(':') !== -1) {
-      eventMatchup = nextEvent.full_name.split(':')[1].trim();
+    if (selectedEvent.venue) eventDate += ' &middot; ' + escapeHtml(selectedEvent.venue);
+    if (selectedEvent.full_name && selectedEvent.full_name.indexOf(':') !== -1) {
+      eventMatchup = selectedEvent.full_name.split(':')[1].trim();
     }
   }
 
+  // Event picker: built from availableEvents, current selection pre-marked.
+  // Hidden in view mode (we follow the standings link's intent — a single
+  // member's lineup at the implied event).
+  var picker = '';
+  if (!isViewMode && availableEvents.length > 1) {
+    picker = '<div class="lineup-event-picker">' +
+               '<label for="lineupEventSelect" class="lineup-event-picker__label">Viewing</label>' +
+               '<select id="lineupEventSelect" class="waiver-filter">';
+    availableEvents.forEach(function(ev) {
+      var d = new Date(ev.event_date + 'T12:00:00');
+      var dStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      var sel  = (selectedEvent && ev.id === selectedEvent.id) ? ' selected' : '';
+      picker  += '<option value="' + ev.id + '"' + sel + '>' +
+                   escapeHtml(ev.name) + ' (' + escapeHtml(dStr) + ')' +
+                 '</option>';
+    });
+    picker += '</select></div>';
+  }
+
+  // "Set Your Lineup" eyebrow doesn't fit a past event — adapt by phase.
+  var eyebrow;
+  if (isViewMode)        eyebrow = escapeHtml(viewedMember.team_name) + '\'s Lineup';
+  else if (isPastEvent)  eyebrow = 'Past Event';
+  else if (isLocked)     eyebrow = 'Locked Lineup';
+  else                   eyebrow = 'Set Your Lineup';
+
   el.innerHTML =
+    picker +
     '<div class="this-week-card" style="margin-bottom: var(--space-8);">' +
       '<div class="this-week-card__event">' +
-        '<p class="this-week-card__eyebrow">' + (isViewMode ? escapeHtml(viewedMember.team_name) + '\'s Lineup' : 'Set Your Lineup') + '</p>' +
+        '<p class="this-week-card__eyebrow">' + eyebrow + '</p>' +
         '<p class="this-week-card__name">' + escapeHtml(eventName) + '</p>' +
         (eventDate    ? '<p class="this-week-card__date">'    + eventDate + '</p>' : '') +
         (eventMatchup ? '<p class="this-week-card__matchup">' + escapeHtml(eventMatchup) + '</p>' : '') +
-        '<button class="btn-ghost fight-card-btn" id="viewFightCardBtn">View fight card &rarr;</button>' +
+        '<div class="lineup-banner-actions">' +
+          '<button class="btn-ghost fight-card-btn" id="viewFightCardBtn">View fight card &rarr;</button>' +
+          // Lets the user pop over to the all-members lineups view for the
+          // same event. We pass ?event= so they land on the same card they
+          // were just looking at, not the page's default.
+          '<a class="btn-ghost fight-card-btn" id="viewAllLineupsLink" href="lineups.html?id=' +
+              encodeURIComponent(leagueId) +
+              (selectedEvent ? '&event=' + encodeURIComponent(selectedEvent.id) : '') +
+              '">View all lineups &rarr;</a>' +
+        '</div>' +
       '</div>' +
       '<div class="this-week-card__right">' +
-        '<p class="lineup-lock-status">' + lockLabel + '</p>' +
-        '<p class="this-week-card__deadline">Locks at first prelim &middot; ' + started + '/3 set</p>' +
+        '<p class="lineup-lock-status">' + statusLabel + '</p>' +
+        '<p class="this-week-card__deadline">' + rightSubText + '</p>' +
       '</div>' +
     '</div>';
 
   document.getElementById('viewFightCardBtn').addEventListener('click', showFightCardModal);
+  var pickEl = document.getElementById('lineupEventSelect');
+  if (pickEl) {
+    pickEl.addEventListener('change', function() { onSelectEvent(this.value); });
+  }
 }
 
 // ========================================================================
@@ -352,6 +490,28 @@ function renderStarterSlots() {
       toggleStarter(btn.getAttribute('data-fighter-id'));
     });
   });
+
+  // Wire the starter cards themselves to open the fighter modal on click.
+  // Clicks that originated on the inner Bench button (or any future button
+  // we add to the card) are ignored so existing actions keep working.
+  el.querySelectorAll('[data-modal-fighter-id]').forEach(function(card) {
+    function openModal() {
+      var fid = card.getAttribute('data-modal-fighter-id');
+      if (fid && typeof showFighterModal === 'function') showFighterModal(fid);
+    }
+    card.addEventListener('click', function(e) {
+      // Bail if the click came from an inner button (Bench, etc.)
+      if (e.target.closest('button, a')) return;
+      openModal();
+    });
+    // Keyboard activation — card has role="button" and tabindex=0
+    card.addEventListener('keydown', function(e) {
+      if ((e.key === 'Enter' || e.key === ' ') && !e.target.closest('button, a')) {
+        e.preventDefault();
+        openModal();
+      }
+    });
+  });
 }
 
 // Returns the HTML for a filled starter card
@@ -366,8 +526,33 @@ function buildStarterCard(fighter, slotNum) {
     : '<div class="fighter-card__photo-placeholder"></div>';
   const champBadge = fighter.is_champion ? '<span class="fighter-card__badge-champ">Champ</span>' : '';
 
+  // Inline score — sits next to the record at the bottom of the card so
+  // it never collides with the rank badge (top-left) or CHAMP badge
+  // (top-right). Surfaced whenever any scores have been saved for the
+  // event; if this fighter doesn't have a score row yet (e.g., their
+  // fight hasn't been entered), we show a muted "—" so the absence
+  // reads as "0 pts so far" rather than a missing element.
+  var scoreInline = '';
+  var anyScoresSaved = Object.keys(selectedEventScores).length > 0;
+  if (anyScoresSaved) {
+    var pts = selectedEventScores[fighter.id];
+    var hasPts = (pts != null);
+    var ptsStr = hasPts ? (Math.round(pts * 100) / 100).toFixed(2) : '—';
+    // Empty modifier dims the value when there's no score yet
+    var emptyMod = hasPts ? '' : ' fighter-card__pts--empty';
+    scoreInline = '<span class="fighter-card__pts' + emptyMod + '">' +
+                    '<span class="fighter-card__pts-val">' + ptsStr + '</span>' +
+                    '<span class="fighter-card__pts-label">PTS</span>' +
+                  '</span>';
+  }
+
   return (
-    '<div class="fighter-card ' + tierClass + '">' +
+    // data-modal-fighter-id is the click target for opening the fighter
+    // modal. tabindex/role/aria-label make the card keyboard-activatable.
+    '<div class="fighter-card lineup-starter-card ' + tierClass + '" ' +
+         'data-modal-fighter-id="' + fighter.id + '" ' +
+         'tabindex="0" role="button" ' +
+         'aria-label="View ' + escapeHtml(fighter.name) + ' details">' +
       '<div class="fighter-card__photo-wrap">' + photoHtml + '</div>' +
       '<div class="fighter-card__rating">' +
         '<span class="fighter-card__rating-num">' + rankLabel + '</span>' +
@@ -377,7 +562,10 @@ function buildStarterCard(fighter, slotNum) {
       '<div class="fighter-card__info">' +
         '<p class="fighter-card__division">' + escapeHtml(divLabel) + '</p>' +
         '<p class="fighter-card__name">' + escapeHtml(fighter.name) + '</p>' +
-        '<p class="fighter-card__record">' + record + '</p>' +
+        '<div class="fighter-card__stat-row">' +
+          '<p class="fighter-card__record">' + record + '</p>' +
+          scoreInline +
+        '</div>' +
         (isLocked || isViewMode
           ? '<span class="lineup-starter-badge">Starter ' + slotNum + '</span>'
           : '<button class="lineup-bench-btn" data-fighter-id="' + fighter.id + '">Bench</button>') +
@@ -431,7 +619,7 @@ function renderRosterList() {
   // Determine whether the +3 cap expansion is currently in effect. Only when
   // expanded do we split out a "Temporary Extended Roster Flex" (TERF) section
   // for the most recently acquired fighters that exceed the normal cap of 20.
-  const eventDate    = nextEvent ? nextEvent.event_date : null;
+  const eventDate    = selectedEvent ? selectedEvent.event_date : null;
   const capExpanded  = typeof isCapExpanded === 'function' ? isCapExpanded(new Date(), eventDate) : false;
   const overflow     = Math.max(0, myRoster.length - 20);
   const showTerf     = capExpanded && overflow > 0;
@@ -785,7 +973,7 @@ function renderRosterRow(fighter, ctx, slotType) {
 // ========================================================================
 async function toggleStarter(fighterId) {
   if (isLocked) return;
-  if (!nextEvent) { alert('No upcoming event found. Cannot save starters.'); return; }
+  if (!selectedEvent) { alert('No upcoming event found. Cannot save starters.'); return; }
 
   if (selections.has(fighterId)) {
     // Bench: delete from DB first, then update local state
@@ -818,7 +1006,7 @@ async function toggleStarter(fighterId) {
       .from('starter_selections')
       .insert({
         league_member_id: myMemberId,
-        event_id:         nextEvent.id,
+        event_id:         selectedEvent.id,
         fighter_id:       fighterId,
         slot_position:    slotPos
       })
@@ -881,6 +1069,16 @@ async function dropFighter(fighterId) {
     source: 'manual'
   });
   if (dropLog.error) console.warn('roster_drops insert failed:', dropLog.error);
+
+  // Mirror to the league activity feed. Fire-and-forget — failures are
+  // logged inside LeagueActivity and don't affect the user-facing flow.
+  if (typeof LeagueActivity !== 'undefined') {
+    LeagueActivity.logEvent(leagueId, LeagueActivity.KINDS.DROP, {
+      fighter_id:   fighterId,
+      fighter_name: fighter.name,
+      source:       'manual'
+    }, myMemberId);
+  }
 
   // If the dropped fighter was a starter, clean up their starter_selection row too
   const selRowId = selectionRowIds[fighterId];
@@ -1247,7 +1445,7 @@ function showFightCardModal() {
       '<div class="fight-card-modal__header">' +
         '<div>' +
           '<p class="fight-card-modal__eyebrow">Fight Card</p>' +
-          '<p class="fight-card-modal__title">' + escapeHtml(nextEvent ? nextEvent.name : 'TBD') + '</p>' +
+          '<p class="fight-card-modal__title">' + escapeHtml(selectedEvent ? selectedEvent.name : 'TBD') + '</p>' +
         '</div>' +
         '<button class="fight-card-modal__close" id="closeFightCardBtn" aria-label="Close">&times;</button>' +
       '</div>' +

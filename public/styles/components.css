@@ -1009,10 +1009,62 @@ body {
   border: 1px solid rgba(212, 168, 75, 0.3);
 }
 
+/* Co-commissioner: same gold accent as primary but with a softer treatment
+   so the primary owner still reads as the unique role at a glance. */
+.badge-co-commissioner {
+  background: transparent;
+  color: var(--accent-gold);
+  border: 1px solid rgba(212, 168, 75, 0.4);
+}
+
 .badge-member {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   border: 1px solid var(--border-subtle);
+}
+
+/* Co-commissioner list on league-settings: one member per row with a
+   Promote/Demote button on the right. */
+.co-commish-list {
+  list-style: none;
+  margin: var(--space-3) 0 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.co-commish-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+}
+.co-commish-row__info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.co-commish-row__name {
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.co-commish-row__btn {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  font-size: 12px;
+}
+.co-commish-empty {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  padding: var(--space-3) 0;
 }
 
 /* Count shown inline in the section label */
@@ -1955,6 +2007,116 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--accent-crimson);
+}
+
+/* ========================================================================
+   LINEUP MOCKUP — used in hero slide 3 to advertise the lineup screen.
+   Reuses the real .fighter-card classes so the marketing image stays in
+   sync with the app; only sizes are scaled down so 3 cards fit in the
+   right column of the hero. Browser chrome reuses .app-mockup__chrome.
+   ======================================================================== */
+
+.lineup-mockup {
+  width: 100%;
+  max-width: 620px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+}
+
+/* Header bar: event eyebrow/name on the left, status pill on the right */
+.lineup-mockup__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.lineup-mockup__eyebrow {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--accent-crimson);
+  margin: 0 0 2px 0;
+}
+.lineup-mockup__event {
+  font-family: var(--font-display);
+  font-size: var(--text-body-sm);
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+/* Live status pill: green dot + label, mimics a real activity badge */
+.lineup-mockup__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #4ade80;
+  white-space: nowrap;
+}
+.lineup-mockup__status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #4ade80;
+  box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.6);
+  animation: lineup-mockup-pulse 1.8s ease-in-out infinite;
+}
+@keyframes lineup-mockup-pulse {
+  0%   { box-shadow: 0 0 0 0   rgba(74, 222, 128, 0.55); }
+  70%  { box-shadow: 0 0 0 8px rgba(74, 222, 128, 0); }
+  100% { box-shadow: 0 0 0 0   rgba(74, 222, 128, 0); }
+}
+
+/* Three-card row inside the mockup */
+.lineup-mockup__cards {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: center;
+  padding: var(--space-4);
+  background:
+    repeating-linear-gradient( 45deg, transparent, transparent 14px, rgba(255,255,255,0.012) 14px, rgba(255,255,255,0.012) 15px),
+    repeating-linear-gradient(-45deg, transparent, transparent 14px, rgba(255,255,255,0.012) 14px, rgba(255,255,255,0.012) 15px),
+    var(--bg-tertiary);
+}
+
+/* Scaled-down fighter cards inside the mockup — keep the real classes
+   for visual fidelity; just shrink dimensions so 3 fit side-by-side. */
+.lineup-mockup .fighter-card {
+  width: 168px;
+  min-height: 252px; /* preserves the 2:3 aspect proportion */
+}
+.lineup-mockup .fighter-card__photo-wrap {
+  flex: 0 0 150px;
+}
+.lineup-mockup .fighter-card__rating {
+  width: 32px;
+  height: 38px;
+}
+.lineup-mockup .fighter-card__rating-num { font-size: 14px; }
+.lineup-mockup .fighter-card__rating-label { font-size: 6px; }
+.lineup-mockup .fighter-card__badge-champ { font-size: 8px; padding: 2px 5px; }
+.lineup-mockup .fighter-card__info {
+  padding: var(--space-2);
+  gap: 2px;
+}
+.lineup-mockup .fighter-card__division { font-size: 8px; }
+.lineup-mockup .fighter-card__name { font-size: 0.7rem; }
+.lineup-mockup .fighter-card__record { font-size: 11px; }
+.lineup-mockup .fighter-card__pts-val   { font-size: 12px; }
+.lineup-mockup .fighter-card__pts-label { font-size: 8px; }
+
+/* Drop the third card on narrow viewports so the mockup doesn't squeeze */
+@media (max-width: 720px) {
+  .lineup-mockup__cards .fighter-card:nth-child(3) { display: none; }
 }
 
 /* Compact standings table inside the product frame */
@@ -3457,6 +3619,23 @@ body {
   margin: 0;
 }
 
+/* Starter card is itself a click target (opens fighter modal). Hover lifts
+   the card subtly, focus ring matches our gold accent for keyboard users.
+   Inner buttons (Bench) keep their own cursor and are excluded from the
+   click-through in the JS handler. */
+.lineup-starter-card {
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.lineup-starter-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35);
+}
+.lineup-starter-card:focus-visible {
+  outline: 2px solid var(--accent-gold);
+  outline-offset: 2px;
+}
+
 /* Bench button inside a starter card — full width, sits at bottom of info panel */
 .lineup-bench-btn {
   display: block;
@@ -4281,17 +4460,127 @@ body {
 .fight-result--draw { background: rgba(212, 175, 55, 0.12); color: var(--accent-gold); }
 .fight-result--nc   { background: var(--bg-tertiary);       color: var(--text-tertiary); }
 
-/* Fantasy points cell — colour-coded by performance */
+/* Fantasy points cell — colour-coded by performance, also acts as the
+   click target that toggles the per-fight score breakdown row beneath it. */
 .fight-history-pts {
   font-family: var(--font-display);
   font-size: 1.1rem;
   letter-spacing: 0.02em;
   color: var(--text-secondary);
   text-align: right;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.fight-history-pts:hover { background: rgba(255, 255, 255, 0.03); }
+.fight-history-pts:focus-visible {
+  outline: 1px solid var(--accent-gold);
+  outline-offset: -1px;
+}
+.fight-history-pts__chevron {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 9px;
+  color: var(--text-tertiary);
+  transition: transform 0.15s ease;
+  vertical-align: middle;
+}
+.fight-history-pts.is-expanded .fight-history-pts__chevron {
+  transform: rotate(90deg);
+  color: var(--accent-gold);
 }
 
 .fight-history-pts--mid  { color: var(--accent-gold); }
 .fight-history-pts--high { color: #4ade80; }
+
+/* Per-fight score breakdown — hidden by default, revealed when the user
+   clicks the Pts cell on a fight row. Spans every column of the parent
+   table via colspan="6". */
+.fight-history-detail > td {
+  padding: 0 !important;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.fight-breakdown {
+  padding: var(--space-3) var(--space-4);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+@media (max-width: 720px) {
+  .fight-breakdown { grid-template-columns: 1fr; }
+}
+.fight-breakdown__group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.fight-breakdown__group-label {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--accent-gold);
+  margin-bottom: 4px;
+}
+.fight-breakdown__line {
+  display: grid;
+  grid-template-columns: 1.4fr 1.6fr auto;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: var(--text-caption);
+  color: var(--text-secondary);
+  padding: 3px 0;
+}
+.fight-breakdown__label {
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.fight-breakdown__formula {
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fight-breakdown__pts {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--text-primary);
+  font-weight: 600;
+  white-space: nowrap;
+}
+/* Categories that contributed zero — kept visible for auditability but
+   dimmed so they don't compete with the categories that earned points. */
+.fight-breakdown__line--muted .fight-breakdown__label,
+.fight-breakdown__line--muted .fight-breakdown__formula,
+.fight-breakdown__line--muted .fight-breakdown__pts {
+  color: var(--text-tertiary);
+  font-weight: 400;
+}
+/* Subtotal rows: separator on top, slightly heavier weight */
+.fight-breakdown__line--subtotal {
+  border-top: 1px solid var(--border-subtle);
+  margin-top: 4px;
+  padding-top: 6px;
+}
+.fight-breakdown__line--subtotal .fight-breakdown__label,
+.fight-breakdown__line--subtotal .fight-breakdown__pts {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+/* Final total: gold accent, larger, bordered top */
+.fight-breakdown__line--total {
+  border-top: 1px solid var(--accent-gold);
+  margin-top: 4px;
+  padding-top: 6px;
+}
+.fight-breakdown__line--total .fight-breakdown__label,
+.fight-breakdown__line--total .fight-breakdown__pts {
+  color: var(--accent-gold);
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 400;
+}
 
 /* ========================================================================
    STANDINGS PAGE
@@ -5266,6 +5555,310 @@ label .form-label__hint {
   margin-top: var(--space-6);
 }
 
+/* ============================================================
+   SCORE EVENT PAGE — commissioner UI for entering fight results
+   ============================================================ */
+
+.score-event-body {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: var(--space-8);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.score-event-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.score-event-section-header .section-label {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+/* Inline checkbox/flag rows — used for "Title Defense", "Fight of the
+   Night", "Performance of the Night". */
+.score-event-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5, var(--space-4));
+  margin: var(--space-3) 0 var(--space-4);
+}
+.score-event-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-body-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+.score-event-flag input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent-crimson);
+}
+
+/* Fighter pickers (autocomplete dropdown) */
+.score-event-fighter-pick {
+  position: relative;
+}
+.score-event-fighter-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  margin-top: 4px;
+  max-height: 280px;
+  overflow-y: auto;
+  z-index: 50;
+  box-shadow: 0 8px 20px -8px rgba(0, 0, 0, 0.4);
+}
+.score-event-fighter-dropdown__row {
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+  font-size: var(--text-body-sm);
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.score-event-fighter-dropdown__row:hover,
+.score-event-fighter-dropdown__row:focus {
+  background: var(--bg-tertiary);
+}
+.score-event-fighter-dropdown__row:last-child {
+  border-bottom: 0;
+}
+.score-event-fighter-dropdown__row-meta {
+  color: var(--text-tertiary);
+  font-size: var(--text-caption);
+}
+.score-event-fighter-chip {
+  margin-top: var(--space-2);
+  font-size: var(--text-body-sm);
+  color: var(--accent-gold);
+}
+
+/* Per-fighter stat columns inside the form */
+.score-event-stats-col {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: var(--space-4);
+}
+.score-event-stats-col__header {
+  font-family: var(--font-display);
+  font-size: var(--text-heading-sm);
+  letter-spacing: 0.04em;
+  color: var(--text-primary);
+  margin: 0 0 var(--space-3) 0;
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.score-event-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* ---- Fight card list table ----
+   The JS in score-event.js emits a <table class="fight-card-table">. Style
+   it with the same look as the standings table so columns separate cleanly
+   instead of rendering as one run-on line. */
+.fight-card-table,
+.score-preview-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.fight-card-table th,
+.score-preview-table th {
+  padding: var(--space-3) var(--space-4);
+  text-align: left;
+  font-size: var(--text-caption);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-tertiary);
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-subtle);
+  white-space: nowrap;
+}
+
+.fight-card-table td,
+.score-preview-table td {
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-body-sm);
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-subtle);
+  vertical-align: middle;
+}
+
+.fight-card-table tr:last-child td,
+.score-preview-table tr:last-child td {
+  border-bottom: none;
+}
+
+/* Right-align the action column on the fight card list (Edit / Delete) */
+.fight-card-table td:last-child {
+  text-align: right;
+  width: 1%; /* shrink to button width */
+  white-space: nowrap;
+}
+.fight-card-table__actions {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+/* Score preview specifics: top-align the team cell so it lines up with
+   the first starter in a multi-starter list, and right-align points. */
+.score-preview-table td:first-child {
+  vertical-align: top;
+  font-weight: 600;
+  width: 140px;
+}
+.score-preview-table .score-preview-starters {
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+.score-preview-table .pts-cell,
+.score-preview-table th.pts-cell {
+  text-align: right;
+  vertical-align: top;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  width: 100px;
+}
+.score-preview-none {
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+/* Empty-state messages emitted by score-event.js */
+.score-empty {
+  color: var(--text-tertiary);
+  font-size: var(--text-body-sm);
+  padding: var(--space-3) 0;
+  margin: 0;
+}
+
+/* Small button modifier — used inline in dense table rows so the action
+   doesn't make the row taller than the data. */
+.btn-sm {
+  padding: 6px 12px;
+  font-size: var(--text-caption);
+}
+
+/* New-event inline form, sits inside the Choose Event card under the
+   selector. Border-top divider so it's clearly a sub-section that opens
+   on demand. */
+.score-event-new-event {
+  margin-top: var(--space-5);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* End-time picker — two compact selects with a colon between them.
+   Sized so the pair fits in a single form-group cell of form-grid--3. */
+.score-event-time {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.score-event-time .input {
+  flex: 0 0 auto;
+  width: 64px;
+  padding: 12px 8px;
+  text-align: center;
+}
+.score-event-time__sep {
+  font-family: var(--font-display);
+  font-size: var(--text-heading-sm);
+  color: var(--text-tertiary);
+}
+.score-event-time__hint {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  margin-left: var(--space-2);
+}
+
+/* ============================================================
+   LINEUP — event picker + per-card score chip
+   ============================================================ */
+
+/* Event picker that sits above the event banner. Compact label-on-left,
+   select-on-right layout that wraps on narrow screens. */
+.lineup-event-picker {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+.lineup-event-picker__label {
+  font-size: var(--text-caption);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+.lineup-event-picker .waiver-filter {
+  flex: 0 1 360px;
+}
+
+/* Inline points on a starter card — sits to the right of the record at
+   the bottom of the card, NOT in a corner. Avoids collisions with the
+   rank badge (top-left) and CHAMP badge (top-right) which both occupy
+   the photo area. Subtle by design: the card is already busy. */
+.fighter-card__stat-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.fighter-card__pts {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.fighter-card__pts-val {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  color: var(--accent-gold);
+  line-height: 1;
+}
+.fighter-card__pts-label {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-tertiary);
+  line-height: 1;
+}
+/* Empty state — no score recorded yet for this fighter. Same layout,
+   muted so it doesn't compete with real scores on sibling cards. */
+.fighter-card__pts--empty .fighter-card__pts-val {
+  color: var(--text-tertiary);
+}
+
 .draft-panel__controls {
   display: grid;
   gap: var(--space-2);
@@ -5682,3 +6275,374 @@ label .form-label__hint {
   padding-top: var(--space-3);
   border-top: 1px solid var(--border-subtle);
 }
+
+/* ============================================================
+   ACTIVITY FEED
+   Used by the embedded card on league.html and the standalone
+   activity.html page. One vertical list of past league events
+   (drops, claims, trades, joins, draft picks, score pushes).
+   ============================================================ */
+
+.activity-feed {
+  width: 100%;
+}
+.activity-feed__loading,
+.activity-feed__empty,
+.activity-feed__error {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  padding: var(--space-3) 0;
+  margin: 0;
+}
+.activity-feed__error { color: var(--accent-crimson); }
+
+.activity-feed__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.activity-feed__row {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: var(--space-3);
+  align-items: start;
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.activity-feed__row:last-child { border-bottom: none; }
+
+/* Icon chip — neutral background, kind-tinted icon color */
+.activity-feed__icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--bg-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+/* Kind-specific tints — keep subtle so the feed scans as one rhythm */
+.activity-feed__row--check  .activity-feed__icon { color: #4ade80; }
+.activity-feed__row--x      .activity-feed__icon { color: var(--accent-crimson); }
+.activity-feed__row--star   .activity-feed__icon { color: var(--accent-gold); }
+.activity-feed__row--trophy .activity-feed__icon { color: var(--accent-gold); }
+.activity-feed__row--plus   .activity-feed__icon { color: #4ade80; }
+.activity-feed__row--arrows .activity-feed__icon { color: var(--accent-gold); }
+
+.activity-feed__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.activity-feed__headline {
+  margin: 0;
+  font-size: var(--text-body-sm);
+  color: var(--text-secondary);
+  line-height: 1.35;
+}
+.activity-feed__headline strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.activity-feed__when {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+.activity-feed__meta {
+  color: var(--text-tertiary);
+  font-weight: 400;
+}
+
+/* Activity card on league.html — uses the shared .league-info-card
+   wrapper for visual rhythm. Sits between .league-live-row (above) and
+   .league-info-row (below); both of those use margin-top to set gaps,
+   so we mirror that here. var(--space-8) matches the info-row's
+   margin-top, giving symmetric 32px space above and below the card. */
+.activity-card {
+  margin-top: var(--space-8);
+}
+.activity-card .activity-card__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+/* Cancel the default bottom margin on .section-label since the header
+   row owns its own spacing — the feed list below has its own breathing
+   room from the row borders. */
+.activity-card .activity-card__header .section-label {
+  margin: 0;
+}
+.activity-card__see-all {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-tertiary);
+  text-decoration: none;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.activity-card__see-all:hover { color: var(--accent-crimson); }
+/* Tighter top padding on the feed body inside this card so the loading/
+   empty state doesn't leave a tall void. */
+.activity-card #leagueActivityFeed {
+  margin-top: var(--space-2);
+}
+/* Pull the loading/empty/error states flush against the header — the
+   list-with-borders treatment isn't active in those states, so the
+   default activity-feed padding leaves an awkward gap. */
+.activity-card #leagueActivityFeed > .activity-feed__loading,
+.activity-card #leagueActivityFeed > .activity-feed__empty,
+.activity-card #leagueActivityFeed > .activity-feed__error {
+  padding: var(--space-2) 0 0 0;
+}
+
+/* Filter chip row at the top of the standalone activity page */
+.activity-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+.activity-filter__chip {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.activity-filter__chip:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+.activity-filter__chip--active {
+  background: var(--accent-crimson);
+  color: #F5F5F0;
+  border-color: var(--accent-crimson);
+}
+
+/* ============================================================
+   LINEUP BANNER ACTIONS
+   The "View fight card" / "View all lineups" buttons live in
+   the same row of the event banner on the lineup page.
+   ============================================================ */
+.lineup-banner-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+  margin-top: var(--space-2);
+}
+.lineup-banner-actions .fight-card-btn {
+  text-decoration: none;
+}
+
+/* ============================================================
+   LINEUPS PAGE — every manager's starters at a glance
+   One card per league member; each card has 3 starter slots.
+   ============================================================ */
+
+#lineupsGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-4);
+  margin-top: var(--space-6);
+}
+
+.lineups-card {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: var(--space-4);
+  transition: transform 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.lineups-card:hover {
+  transform: translateY(-1px);
+  border-color: var(--border-strong);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+}
+.lineups-card--me {
+  border-color: rgba(212, 168, 75, 0.5);
+  box-shadow: 0 0 0 1px rgba(212, 168, 75, 0.2) inset;
+}
+
+.lineups-card__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: var(--space-2);
+}
+.lineups-card__team {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.lineups-card__name {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lineups-card__you {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--accent-gold-subtle);
+  color: var(--accent-gold);
+  border: 1px solid rgba(212, 168, 75, 0.3);
+}
+.lineups-card__total {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  letter-spacing: 0.02em;
+  color: var(--accent-gold);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.lineups-card__total--muted {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  font-family: var(--font-body);
+}
+
+/* Three-up starter tile row inside each manager card */
+.lineups-card__slots {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+@media (max-width: 540px) {
+  .lineups-card__slots { grid-template-columns: 1fr; }
+}
+
+/* Compact starter tile — photo + name/division on the left, optional
+   points chip on the right. Tighter than .fighter-card so multiple
+   managers fit in the viewport. */
+.lineups-slot {
+  display: grid;
+  grid-template-columns: 56px 1fr auto;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--border-subtle);
+  border-radius: 8px;
+}
+.lineups-slot--champion { border-left-color: var(--tier-champion); }
+.lineups-slot--top5     { border-left-color: var(--tier-top5); }
+.lineups-slot--top15    { border-left-color: var(--tier-top15); }
+.lineups-slot--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 64px;
+  border-style: dashed;
+  border-left-style: dashed;
+  color: var(--text-tertiary);
+  font-size: var(--text-caption);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+}
+
+.lineups-slot__photo-wrap {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: linear-gradient(160deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+  flex-shrink: 0;
+}
+.lineups-slot__photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+}
+.lineups-slot__photo--placeholder {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(160deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+}
+.lineups-slot__rank {
+  position: absolute;
+  bottom: 2px;
+  left: 2px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(14, 14, 16, 0.85);
+  color: #F5F5F0;
+  font-family: var(--font-display);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  border: 1px solid var(--border-strong);
+  line-height: 1;
+}
+
+.lineups-slot__info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.lineups-slot__name {
+  font-weight: 600;
+  font-size: var(--text-body-sm);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lineups-slot__division {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-tertiary);
+}
+
+.lineups-slot__pts {
+  font-family: var(--font-display);
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  color: var(--accent-gold);
+  font-variant-numeric: tabular-nums;
+  padding: 0 var(--space-2);
+}
+.lineups-slot__pts--empty {
+  color: var(--text-tertiary);
+}
+

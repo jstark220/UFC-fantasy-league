@@ -17,7 +17,7 @@ async function initMyLeagues() {
   // This returns each membership row with the full leagues row nested inside.
   const { data: memberships, error } = await supabaseClient
     .from('league_members')
-    .select('team_name, league_id, leagues(id, name, format, commissioner_id, max_managers)')
+    .select('team_name, league_id, is_commissioner, leagues(id, name, format, commissioner_id, max_managers)')
     .eq('user_id', user.id);
 
   if (error) {
@@ -60,13 +60,20 @@ async function initMyLeagues() {
 
   memberships.forEach(function(membership) {
     const league = membership.leagues;
-    const isCommissioner = league.commissioner_id === user.id;
+    // Three-tier role: primary owner / co-commissioner / plain member.
+    const isPrimary   = Commissioner.isPrimaryCommissioner(league, user.id);
+    const isCoCommish = !isPrimary && membership.is_commissioner === true;
+    // Anything that gates by "is a commissioner" should treat the two
+    // commissioner tiers the same — kept as a single boolean for consumers.
+    const isCommissioner = isPrimary || isCoCommish;
     const memberCount = memberCounts[membership.league_id] || 0;
 
     // Format display values from enum strings
     const formatDisplay = league.format === 'dynasty' ? 'Dynasty' : 'Season-Long';
-    const roleDisplay = isCommissioner ? 'Commissioner' : 'Member';
-    const badgeClass = isCommissioner ? 'badge-commissioner' : 'badge-member';
+    var roleDisplay, badgeClass;
+    if (isPrimary)         { roleDisplay = 'Commissioner';     badgeClass = 'badge-commissioner'; }
+    else if (isCoCommish)  { roleDisplay = 'Co-commissioner';  badgeClass = 'badge-co-commissioner'; }
+    else                   { roleDisplay = 'Member';           badgeClass = 'badge-member'; }
 
     const card = document.createElement('div');
     card.className = 'league-card';

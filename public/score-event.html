@@ -3,240 +3,328 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Score Event - UFC Fantasy League</title>
-  <link rel="stylesheet" href="css/styles.css">
+
+  <script src="js/theme.js"></script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="styles/tokens.css">
+  <link rel="stylesheet" href="styles/components.css">
+
+  <title>Score Event - Knockdown Fantasy</title>
 </head>
 <body>
 
-  <!-- Hidden until auth check and commissioner verification complete -->
-  <div class="page" id="pageContent" style="display: none;">
+  <div class="dashboard-page" id="pageContent" style="display: none;">
 
-    <a href="#" class="back-link" id="leagueLink">&#8592; League</a>
-
-    <div class="page-header">
-      <h1 id="leagueName"></h1>
-    </div>
-
-    <!-- Event selector: pick which event you're entering results for -->
-    <div class="section">
-      <h2>Score Event</h2>
-      <div id="eventSelectorContent"></div>
-    </div>
-
-    <!-- Fight card: lists all fights entered so far + button to add a new one -->
-    <div class="section" id="fightCardSection" style="display: none;">
-      <div class="section-header-row">
-        <h2 id="fightCardTitle">Fight Card</h2>
-        <button class="btn-gold" id="addFightBtn">+ Add Fight</button>
+    <nav class="top-nav">
+      <a href="index.html" class="top-nav__logo">
+        <span class="kf-red">Knockdown</span> Fantasy
+      </a>
+      <div class="top-nav__links">
+        <a href="#" class="btn-ghost" id="leagueLink">← League</a>
       </div>
-      <div id="fightCardList"></div>
+      <div class="top-nav__actions">
+        <button class="btn-theme" onclick="toggleTheme()" aria-label="Toggle theme">☾</button>
+        <button id="globalLogoutBtn" class="btn-ghost" onclick="logOut()">Log out</button>
+      </div>
+    </nav>
+
+    <div class="dashboard-header">
+      <div class="dashboard-header__inner">
+        <p class="dashboard-welcome__eyebrow">Commissioner — Score Event</p>
+        <h1 class="dashboard-welcome__name" id="leagueName"></h1>
+        <p class="dashboard-welcome__sub">Enter fight results, then push the totals to standings.</p>
+      </div>
     </div>
 
-    <!-- Add/Edit fight form: shown inline when + Add Fight or Edit is clicked -->
-    <div class="section" id="fightFormSection" style="display: none;">
-      <h2 id="fightFormTitle">Add Fight</h2>
-      <form id="fightForm">
+    <div class="dashboard-body score-event-body">
 
-        <!-- Fight metadata row -->
-        <div class="fight-form-meta">
-          <div class="form-group">
-            <label for="cardPosition">Card Position</label>
-            <select id="cardPosition" name="cardPosition">
-              <option value="main_card">Main Card</option>
-              <option value="co_main_event">Co-Main Event</option>
-              <option value="main_event">Main Event</option>
-              <option value="prelim">Prelim</option>
-              <option value="early_prelim">Early Prelim</option>
-            </select>
+      <!-- Step 1: Pick the event (or add a new one) -->
+      <section class="form-section">
+        <div class="score-event-section-header">
+          <p class="section-label">Choose Event</p>
+          <button type="button" class="btn-secondary btn-sm" id="toggleNewEventBtn">+ New Event</button>
+        </div>
+
+        <div id="eventSelectorContent"></div>
+
+        <!-- Inline new-event form. Hidden until the commissioner clicks
+             "+ New Event". Inserts a row into ufc_events, then re-renders
+             the event dropdown with the new event auto-selected. -->
+        <div id="newEventForm" class="score-event-new-event" style="display:none">
+          <p class="form-section__group-label">Add a UFC Event</p>
+          <div class="form-grid form-grid--2">
+            <div class="form-group">
+              <label for="newEventName">Event Name</label>
+              <input type="text" id="newEventName" class="input" placeholder="UFC 315" maxlength="80">
+            </div>
+            <div class="form-group">
+              <label for="newEventDate">Event Date</label>
+              <input type="date" id="newEventDate" class="input">
+            </div>
+            <div class="form-group form-grid__span-2">
+              <label for="newEventFullName">
+                Full Name <span class="form-label__hint">(optional)</span>
+              </label>
+              <input type="text" id="newEventFullName" class="input"
+                     placeholder="UFC 315: Jones vs. Aspinall" maxlength="200">
+            </div>
+            <div class="form-group form-grid__span-2">
+              <label for="newEventVenue">
+                Venue <span class="form-label__hint">(optional)</span>
+              </label>
+              <input type="text" id="newEventVenue" class="input"
+                     placeholder="T-Mobile Arena, Las Vegas, NV" maxlength="200">
+            </div>
           </div>
-          <div class="form-group">
-            <label for="weightClass">Weight Class</label>
-            <select id="weightClass" name="weightClass">
-              <option value="strawweight">Women's Strawweight</option>
-              <option value="flyweight_w">Women's Flyweight</option>
-              <option value="bantamweight_w">Women's Bantamweight</option>
-              <option value="flyweight">Men's Flyweight</option>
-              <option value="bantamweight">Men's Bantamweight</option>
-              <option value="featherweight">Men's Featherweight</option>
-              <option value="lightweight">Men's Lightweight</option>
-              <option value="welterweight">Men's Welterweight</option>
-              <option value="middleweight">Men's Middleweight</option>
-              <option value="light_heavyweight">Men's Light Heavyweight</option>
-              <option value="heavyweight">Men's Heavyweight</option>
-            </select>
+          <div class="score-event-form-actions">
+            <button type="button" class="btn-ghost"   id="cancelNewEventBtn">Cancel</button>
+            <button type="button" class="btn-primary" id="saveNewEventBtn">Save Event</button>
           </div>
-          <div class="form-group">
-            <label for="titleType">Title Fight</label>
-            <select id="titleType" name="titleType">
-              <option value="none">No</option>
-              <option value="divisional">Divisional Title</option>
-              <option value="interim">Interim Title</option>
-              <option value="bmf">BMF Belt</option>
-            </select>
+        </div>
+      </section>
+
+      <!-- Step 2: Fight card list (visible once an event is selected) -->
+      <section class="form-section" id="fightCardSection" style="display: none;">
+        <div class="score-event-section-header">
+          <p class="section-label" id="fightCardTitle">Fight Card</p>
+          <button class="btn-primary" id="addFightBtn">+ Add Fight</button>
+        </div>
+        <div id="fightCardList"></div>
+      </section>
+
+      <!-- Step 3: Add/edit fight form (toggled inline) -->
+      <section class="form-section" id="fightFormSection" style="display: none;">
+        <p class="section-label" id="fightFormTitle">Add Fight</p>
+        <form id="fightForm">
+
+          <p class="form-section__group-label">Fight Details</p>
+          <div class="form-grid form-grid--3">
+            <div class="form-group">
+              <label for="cardPosition">Card Position</label>
+              <select id="cardPosition" name="cardPosition" class="input">
+                <option value="main_card">Main Card</option>
+                <option value="co_main_event">Co-Main Event</option>
+                <option value="main_event">Main Event</option>
+                <option value="prelim">Prelim</option>
+                <option value="early_prelim">Early Prelim</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="weightClass">Weight Class</label>
+              <select id="weightClass" name="weightClass" class="input">
+                <option value="strawweight">Women's Strawweight</option>
+                <option value="flyweight_w">Women's Flyweight</option>
+                <option value="bantamweight_w">Women's Bantamweight</option>
+                <option value="flyweight">Men's Flyweight</option>
+                <option value="bantamweight">Men's Bantamweight</option>
+                <option value="featherweight">Men's Featherweight</option>
+                <option value="lightweight">Men's Lightweight</option>
+                <option value="welterweight">Men's Welterweight</option>
+                <option value="middleweight">Men's Middleweight</option>
+                <option value="light_heavyweight">Men's Light Heavyweight</option>
+                <option value="heavyweight">Men's Heavyweight</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="titleType">Title Fight</label>
+              <select id="titleType" name="titleType" class="input">
+                <option value="none">No</option>
+                <option value="divisional">Divisional Title</option>
+                <option value="interim">Interim Title</option>
+                <option value="bmf">BMF Belt</option>
+              </select>
+            </div>
           </div>
-          <div class="form-group fight-form-checkbox-group">
-            <label>
+
+          <div class="score-event-flags">
+            <label class="score-event-flag">
               <input type="checkbox" id="isTitleDefense" name="isTitleDefense">
-              Title Defense?
+              <span>Title Defense</span>
             </label>
-            <label>
+            <label class="score-event-flag">
               <input type="checkbox" id="fightOfTheNight" name="fightOfTheNight">
-              Fight of the Night
+              <span>Fight of the Night</span>
             </label>
           </div>
-        </div>
 
-        <!-- Fighter picker row: search boxes to select each fighter -->
-        <div class="fight-form-fighters">
-          <div class="fighter-pick-col">
-            <label for="fighterASearch">Fighter A</label>
-            <input type="text" id="fighterASearch" placeholder="Search fighter..." autocomplete="off">
-            <div id="fighterADropdown" class="fighter-dropdown" style="display:none;"></div>
-            <input type="hidden" id="fighterAId">
-            <div id="fighterASelected" class="fighter-selected"></div>
+          <p class="form-section__group-label">Fighters</p>
+          <div class="form-grid form-grid--2">
+            <div class="form-group score-event-fighter-pick">
+              <label for="fighterASearch">Fighter A</label>
+              <input type="text" id="fighterASearch" class="input" placeholder="Search fighter..." autocomplete="off">
+              <div id="fighterADropdown" class="score-event-fighter-dropdown" style="display:none;"></div>
+              <input type="hidden" id="fighterAId">
+              <div id="fighterASelected" class="score-event-fighter-chip"></div>
+            </div>
+            <div class="form-group score-event-fighter-pick">
+              <label for="fighterBSearch">Fighter B</label>
+              <input type="text" id="fighterBSearch" class="input" placeholder="Search fighter..." autocomplete="off">
+              <div id="fighterBDropdown" class="score-event-fighter-dropdown" style="display:none;"></div>
+              <input type="hidden" id="fighterBId">
+              <div id="fighterBSelected" class="score-event-fighter-chip"></div>
+            </div>
           </div>
-          <div class="fight-vs-divider">vs</div>
-          <div class="fighter-pick-col">
-            <label for="fighterBSearch">Fighter B</label>
-            <input type="text" id="fighterBSearch" placeholder="Search fighter..." autocomplete="off">
-            <div id="fighterBDropdown" class="fighter-dropdown" style="display:none;"></div>
-            <input type="hidden" id="fighterBId">
-            <div id="fighterBSelected" class="fighter-selected"></div>
-          </div>
-        </div>
 
-        <!-- Outcome row: method/result, winner, round, time -->
-        <div class="fight-form-outcome">
-          <div class="form-group">
-            <label for="outcome">Method / Result</label>
-            <select id="outcome" name="outcome">
-              <option value="">-- Select --</option>
-              <option value="ko_tko">KO / TKO</option>
-              <option value="submission">Submission</option>
-              <option value="decision_u">Unanimous Decision</option>
-              <option value="decision_s">Split Decision</option>
-              <option value="decision_m">Majority Decision</option>
-              <option value="dq">DQ</option>
-              <option value="draw">Draw</option>
-              <option value="no_contest">No Contest</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
+          <p class="form-section__group-label">Outcome</p>
+          <div class="form-grid form-grid--3">
+            <div class="form-group">
+              <label for="outcome">Method / Result</label>
+              <select id="outcome" name="outcome" class="input">
+                <option value="">— Select —</option>
+                <option value="ko_tko">KO / TKO</option>
+                <option value="submission">Submission</option>
+                <option value="decision_u">Unanimous Decision</option>
+                <option value="decision_s">Split Decision</option>
+                <option value="decision_m">Majority Decision</option>
+                <option value="dq">DQ</option>
+                <option value="draw">Draw</option>
+                <option value="no_contest">No Contest</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="winner">Winner</label>
+              <select id="winner" name="winner" class="input">
+                <option value="">N/A</option>
+                <option value="a">Fighter A</option>
+                <option value="b">Fighter B</option>
+              </select>
+            </div>
+            <div class="form-group" id="roundGroup">
+              <label for="endRound">Round</label>
+              <select id="endRound" name="endRound" class="input">
+                <option value="">—</option>
+                <option value="1">R1</option>
+                <option value="2">R2</option>
+                <option value="3">R3</option>
+                <option value="4">R4</option>
+                <option value="5">R5</option>
+              </select>
+            </div>
+            <div class="form-group" id="timeGroup">
+              <label>End Time</label>
+              <div class="score-event-time">
+                <select id="endTimeMinutes" class="input" aria-label="Minutes">
+                  <option value="0">0</option>
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                  <option value="4">4</option>
+                </select>
+                <span class="score-event-time__sep">:</span>
+                <select id="endTimeSecondsSel" class="input" aria-label="Seconds"></select>
+                <span class="score-event-time__hint">min : sec</span>
+              </div>
+              <!-- Legacy hidden field kept under the same id so any external
+                   refs continue to work; populated from the two selects on
+                   submit. -->
+              <input type="hidden" id="endTimeSeconds">
+            </div>
           </div>
-          <div class="form-group">
-            <label for="winner">Winner</label>
-            <select id="winner" name="winner">
-              <option value="">N/A</option>
-              <option value="a">Fighter A</option>
-              <option value="b">Fighter B</option>
-            </select>
-          </div>
-          <div class="form-group" id="roundGroup">
-            <label for="endRound">Round</label>
-            <select id="endRound" name="endRound">
-              <option value="">--</option>
-              <option value="1">R1</option>
-              <option value="2">R2</option>
-              <option value="3">R3</option>
-              <option value="4">R4</option>
-              <option value="5">R5</option>
-            </select>
-          </div>
-          <div class="form-group" id="timeGroup">
-            <label for="endTimeSeconds">End Time (sec)</label>
-            <input type="number" id="endTimeSeconds" name="endTimeSeconds" min="0" max="300" placeholder="e.g. 83">
-          </div>
-        </div>
 
-        <!-- Per-fighter stat columns -->
-        <div class="fight-form-stats">
+          <p class="form-section__group-label">Stats</p>
+          <div class="form-grid form-grid--2">
 
-          <div class="stats-col">
-            <h3 id="statsHeaderA" class="stats-col-header">Fighter A Stats</h3>
-            <div class="form-group">
-              <label>Sig. Strikes</label>
-              <input type="number" id="aSigStrikes" min="0" value="0">
-            </div>
-            <div class="form-group">
-              <label>Takedowns</label>
-              <input type="number" id="aTakedowns" min="0" value="0">
-            </div>
-            <div class="form-group">
-              <label>Knockdowns</label>
-              <input type="number" id="aKnockdowns" min="0" value="0">
-            </div>
-            <div class="form-group">
-              <label>Control (sec)</label>
-              <input type="number" id="aControlSeconds" min="0" value="0">
-            </div>
-            <div class="form-group">
-              <label>Opponent Rank</label>
-              <input type="number" id="aOpponentRank" min="1" max="15" placeholder="blank if unranked">
-            </div>
-            <div class="form-group">
-              <label>
-                <input type="checkbox" id="aPotN"> Perf. of the Night
+            <div class="score-event-stats-col">
+              <h3 id="statsHeaderA" class="score-event-stats-col__header">Fighter A Stats</h3>
+              <div class="form-group">
+                <label for="aSigStrikes">Sig. Strikes</label>
+                <input type="number" id="aSigStrikes" class="input" min="0" value="0">
+              </div>
+              <div class="form-group">
+                <label for="aTakedowns">Takedowns</label>
+                <input type="number" id="aTakedowns" class="input" min="0" value="0">
+              </div>
+              <div class="form-group">
+                <label for="aKnockdowns">Knockdowns</label>
+                <input type="number" id="aKnockdowns" class="input" min="0" value="0">
+              </div>
+              <div class="form-group">
+                <label for="aControlSeconds">Control (sec)</label>
+                <input type="number" id="aControlSeconds" class="input" min="0" value="0">
+              </div>
+              <div class="form-group">
+                <label for="aOpponentRank">Opponent Rank</label>
+                <input type="number" id="aOpponentRank" class="input" min="1" max="15" placeholder="blank if unranked">
+              </div>
+              <label class="score-event-flag">
+                <input type="checkbox" id="aPotN">
+                <span>Performance of the Night</span>
               </label>
             </div>
-          </div>
 
-          <div class="stats-col">
-            <h3 id="statsHeaderB" class="stats-col-header">Fighter B Stats</h3>
-            <div class="form-group">
-              <label>Sig. Strikes</label>
-              <input type="number" id="bSigStrikes" min="0" value="0">
-            </div>
-            <div class="form-group">
-              <label>Takedowns</label>
-              <input type="number" id="bTakedowns" min="0" value="0">
-            </div>
-            <div class="form-group">
-              <label>Knockdowns</label>
-              <input type="number" id="bKnockdowns" min="0" value="0">
-            </div>
-            <div class="form-group">
-              <label>Control (sec)</label>
-              <input type="number" id="bControlSeconds" min="0" value="0">
-            </div>
-            <div class="form-group">
-              <label>Opponent Rank</label>
-              <input type="number" id="bOpponentRank" min="1" max="15" placeholder="blank if unranked">
-            </div>
-            <div class="form-group">
-              <label>
-                <input type="checkbox" id="bPotN"> Perf. of the Night
+            <div class="score-event-stats-col">
+              <h3 id="statsHeaderB" class="score-event-stats-col__header">Fighter B Stats</h3>
+              <div class="form-group">
+                <label for="bSigStrikes">Sig. Strikes</label>
+                <input type="number" id="bSigStrikes" class="input" min="0" value="0">
+              </div>
+              <div class="form-group">
+                <label for="bTakedowns">Takedowns</label>
+                <input type="number" id="bTakedowns" class="input" min="0" value="0">
+              </div>
+              <div class="form-group">
+                <label for="bKnockdowns">Knockdowns</label>
+                <input type="number" id="bKnockdowns" class="input" min="0" value="0">
+              </div>
+              <div class="form-group">
+                <label for="bControlSeconds">Control (sec)</label>
+                <input type="number" id="bControlSeconds" class="input" min="0" value="0">
+              </div>
+              <div class="form-group">
+                <label for="bOpponentRank">Opponent Rank</label>
+                <input type="number" id="bOpponentRank" class="input" min="1" max="15" placeholder="blank if unranked">
+              </div>
+              <label class="score-event-flag">
+                <input type="checkbox" id="bPotN">
+                <span>Performance of the Night</span>
               </label>
             </div>
+
           </div>
 
+          <div class="score-event-form-actions">
+            <button type="button" class="btn-ghost" id="cancelFightBtn">Cancel</button>
+            <button type="submit" class="btn-primary" id="saveFightBtn">Save Fight</button>
+          </div>
+
+        </form>
+      </section>
+
+      <!-- Step 4: Score preview & commit to standings -->
+      <section class="form-section" id="scorePreviewSection" style="display: none;">
+        <p class="section-label">Score Preview</p>
+        <p class="form-section__note" style="margin-top: 0; margin-bottom: var(--space-4)">
+          Review the computed points below, then click "Save Scores" to commit them.
+          Saving will overwrite any previously saved scores for this event.
+        </p>
+        <div id="scorePreviewContent"></div>
+        <div class="score-event-form-actions">
+          <button class="btn-primary" id="saveScoresBtn">Save Scores to Standings</button>
         </div>
+      </section>
 
-        <div class="fight-form-actions">
-          <button type="submit" class="btn-gold" id="saveFightBtn">Save Fight</button>
-          <button type="button" class="btn-secondary" id="cancelFightBtn">Cancel</button>
-        </div>
-
-      </form>
     </div>
-
-    <!-- Score preview: computed points per manager before committing to DB -->
-    <div class="section" id="scorePreviewSection" style="display: none;">
-      <h2>Score Preview</h2>
-      <p class="score-preview-note">
-        Review the computed points below, then click "Save Scores" to commit them.
-        Saving will overwrite any previously saved scores for this event.
-      </p>
-      <div id="scorePreviewContent"></div>
-      <div class="score-save-actions">
-        <button class="btn-gold" id="saveScoresBtn">Save Scores to Standings</button>
-      </div>
-    </div>
-
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/supabase-config.js"></script>
   <script src="js/auth-guard.js"></script>
+  <script src="js/scoring.js"></script>
+  <script src="js/activity.js"></script>
+  <script src="js/commissioner.js"></script>
   <script src="js/score-event.js"></script>
+
+  <script>
+    document.querySelectorAll('.btn-theme').forEach(function(btn) {
+      var theme = document.documentElement.getAttribute('data-theme');
+      btn.textContent = theme === 'light' ? '☀' : '☾';
+    });
+  </script>
 
 </body>
 </html>
