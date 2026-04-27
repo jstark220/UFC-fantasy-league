@@ -5548,6 +5548,119 @@ body {
 .draft-status__team     { color: var(--accent-gold); }
 .draft-status__complete { color: var(--accent-gold); }
 .draft-status__pre      { color: var(--accent-crimson); font-variant-numeric: tabular-nums; }
+.draft-status__paused   { color: var(--accent-warning); font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
+
+/* ============================================================
+   PERSONAL TURN BANNER
+   Loud "YOU'RE ON THE CLOCK" when it's the viewer's pick;
+   subtler "Up in N picks" indicator otherwise. Lives between
+   the top nav and the status strip.
+   ============================================================ */
+.draft-banner {
+  padding: 10px var(--space-6);
+  text-align: center;
+  font-weight: 700;
+  font-size: var(--text-body-sm);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+/* Defeat the [hidden] vs author-display issue (same trick as the commish
+   toolbar — author display rules can't beat the UA stylesheet without
+   an attribute-selector backstop). */
+.draft-banner[hidden] { display: none; }
+
+.draft-banner--mine {
+  background: var(--accent-crimson);
+  color: #fff;
+  font-size: var(--text-body);
+  letter-spacing: 0.12em;
+  animation: draftBannerPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes draftBannerPulse {
+  0%, 100% { background: var(--accent-crimson); }
+  50%      { background: var(--accent-crimson-hover); }
+}
+
+.draft-banner--ondeck {
+  background: rgba(212, 168, 75, 0.18);
+  color: var(--accent-gold);
+}
+
+.draft-banner--waiting {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+}
+
+.draft-banner--done {
+  background: var(--bg-secondary);
+  color: var(--text-tertiary);
+}
+
+/* ============================================================
+   COMMISSIONER TOOLBAR
+   Thin row beneath the status strip with the pause / undo /
+   clear escape hatches. Visible only to the commissioner.
+   ============================================================ */
+.draft-commish-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 6px var(--space-6);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: var(--text-caption);
+  flex-shrink: 0;
+}
+
+/* Defeat the [hidden] HTML attribute — author display:flex above would
+   otherwise override the UA stylesheet's display:none for [hidden]. The
+   toolbar is hidden by default and only revealed by initCommishTools()
+   for the primary commissioner or co-commissioners. */
+.draft-commish-tools[hidden] {
+  display: none;
+}
+
+.draft-commish-tools__label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent-gold);
+  margin-right: var(--space-2);
+}
+
+.draft-commish-btn {
+  font-size: var(--text-caption);
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.draft-commish-btn:hover:not(:disabled) {
+  color: var(--text-primary);
+  border-color: var(--accent-gold);
+}
+.draft-commish-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.draft-commish-btn--danger {
+  margin-left: auto;
+  color: var(--accent-error);
+}
+.draft-commish-btn--danger:hover:not(:disabled) {
+  color: var(--accent-error);
+  border-color: var(--accent-error);
+  background: var(--accent-crimson-subtle);
+}
 
 /* Right-side cluster: pick timer + counter */
 .draft-status__right {
@@ -5741,7 +5854,15 @@ body {
    bounded size, so internal scroll never engaged. */
 .draft-room {
   display: flex;
-  height: calc(100dvh - var(--nav-height) - 60px); /* 60px ≈ status strip */
+  /* Fill whatever vertical space is left in the .draft-page flex column
+     after the nav, banner, status strip, and commish toolbar take their
+     natural heights. flex-basis:0 (rather than auto) sidesteps a Safari/
+     WebKit quirk where flex-basis:auto on a flex item with overflow:hidden
+     can resolve to the content's intrinsic size, leaving the room with
+     0 grow space if content is tall — which collapsed the bottom row to
+     0px and made fighters / roster invisible. With basis:0 the grow:1
+     fairly distributes remaining space without consulting content size. */
+  flex: 1 1 0;
   min-height: 0;
   overflow: hidden;
 }
@@ -5759,20 +5880,18 @@ body {
   width: 100%;
 }
 
-/* Bottom row: fighters | resize handle | roster */
+/* Bottom row: fighters | resize handle | roster.
+   flex: 1 1 0 (basis 0) so the row reliably gets remaining height after
+   the board's fixed 50% — matching the same Safari fix as .draft-room. */
 .draft-bottom {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   display: flex;
   min-height: 0;
   overflow: hidden;
 }
 
-/* Narrow screens add a ~50px tab bar between the status strip and the room */
-@media (max-width: 899px) {
-  .draft-room {
-    height: calc(100dvh - var(--nav-height) - 60px - 50px);
-  }
-}
+/* The narrow-screen tab bar uses flex-shrink:0 below, so the .draft-room
+   flex-fill handles its height automatically — no calc override needed. */
 
 .draft-panel {
   /* Grid is more predictable than flex column here: the body row gets a
@@ -5785,6 +5904,16 @@ body {
   min-height: 0;
   overflow: hidden;
   background: var(--bg-primary);
+}
+
+/* Board panel has only header + body (no controls row), so override the
+   default 3-row template. Without this, the body lands in row 2 (auto-
+   sized to content) and row 3 (1fr) absorbs any extra panel height —
+   so dragging the horizontal divider down to grow the board reveals an
+   empty band at the bottom instead of more board content. With auto +
+   1fr, the body always fills whatever height the panel has. */
+.panel-board {
+  grid-template-rows: auto 1fr;
 }
 
 /* In the stacked layout the roster gets a fixed width on the right; the

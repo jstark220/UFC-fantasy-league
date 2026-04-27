@@ -33,6 +33,14 @@
       </div>
     </nav>
 
+    <!-- Personal turn banner. Tall and loud when it's your pick;
+         smaller "up in N picks" indicator otherwise. Hidden during
+         pre-draft, completion, and pause (the status strip handles
+         those states). -->
+    <div class="draft-banner" id="draftBanner" hidden>
+      <span class="draft-banner__text" id="draftBannerText"></span>
+    </div>
+
     <!-- Whose-turn strip + pick counter + countdown timer. Stays compact
          so the panels get room. The timer is anchored server-side via the
          most recent pick's created_at; draft.js handles the countdown. -->
@@ -47,6 +55,16 @@
           <p class="draft-status__counter" id="pickCounter"></p>
         </div>
       </div>
+    </div>
+
+    <!-- Commissioner-only escape hatches: pause/resume the clock, undo the
+         most recent pick, or wipe the board. Hidden by default; revealed
+         by draft.js when the viewer is the commissioner or co-commish. -->
+    <div class="draft-commish-tools" id="draftCommishTools" hidden>
+      <span class="draft-commish-tools__label">Commish</span>
+      <button class="btn-ghost draft-commish-btn" id="commishPauseBtn">Pause Draft</button>
+      <button class="btn-ghost draft-commish-btn" id="commishUndoBtn">Undo Last Pick</button>
+      <button class="btn-ghost draft-commish-btn draft-commish-btn--danger" id="commishClearBtn">Clear Board</button>
     </div>
 
     <!-- Mobile/narrow tab bar — switches which panel is visible.
@@ -155,6 +173,69 @@
       var theme = document.documentElement.getAttribute('data-theme');
       btn.textContent = theme === 'light' ? '☀' : '☾';
     });
+
+    // ---- Reset inline drag-resized panel sizes whenever the window
+    //      resizes. The drag handlers below set inline `flex: 0 0 Npx`
+    //      and explicit `width`/`height` on .panel-board / .panel-roster
+    //      to commit a user's manual size. Those pixel values don't
+    //      adapt to a new window size — so when the window changes,
+    //      the board can end up too short (only round 1 visible) or
+    //      too tall (squishing the bottom panels). Clearing the inline
+    //      styles falls back to the CSS rules (50% / 360px), which are
+    //      relative and behave correctly after any resize. Users can
+    //      re-drag to customize again. ----
+    // Live layout sync: explicitly compute .draft-room height as
+    // (viewport - everything-above-it) and set it directly. This sidesteps
+    // a Safari/WebKit bug where `flex: 1 1 0` on the room inside a flex
+    // column parent can resolve to 0 after window resize and stay stuck
+    // there until something forces a reflow. Computing the height in JS
+    // is bulletproof: the room always gets exactly the right height for
+    // the current viewport, on every resize event, with no caching games.
+    function _syncDraftRoomHeight() {
+      var page = document.getElementById('pageContent');
+      if (!page) return;
+      var room = page.querySelector('.draft-room');
+      if (!room) return;
+      // Sum heights of every page child that ISN'T the room itself —
+      // top-nav, banner, status strip, commish toolbar, mobile tab bar.
+      // Hidden elements (display:none) contribute 0 naturally.
+      var above = 0;
+      Array.prototype.forEach.call(page.children, function(child) {
+        if (child === room) return;
+        above += child.getBoundingClientRect().height;
+      });
+      room.style.height = Math.max(0, window.innerHeight - above) + 'px';
+    }
+    function _onWindowResize() {
+      // Clear any inline pixel sizes from the drag-handle resizers so
+      // they fall back to the CSS percent/fixed defaults at the new size.
+      document.querySelectorAll('.panel-board, .panel-roster').forEach(function(panel) {
+        panel.style.flex       = '';
+        panel.style.height     = '';
+        panel.style.width      = '';
+        panel.style.flexShrink = '';
+      });
+      _syncDraftRoomHeight();
+    }
+    // Listen via BOTH resize event and ResizeObserver. The resize event
+    // is reliable for "did the user release the drag" but Safari/WebKit
+    // throttles it during continuous drag — leaving the layout stale
+    // while the user drags. ResizeObserver fires on every layout-frame
+    // size change of the observed element, so it gives us live updates
+    // throughout the drag.
+    window.addEventListener('resize', _onWindowResize);
+    if (typeof ResizeObserver !== 'undefined') {
+      var _ro = new ResizeObserver(function() { _onWindowResize(); });
+      _ro.observe(document.documentElement);
+    }
+    // Expose the sync helper so the rest of draft.js can call it whenever
+    // an element above the room changes visibility (banner state flips
+    // between mine/waiting/ondeck, commish toolbar reveals on init, etc.)
+    window.syncDraftRoomHeight = _syncDraftRoomHeight;
+    // Sync once on load so the room has the right height before the user
+    // touches anything — useful if the page was loaded into a viewport
+    // that's smaller than what the CSS calc would have assumed.
+    _syncDraftRoomHeight();
 
     // ---- Drag-to-resize handles. Two flavors:
     //      * vertical handle (between Fighters and Roster) → resizes

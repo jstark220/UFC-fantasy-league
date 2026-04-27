@@ -52,6 +52,14 @@ let pickTimerInterval = null; // setInterval handle for the countdown
 // state stays in sync without a manual refetch.
 let queue = [];
 
+// Pick-clock fallback anchor. Set to Date.now() whenever a new pick lands
+// (locally via makePick or remotely via handleNewPick). Used as a backup
+// when the latest pick's server-side created_at isn't available — e.g. the
+// draft_picks schema doesn't have a created_at column, or the realtime
+// payload arrived without one. Without this, the timer would freeze on
+// the previous anchor and never reset between picks.
+let pickClockResetAt = null;
+
 // View All modal — independent filter / sort state so the modal can be
 // browsed without disturbing the side panel's controls.
 let viewAllSearch   = '';
@@ -80,12 +88,12 @@ async function initDraft() {
   const [leagueRes, membersRes, fightersRes, picksRes] = await Promise.all([
     supabaseClient
       .from('leagues')
-      .select('id, name, draft_order, draft_started, draft_completed, draft_started_at, draft_scheduled_at, roster_size, max_managers, pick_timer_seconds')
+      .select('id, name, draft_order, draft_started, draft_completed, draft_started_at, draft_scheduled_at, draft_paused_at, commissioner_id, roster_size, max_managers, pick_timer_seconds')
       .eq('id', leagueId)
       .single(),
     supabaseClient
       .from('league_members')
-      .select('id, user_id, team_name')
+      .select('id, user_id, team_name, is_commissioner')
       .eq('league_id', leagueId),
     supabaseClient
       .from('fighters')
@@ -94,7 +102,7 @@ async function initDraft() {
       .order('current_rank', { nullsFirst: false }),
     supabaseClient
       .from('draft_picks')
-      .select('id, league_member_id, fighter_id, draft_pick, draft_round, created_at')
+      .select('*')
       .eq('league_id', leagueId)
       .order('draft_pick')
   ]);
@@ -154,9 +162,21 @@ async function initDraft() {
   subscribeToQueue();
   if (league.draft_started) {
     subscribeToRealtime();
+    // Watch the leagues row in live draft too, so all clients see pause /
+    // resume / commish-revert state changes in real time. (Pre-draft uses
+    // subscribeToLobbyFlip for the start flip.)
+    subscribeToLeagueChanges();
   } else {
     subscribeToLobbyFlip();
     startPredraftCountdown();
+  }
+
+  // Commissioner-only toolbar: reveal the Pause / Undo / Clear buttons if
+  // the viewer is the commish (primary or co-) and the draft has actually
+  // started. Pre-draft these actions don't make sense (nothing to pause /
+  // undo / clear yet).
+  if (league.draft_started && isCommish()) {
+    initCommishTools();
   }
 
   // One delegated listener: any element with data-open-fighter opens the
@@ -202,7 +222,12 @@ async function initDraft() {
   if (viewAllBtn) viewAllBtn.addEventListener('click', openViewAll);
 
   // Reveal the page now that everything is ready
-  document.getElementById('pageContent').style.display = 'block';
+  // Clear the inline display:none so CSS's display:flex takes over.
+  // Setting 'block' instead would override the flex container and cause
+  // .draft-room (flex:1 1 0) to fall back to content-height — which makes
+  // the bottom panels collapse to 0 because the board's tall table
+  // pushes the room past 100vh.
+  document.getElementById('pageContent').style.display = '';
 }
 
 // ========================================================================
@@ -282,12 +307,39 @@ function canPick(fighter, currentPickFighters) {
 async function makePick(fighter) {
   if (!isMyTurn() || picking) return;
 
+  // Picks are blocked while the commissioner has paused the draft.
+  // Surface this so the user gets feedback instead of a silent no-op.
+  if (league.draft_paused_at) {
+    alert('The draft is paused. Wait for the commissioner to resume.');
+    return;
+  }
+
   const myPickFighters = getMyPickFighters();
   if (!canPick(fighter, myPickFighters)) return;
 
   // Lock immediately to prevent double-pick while the INSERT is in flight
   picking = true;
   renderFighterPool();
+
+  // Safety net: handleNewPick is what's normally responsible for releasing
+  // the lock (it fires off the realtime draft_picks INSERT). If realtime
+  // hiccups — channel drops, RLS blocks the select-back, trigger fails —
+  // the lock would stay true forever and EVERY future pick attempt would
+  // silently bail with no error. After 5s, refetch picks from the DB and
+  // resync. If our pick is in there, accept it. If not, release the lock
+  // so the user can try again.
+  const safetyTimeout = setTimeout(async function() {
+    if (!picking) return;  // already cleared by handleNewPick — nothing to do
+    console.warn('[draft] pick lock held >5s, resyncing from DB');
+    const { data: freshPicks } = await supabaseClient
+      .from('draft_picks')
+      .select('*')
+      .eq('league_id', leagueId)
+      .order('draft_pick');
+    if (freshPicks) picks = freshPicks;
+    picking = false;
+    renderAll();
+  }, 5000);
 
   const pickNum = getCurrentPickNum();
   const { round } = getPickInfo(pickNum);
@@ -304,19 +356,54 @@ async function makePick(fighter) {
     });
 
   if (error) {
-    // Most likely a race condition where another client picked the same slot
+    clearTimeout(safetyTimeout);
     console.error('Pick failed:', error.message);
     picking = false;
-    // Re-fetch picks to sync with the actual DB state
+
+    // Resync from the DB. We use SELECT * so this works regardless of which
+    // optional columns the draft_picks table happens to have — earlier we
+    // hit 400s by SELECT-ing a column that didn't exist in this league's
+    // schema. The renderers only need a few fields (id, fighter_id,
+    // league_member_id, draft_pick, draft_round) and ignore the rest.
     const { data: freshPicks } = await supabaseClient
-      .from('rosters')
-      .select('id, league_member_id, fighter_id, draft_pick, draft_round')
+      .from('draft_picks')
+      .select('*')
       .eq('league_id', leagueId)
       .order('draft_pick');
     if (freshPicks) picks = freshPicks;
+
+    // Specifically catch the unique-slot violation. This means our local
+    // state was stale: someone (probably us, on an earlier attempt where
+    // realtime didn't deliver) already picked at this slot. Tell the user
+    // what happened so they don't keep clicking the same fighter.
+    if (error.code === '23505' || /duplicate key/i.test(error.message)) {
+      alert('That pick slot was already taken. The board has been resynced — try again.');
+    } else {
+      alert('Pick failed: ' + error.message);
+    }
     renderAll();
     return;
   }
+
+  // Don't wait for realtime to confirm our own pick — resync from the DB
+  // immediately so the board updates right away. Realtime is still the
+  // mechanism by which OTHER managers learn about this pick; for the
+  // picker themselves it's just a backup. The safety timeout is now
+  // mostly a no-op for the picker (we'll have already cleared the lock
+  // before it fires), but stays in place for the rare case where this
+  // post-insert refetch also fails. Using SELECT * here for the same
+  // schema-tolerance reason as the error branch above.
+  clearTimeout(safetyTimeout);
+  const { data: freshPicks } = await supabaseClient
+    .from('draft_picks')
+    .select('*')
+    .eq('league_id', leagueId)
+    .order('draft_pick');
+  if (freshPicks) picks = freshPicks;
+  // Local pick-clock anchor — the timer should restart on every pick.
+  pickClockResetAt = Date.now();
+  picking = false;
+  renderAll();
 
   // Activity feed: draft_pick. Captures round + overall so the line reads
   // "Mike drafted Topuria (R3 · #21)". Best-effort — failures are logged
@@ -329,7 +416,8 @@ async function makePick(fighter) {
       pick_overall:  pickNum
     }, myMemberId);
   }
-  // On success: Realtime fires handleNewPick, which re-renders everything
+
+  if (picks.length >= getTotalPicks()) handleDraftComplete();
 }
 
 // ========================================================================
@@ -340,15 +428,37 @@ function subscribeToRealtime() {
   // Listen on draft_picks (immutable record), not rosters. The trigger
   // sync_draft_pick_trigger inserts into draft_picks whenever a roster
   // row lands with draft metadata, so this fires once per pick.
+  // We listen on '*' (INSERT/UPDATE/DELETE) so the commissioner's "Undo
+  // last pick" action — which deletes a draft_picks row — propagates to
+  // every client too.
   supabaseClient
     .channel('draft_room_' + leagueId)
     .on('postgres_changes', {
-      event: 'INSERT',
+      event: '*',
       schema: 'public',
       table: 'draft_picks',
       filter: 'league_id=eq.' + leagueId
-    }, handleNewPick)
+    }, function(payload) {
+      if (payload.eventType === 'INSERT')      handleNewPick(payload);
+      else if (payload.eventType === 'DELETE') handlePickDelete(payload);
+    })
     .subscribe();
+}
+
+// Removes a deleted pick from local state and re-renders. Triggered by
+// the commissioner's Undo Last Pick action via the leagues realtime
+// channel above.
+function handlePickDelete(payload) {
+  const oldPick = payload.old;
+  if (!oldPick || !oldPick.id) return;
+  picks = picks.filter(function(p) { return p.id !== oldPick.id; });
+  // Treat the undo as a fresh anchor for the now-active pick so the timer
+  // restarts from full duration for whoever's back on the clock.
+  pickClockResetAt = Date.now();
+  // Releasing the lock matters here too: if we were the one who just
+  // picked and our pick got reverted, we want to be able to pick again.
+  picking = false;
+  renderAll();
 }
 
 function handleNewPick(payload) {
@@ -360,6 +470,10 @@ function handleNewPick(payload) {
   picks.push(newPick);
   // Keep sorted by pick number so getCurrentPickNum() stays correct
   picks.sort(function(a, b) { return a.draft_pick - b.draft_pick; });
+
+  // Stamp the local pick-clock anchor so the timer resets even when the
+  // payload's created_at is missing or stale.
+  pickClockResetAt = Date.now();
 
   // Release the pick lock so the next manager can pick
   picking = false;
@@ -409,6 +523,16 @@ function renderHeader() {
   const turnInfoEl    = document.getElementById('turnInfo');
   const pickCounterEl = document.getElementById('pickCounter');
 
+  // Personal turn banner — separate concern, but always re-rendered with
+  // the rest of the header so it stays in sync.
+  renderDraftBanner();
+  // The banner can change height (it's hidden when paused/completed,
+  // larger when "your pick", smaller for "up in N picks"). Resync the
+  // room height so the bottom panels reclaim the difference.
+  if (typeof window.syncDraftRoomHeight === 'function') {
+    window.syncDraftRoomHeight();
+  }
+
   // Pre-draft: show a live countdown + the absolute scheduled time. The
   // <span class="draft-status__pre"> is the target the predraft countdown
   // interval updates every second; we re-render the surrounding markup
@@ -426,6 +550,25 @@ function renderHeader() {
     turnInfoEl.innerHTML = '<span class="draft-status__complete">Draft Complete</span>';
     pickCounterEl.textContent = '';
     stopPickTimer();
+    return;
+  }
+
+  // Paused state takes precedence over the turn indicator. Freeze the
+  // pick clock too so it doesn't keep ticking down toward zero while
+  // the commissioner has stopped the world.
+  if (league.draft_paused_at) {
+    const { round: pausedRound, activeManagerId: pausedActive } = getPickInfo(currentPickNum);
+    const pausedMember = memberMap[pausedActive];
+    const pausedTeam   = pausedMember ? pausedMember.team_name : '?';
+    turnInfoEl.innerHTML =
+      '<span class="draft-status__paused">Draft Paused</span> · ' +
+      escapeHtml(pausedTeam) + ' is on the clock · Round ' + pausedRound;
+    pickCounterEl.textContent = 'Pick ' + currentPickNum + ' of ' + totalPicks;
+    stopPickTimer();
+    const valueEl     = document.getElementById('draftTimerValue');
+    const containerEl = document.getElementById('draftTimer');
+    if (valueEl)     valueEl.textContent = 'PAUSED';
+    if (containerEl) containerEl.hidden  = false;
     return;
   }
 
@@ -447,6 +590,63 @@ function renderHeader() {
 }
 
 // ========================================================================
+// PERSONAL TURN BANNER
+// Tall crimson "YOU'RE ON THE CLOCK" when it's the viewer's pick; subtler
+// "Up in N picks" indicator otherwise. Hidden during pre-draft (the status
+// strip handles the countdown), completion, and pause (the status strip
+// shows the paused state).
+// ========================================================================
+function renderDraftBanner() {
+  const bannerEl = document.getElementById('draftBanner');
+  const textEl   = document.getElementById('draftBannerText');
+  if (!bannerEl || !textEl) return;
+
+  // Hide for any state where a turn-aware banner would be misleading.
+  if (!league.draft_started ||
+      league.draft_completed ||
+      league.draft_paused_at ||
+      picks.length >= getTotalPicks()) {
+    bannerEl.hidden = true;
+    return;
+  }
+
+  bannerEl.hidden = false;
+  bannerEl.classList.remove('draft-banner--mine', 'draft-banner--waiting', 'draft-banner--ondeck', 'draft-banner--done');
+
+  const picksUntil = picksUntilMyTurn();
+  if (picksUntil === 0) {
+    // It's the viewer's pick.
+    bannerEl.classList.add('draft-banner--mine');
+    textEl.textContent = "You're on the clock";
+  } else if (picksUntil === -1) {
+    // Viewer has no more picks (somehow they ran out before the draft did).
+    bannerEl.classList.add('draft-banner--done');
+    textEl.textContent = 'You have no more picks';
+  } else if (picksUntil === 1) {
+    // On deck — call this out a bit louder than the generic "up in N".
+    bannerEl.classList.add('draft-banner--ondeck');
+    textEl.textContent = 'On deck — you pick next';
+  } else {
+    bannerEl.classList.add('draft-banner--waiting');
+    textEl.textContent = 'Up in ' + picksUntil + ' picks';
+  }
+}
+
+// Returns the number of picks between now and the viewer's next pick.
+// 0 means it's their turn right now. -1 means they have no more picks
+// remaining in the draft.
+function picksUntilMyTurn() {
+  const total   = getTotalPicks();
+  const current = getCurrentPickNum();
+  for (let p = current; p <= total; p++) {
+    if (getPickInfo(p).activeManagerId === myMemberId) {
+      return p - current;
+    }
+  }
+  return -1;
+}
+
+// ========================================================================
 // PICK TIMER
 // Counts down from league.pick_timer_seconds, anchored server-side to:
 //   * The previous pick's created_at (for picks 2..N)
@@ -463,7 +663,12 @@ function getActivePickStartedAt() {
   }
   // Sorted by draft_pick asc; the last element is the most recent pick.
   const last = picks[picks.length - 1];
-  return last.created_at ? new Date(last.created_at) : null;
+  // Prefer the server-side created_at (consistent across all clients) when
+  // present, and fall back to the local reset anchor (updated whenever
+  // picks change) so the timer resets even if created_at is missing.
+  if (last && last.created_at) return new Date(last.created_at);
+  if (pickClockResetAt)        return new Date(pickClockResetAt);
+  return league.draft_started_at ? new Date(league.draft_started_at) : null;
 }
 
 function startPickTimer() {
@@ -863,6 +1068,14 @@ function renderDraftBoard() {
   const totalPicks   = getTotalPicks();
   const currentPickNum = getCurrentPickNum();
 
+  // Preserve the user's scroll position across re-renders. Without this,
+  // every realtime pick would yank the board back to the top — frustrating
+  // when the user had scrolled down to round 12 to see future picks.
+  const boardEl = document.getElementById('draftBoard');
+  const oldScrollContainer = boardEl ? boardEl.querySelector('.draft-board') : null;
+  const savedScrollTop  = oldScrollContainer ? oldScrollContainer.scrollTop  : 0;
+  const savedScrollLeft = oldScrollContainer ? oldScrollContainer.scrollLeft : 0;
+
   // Pre-build a pick_number -> fighter_id map. Cells render the fighter's
   // name (looked up via fighterMap) and expose data-open-fighter so the
   // delegated click handler opens the fighter modal.
@@ -960,6 +1173,14 @@ function renderDraftBoard() {
 
   html += '</tbody></table></div>';
   document.getElementById('draftBoard').innerHTML = html;
+
+  // Restore the saved scroll position on the freshly-injected .draft-board
+  // container. We re-query because the previous element was replaced.
+  const newScrollContainer = document.getElementById('draftBoard').querySelector('.draft-board');
+  if (newScrollContainer) {
+    newScrollContainer.scrollTop  = savedScrollTop;
+    newScrollContainer.scrollLeft = savedScrollLeft;
+  }
 }
 
 // ========================================================================
@@ -1432,6 +1653,179 @@ function formatCountdown(iso) {
   if (days > 0 || hrs  > 0 || mins > 0)  parts.push(mins + 'm');
   parts.push(secs + 's');
   return 'Starts in ' + parts.join(' ');
+}
+
+// ========================================================================
+// COMMISSIONER CONTROLS
+// Pause/resume, undo last pick, clear board. Visible to the primary
+// commissioner and any co-commissioner. The destructive actions go through
+// SECURITY DEFINER RPCs (see sql/2026-04-26_draft_commish_controls.sql) so
+// the deletes can bypass RLS while still being authorized server-side.
+// ========================================================================
+
+// True if the viewing user is the primary commissioner OR a co-commissioner.
+function isCommish() {
+  if (!members || !user) return false;
+  if (league.commissioner_id === user.id) return true;
+  const myMember = members.find(function(m) { return m.user_id === user.id; });
+  return !!(myMember && myMember.is_commissioner);
+}
+
+function initCommishTools() {
+  const tools = document.getElementById('draftCommishTools');
+  if (!tools) return;
+  tools.hidden = false;
+
+  document.getElementById('commishPauseBtn').addEventListener('click', toggleDraftPause);
+  document.getElementById('commishUndoBtn').addEventListener('click', undoLastPick);
+  document.getElementById('commishClearBtn').addEventListener('click', clearDraftBoard);
+
+  // Initial label sync (in case we loaded into a paused draft)
+  refreshCommishToolbar();
+
+  // The toolbar just took ~38px of vertical space — resync the room
+  // height so the bottom panels shrink to fit.
+  if (typeof window.syncDraftRoomHeight === 'function') {
+    window.syncDraftRoomHeight();
+  }
+}
+
+// Updates the Pause/Resume button label based on current pause state.
+// Called on init and after every leagues UPDATE delivered via realtime.
+function refreshCommishToolbar() {
+  const pauseBtn = document.getElementById('commishPauseBtn');
+  if (!pauseBtn) return;
+  pauseBtn.textContent = league.draft_paused_at ? 'Resume Draft' : 'Pause Draft';
+}
+
+async function toggleDraftPause() {
+  const pausing = !league.draft_paused_at;
+  const btn = document.getElementById('commishPauseBtn');
+  btn.disabled = true;
+
+  const { error } = await supabaseClient
+    .from('leagues')
+    .update({ draft_paused_at: pausing ? new Date().toISOString() : null })
+    .eq('id', leagueId);
+
+  btn.disabled = false;
+  if (error) {
+    alert('Error toggling pause: ' + error.message);
+    return;
+  }
+  // Realtime will fire on the leagues UPDATE and call refreshCommishToolbar
+  // for everyone, but we also update local state immediately for snappy UI.
+  league.draft_paused_at = pausing ? new Date().toISOString() : null;
+  refreshCommishToolbar();
+  renderHeader();
+}
+
+async function undoLastPick() {
+  if (picks.length === 0) {
+    alert('No picks to undo yet.');
+    return;
+  }
+  // Show the most recent pick in the prompt so the commish knows what
+  // they're about to undo.
+  const lastPick = picks[picks.length - 1];
+  const fighter  = fighterMap[lastPick.fighter_id];
+  const member   = memberMap[lastPick.league_member_id];
+  const desc     = (fighter ? fighter.name : 'Unknown') +
+                   ' (drafted by ' + (member ? member.team_name : 'unknown') + ')';
+  if (!confirm('Undo last pick — ' + desc + '?')) return;
+
+  const btn = document.getElementById('commishUndoBtn');
+  btn.disabled = true;
+  btn.textContent = 'Undoing...';
+
+  const { error } = await supabaseClient.rpc('revert_last_draft_pick', {
+    p_league_id: leagueId
+  });
+
+  btn.disabled = false;
+  btn.textContent = 'Undo Last Pick';
+
+  if (error) {
+    alert('Error reverting pick: ' + error.message);
+    return;
+  }
+  // The DELETE on draft_picks fires realtime, which calls handlePickDelete
+  // for everyone. Local state updates there.
+}
+
+async function clearDraftBoard() {
+  // Two-step confirmation since this wipes the whole board. The second
+  // prompt asks for the league name to make accidental clears very hard.
+  if (!confirm('Clear the entire draft board? This deletes every pick and cannot be undone.')) return;
+  const typed = prompt('Type the league name to confirm: "' + league.name + '"');
+  if (typed === null) return;
+  if (typed.trim() !== league.name) {
+    alert('League name did not match. Aborted.');
+    return;
+  }
+
+  const btn = document.getElementById('commishClearBtn');
+  btn.disabled = true;
+  btn.textContent = 'Clearing...';
+
+  const { error } = await supabaseClient.rpc('clear_draft_board', {
+    p_league_id: leagueId
+  });
+
+  btn.disabled = false;
+  btn.textContent = 'Clear Board';
+
+  if (error) {
+    alert('Error clearing board: ' + error.message);
+    return;
+  }
+  // We just deleted every draft_picks row. Each delete fires realtime, but
+  // bulk deletes can be flaky to track row-by-row, so resync from the DB
+  // directly to be safe.
+  const { data: freshPicks } = await supabaseClient
+    .from('draft_picks')
+    .select('*')
+    .eq('league_id', leagueId)
+    .order('draft_pick');
+  picks = freshPicks || [];
+  league.draft_completed = false;
+  picking = false;
+  renderAll();
+}
+
+// ========================================================================
+// LEAGUES REALTIME (live draft)
+// Watches the leagues row for pause/resume/clear changes during an active
+// draft. Pre-draft uses subscribeToLobbyFlip for the start flip; this is
+// the equivalent for the live phase.
+// ========================================================================
+function subscribeToLeagueChanges() {
+  supabaseClient
+    .channel('league_live_' + leagueId)
+    .on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'leagues',
+      filter: 'id=eq.' + leagueId
+    }, function(payload) {
+      const updated = payload.new;
+      const wasPaused = !!league.draft_paused_at;
+      const isPaused  = !!updated.draft_paused_at;
+      league.draft_paused_at = updated.draft_paused_at;
+      league.draft_completed = updated.draft_completed;
+
+      // Re-render header so the timer reflects pause state, and update
+      // the commish toolbar label if the viewer is a commish.
+      refreshCommishToolbar();
+      renderHeader();
+
+      // If draft_completed flipped (rare during live, but the clear-board
+      // RPC un-completes it), re-render the whole room.
+      if (wasPaused !== isPaused) {
+        renderFighterPool();
+      }
+    })
+    .subscribe();
 }
 
 // ========================================================================
