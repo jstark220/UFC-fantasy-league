@@ -123,13 +123,9 @@ async function initLeague() {
 
   // ---- Render nav links in the page header ----
   // Standings is always visible. Lineup/Waivers/Trades appear once the draft starts.
-  // Chat is a primary CTA — always visible, leads with an unread count badge that
-  // we fill in below once the count comes back from the DB.
-  var navHtml =
-    '<a href="chat.html?id=' + leagueId + '" class="btn-primary chat-cta" id="chatCtaLink">' +
-      'Chat' +
-      '<span class="chat-cta__badge" id="chatUnreadBadge" hidden></span>' +
-    '</a>';
+  // Chat lives in the popup widget (top nav + floating bubble) on every page,
+  // so we no longer surface it as a league-page CTA.
+  var navHtml = '';
   navHtml += '<a href="standings.html?id=' + leagueId + '" class="btn-secondary">Standings</a>';
   if (league.draft_started && !league.draft_completed) {
     navHtml += '<a href="draft.html?id=' + leagueId + '" class="btn-primary">Draft Room</a>';
@@ -145,11 +141,6 @@ async function initLeague() {
     navHtml += '<a href="score-event.html?league=' + leagueId + '" class="btn-secondary">Score Event</a>';
   }
   document.getElementById('headerActions').innerHTML = navHtml;
-
-  // Fire-and-forget unread fetch. We pass the user's chat_last_seen_at;
-  // null means "they have never opened chat", so every existing message
-  // counts as unread. Failure leaves the badge hidden — no big deal.
-  refreshChatUnreadBadge(leagueId, myMember.chat_last_seen_at);
 
   // ---- Render details grid ----
   const formatDisplay    = league.format === 'dynasty' ? 'Dynasty' : 'Season-Long';
@@ -998,36 +989,6 @@ async function refreshPerformerPhotos() {
     if (url) img.src = url;
     // No url? Leave the img blank — onerror will hide it as before.
   });
-}
-
-// ========================================================================
-// CHAT UNREAD BADGE
-// Queries league_messages for the count of rows newer than the viewer's
-// chat_last_seen_at. We use { count: 'exact', head: true } so Postgres
-// returns just the number — no payload, no row scan beyond the count.
-// Caps at "9+" so the badge stays visually compact.
-// ========================================================================
-async function refreshChatUnreadBadge(leagueId, lastSeenAtIso) {
-  var badge = document.getElementById('chatUnreadBadge');
-  if (!badge) return;
-
-  // null lastSeenAt means "never opened chat" — count every message in
-  // the league. We pass a sentinel ISO from the epoch so the gt() filter
-  // works either way without an OR branch.
-  var lastSeen = lastSeenAtIso || '1970-01-01T00:00:00Z';
-
-  var { count, error } = await supabaseClient
-    .from('league_messages')
-    .select('id', { count: 'exact', head: true })
-    .eq('league_id', leagueId)
-    .gt('created_at', lastSeen);
-
-  if (error || count == null || count === 0) {
-    badge.hidden = true;
-    return;
-  }
-  badge.textContent = count > 9 ? '9+' : String(count);
-  badge.hidden = false;
 }
 
 initLeague();

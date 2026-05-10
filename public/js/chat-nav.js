@@ -1,25 +1,16 @@
 // ========================================================================
-// CHAT NAV — global Chat link + unread badge
+// CHAT UNREAD BADGE
 // ========================================================================
-// Injects a "Chat" button into the top nav of every league-context page,
-// auto-wiring its target URL and an unread-count badge that combines
-// group messages and DMs.
+// The popup widget (chat-widget.js) owns the chat affordance — a permanent
+// crimson bar pinned bottom-right of every league-context page. This
+// script's only remaining job is to populate that bar's unread count
+// (#chatPopupBadge) on page load. Best-effort: any error leaves the badge
+// hidden and the popup keeps working.
 //
-// This script intentionally has no dependencies beyond what every
-// authenticated page already loads:
-//   * supabaseClient (from supabase-config.js)
-//   * a top-nav with a .top-nav__links container in the DOM
-//
-// It does NOT depend on auth-guard.js completing first — it gracefully
-// no-ops if there's no signed-in user yet. requireAuth() handles the
-// actual redirect on each page.
-//
-// Skips itself on chat.html (already there) and any page without a
-// ?id=<league_uuid> (or score-event's legacy ?league=) URL parameter.
+// Skips itself on chat.html and on pages without a league id in the URL.
 // ========================================================================
 
 (function () {
-  // Don't inject on the chat page — it's the destination
   if (window.location.pathname.endsWith('/chat.html')) return;
 
   // Find a league id in the URL. score-event.html uses ?league= rather
@@ -38,25 +29,6 @@
   }
 
   ready(async function() {
-    const linksEl = document.querySelector('.top-nav__links');
-    if (!linksEl) return;
-
-    // Build the link. Primary-styled so it reads as a CTA, but smaller
-    // than the .btn-primary defaults via .top-nav__chat overrides.
-    const link = document.createElement('a');
-    link.href = 'chat.html?id=' + encodeURIComponent(leagueId);
-    link.className = 'btn-primary top-nav__chat';
-    link.innerHTML =
-      'Chat' +
-      '<span class="top-nav__chat-badge" id="topNavChatBadge" hidden></span>';
-
-    // Insert at the START of the links container so it sits to the left
-    // of the page's existing back-link / context links. That makes the
-    // Chat affordance the leftmost thing the eye lands on after the logo.
-    linksEl.insertBefore(link, linksEl.firstChild);
-
-    // Populate the unread badge in the background. This is best-effort —
-    // any error leaves the badge hidden and the link still works.
     try {
       await refreshUnreadBadge(leagueId);
     } catch (err) {
@@ -67,7 +39,7 @@
   // ----------------------------------------------------------------------
   // refreshUnreadBadge — sums (a) group messages I haven't seen and
   // (b) DMs to me I haven't seen on a per-thread basis. Caps at "9+" so
-  // the badge stays visually compact in a tight nav bar.
+  // the badge stays visually compact.
   // ----------------------------------------------------------------------
   async function refreshUnreadBadge(leagueId) {
     if (typeof supabaseClient === 'undefined') return;
@@ -113,7 +85,7 @@
       if (new Date(m.created_at) > new Date(cutoff)) total++;
     });
 
-    const badge = document.getElementById('topNavChatBadge');
+    const badge = document.getElementById('chatPopupBadge');
     if (!badge) return;
     if (total === 0) { badge.hidden = true; return; }
     badge.textContent = total > 9 ? '9+' : String(total);

@@ -3829,6 +3829,195 @@ body {
   padding: var(--space-3) var(--space-6) var(--space-6);
 }
 
+/* ----- Whole team modal — sectioned by weight class ----- */
+
+/* Override fight-card-modal's 540px cap — the team grid needs the room. */
+.fight-card-modal.whole-team-modal {
+  max-width: 1360px;
+}
+
+.whole-team-modal__body {
+  padding: var(--space-6) var(--space-6) var(--space-6);
+}
+
+/* Each weight class is a column. 5 columns × 2 rows of sections fits the
+   standard 10-section roster (8 men's divisions + women's flex + any flex).
+   Row gap is generous (32px) so the eye reads the weight-class bands as
+   separate; column gap is tighter (24px) since sibling sections in a row
+   aren't related to each other. */
+.whole-team-sections {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--space-8) var(--space-6);
+  max-width: 1300px;
+  margin: 0 auto;
+}
+@media (max-width: 1100px) {
+  .whole-team-sections { grid-template-columns: repeat(4, 1fr); }
+}
+@media (max-width: 900px) {
+  .whole-team-sections { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 700px) {
+  .whole-team-sections { grid-template-columns: repeat(2, 1fr); }
+}
+
+.whole-team-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.whole-team-section__label {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-secondary);
+  margin: 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-strong);
+}
+/* Two tiles side-by-side per section. Keeps vertical real estate tight
+   so the whole modal fits one screen without scrolling. */
+.whole-team-section__tiles {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-2);
+}
+
+.whole-team-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 0;
+  cursor: pointer;
+  overflow: hidden;
+  text-align: left;
+  font-family: var(--font-body);
+  color: inherit;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+/* Dashed placeholder for an empty roster slot — keeps section width
+   balanced when only one fighter occupies the section. */
+.whole-team-tile-empty {
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  background: transparent;
+  opacity: 0.35;
+  /* Grid stretches us to match the real tile's height in the same row. */
+}
+.whole-team-tile:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35);
+}
+.whole-team-tile--starter {
+  border-color: var(--accent-crimson);
+  box-shadow: 0 0 0 1px var(--accent-crimson);
+}
+.whole-team-tile--starter:hover {
+  /* Preserve the crimson outline alongside the lift shadow */
+  box-shadow: 0 0 0 1px var(--accent-crimson), 0 6px 14px rgba(0, 0, 0, 0.35);
+}
+
+.whole-team-tile__photo-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  background: var(--bg-secondary);
+  overflow: hidden;
+}
+.whole-team-tile__photo,
+.whole-team-tile__photo-placeholder {
+  width: 100%;
+  height: 100%;
+}
+.whole-team-tile__photo {
+  object-fit: cover;
+  object-position: top center;
+  display: block;
+}
+
+.whole-team-tile__rank {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  padding: 3px 8px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  z-index: 2;
+}
+.whole-team-tile--champion .whole-team-tile__rank {
+  background: var(--accent-gold);
+  border-color: var(--accent-gold);
+  color: #1a1a1a;
+}
+
+/* Starter mark — filled crimson circle with a star. */
+.whole-team-tile__badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-crimson);
+  color: white;
+  border-radius: 50%;
+  font-size: 14px;
+  line-height: 1;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  z-index: 1;
+}
+
+.whole-team-tile__info {
+  padding: 8px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+/* Two-line clamp so longer names ("Khalil Rountree Jr.") show in full
+   instead of getting ellipsised after a few characters. text-wrap: balance
+   distributes characters evenly across the two lines so we don't end up
+   with a stranded "Jr." on its own line. */
+.whole-team-tile__name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.25;
+  word-break: break-word;
+  text-wrap: balance;
+}
+.whole-team-tile__div {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 0;
+}
+
 /* Section group (Main Card / Prelims / Early Prelims) */
 .fight-card-section {
   margin-top: var(--space-4);
@@ -3868,6 +4057,41 @@ body {
 
 .fight-row__fighter--red  { text-align: right; }
 .fight-row__fighter--blue { text-align: left;  }
+
+/* Roster ownership marks in the fight card modal. "Mine" = on the user's
+   roster (gold). "Starter" = on the roster AND in this event's starting
+   three (crimson). Skipped in view mode by the JS. The pill is rendered
+   via ::after so the existing text-align (right for red, left for blue)
+   continues to control corner placement. */
+.fight-row__fighter--mine {
+  color: var(--accent-gold);
+}
+.fight-row__fighter--starter {
+  color: var(--accent-crimson);
+}
+.fight-row__fighter--mine::after,
+.fight-row__fighter--starter::after {
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  border-radius: 3px;
+  padding: 1px 5px;
+  margin-left: 6px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.fight-row__fighter--mine::after {
+  content: "YOURS";
+  color: var(--accent-gold);
+  background: rgba(212, 175, 55, 0.12);
+  border: 1px solid rgba(212, 175, 55, 0.35);
+}
+.fight-row__fighter--starter::after {
+  content: "STARTER";
+  color: var(--accent-crimson);
+  background: rgba(193, 59, 46, 0.14);
+  border: 1px solid rgba(193, 59, 46, 0.4);
+}
 
 /* Center column: badge (optional) + weight class + "vs" */
 .fight-row__center {
@@ -4034,6 +4258,67 @@ body {
   font-size: var(--text-h3);
   font-weight: 700;
   margin: 0;
+}
+
+/* Live countdown digits inside the deadline subtext. Tabular numerals
+   stop the line from reflowing every second as digit widths change. */
+.lock-countdown {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--accent-gold);
+}
+
+/* ---- Locked / past event read-only state ----
+   Applied to #pageContent when the lineup is locked or the event is final.
+   Roster moves (drop / flex) still work after lock — these styles are pure
+   visual signaling so the page reads "frozen" at-a-glance. */
+
+.lineup-locked .lineup-section {
+  filter: saturate(0.85);
+}
+
+/* Top ribbon on the event banner announcing the locked state */
+.lineup-locked .this-week-card {
+  position: relative;
+  padding-top: calc(var(--space-4) + 22px);
+}
+.lineup-locked .this-week-card::before {
+  content: "LINEUP LOCKED";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-tertiary);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-align: center;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* Subtle starter glow — celebrate the locked-in picks. The card is still
+   clickable (opens the fighter modal) so the existing hover lift continues
+   to apply alongside the glow. */
+.lineup-locked .lineup-starter-card {
+  box-shadow: 0 0 0 1px rgba(193, 59, 46, 0.4),
+              0 0 24px rgba(193, 59, 46, 0.18);
+}
+
+/* Past-event variant — gold "Final" treatment instead of the cooler lock tint */
+.lineup-past .this-week-card::before {
+  content: "EVENT FINAL";
+  background: rgba(212, 175, 55, 0.08);
+  color: var(--accent-gold);
+  border-bottom-color: rgba(212, 175, 55, 0.25);
+}
+.lineup-past .lineup-starter-card {
+  box-shadow: 0 0 0 1px rgba(212, 175, 55, 0.45),
+              0 0 24px rgba(212, 175, 55, 0.18);
+}
+.lineup-past .lineup-section {
+  filter: saturate(0.95);
 }
 
 /* ---- Roster list rows ---- */
@@ -7661,6 +7946,39 @@ label .form-label__hint {
   overflow-wrap: anywhere;
 }
 
+/* Activity events surfaced in the group chat (drops, claims, trades).
+   Centered system-style notice — distinct from chat bubbles so the eye
+   reads it as an announcement, not someone talking. */
+.chat-event {
+  align-self: center;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: 90%;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.35;
+  text-align: center;
+}
+.chat-event__text {
+  font-weight: 500;
+}
+.chat-event__text strong {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+.chat-event__time {
+  color: var(--text-tertiary);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Composer — pinned to the bottom of the chat window */
 .chat-composer {
   display: flex;
@@ -7693,71 +8011,6 @@ label .form-label__hint {
   padding: 8px 18px;
 }
 
-/* ============================================================
-   CHAT CTA + UNREAD BADGE
-   The primary "Chat" button on league.html. Same .btn-primary
-   shape as the existing nav buttons; the badge sits inside.
-   ============================================================ */
-
-.chat-cta {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-.chat-cta__badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: #F5F5F0;
-  color: var(--accent-crimson);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-}
-.chat-cta__badge[hidden] { display: none; }
-
-/* ============================================================
-   TOP NAV CHAT LINK
-   Injected by chat-nav.js into the top-nav links container of
-   every authenticated page that has a league context. Smaller
-   than the page-level Chat CTA on league.html — this is a
-   persistent affordance, not a primary call-to-action.
-   ============================================================ */
-
-.top-nav__chat {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  /* Override .btn-primary's default padding so it fits the nav bar */
-  padding: 5px 12px !important;
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  text-decoration: none;
-}
-.top-nav__chat-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 5px;
-  border-radius: 999px;
-  background: #F5F5F0;
-  color: var(--accent-crimson);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-}
-.top-nav__chat-badge[hidden] { display: none; }
 
 /* ============================================================
    CHAT SIDEBAR — League Chat + per-manager DM threads
@@ -7781,6 +8034,10 @@ label .form-label__hint {
   gap: 2px;
 }
 .chat-sidebar__section-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
   font-size: 9px;
   font-weight: 700;
   text-transform: uppercase;
@@ -7788,6 +8045,122 @@ label .form-label__hint {
   color: var(--text-tertiary);
   padding: var(--space-2) var(--space-2) 4px;
 }
+
+/* "+ New" button next to the Direct Messages section header. Small and
+   secondary so it doesn't compete with the thread rows below. */
+.chat-new-dm-btn {
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.chat-new-dm-btn:hover {
+  background: var(--accent-crimson);
+  color: white;
+  border-color: var(--accent-crimson);
+}
+
+/* New DM picker — overlay that covers the chat surface (popup body or the
+   standalone chat-page). Click a row to switch to that DM thread. */
+.chat-new-dm-picker {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+  padding: var(--space-4);
+  box-sizing: border-box;
+}
+.chat-new-dm-picker__panel {
+  width: 100%;
+  max-width: 360px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  max-height: 100%;
+  overflow: hidden;
+}
+.chat-new-dm-picker__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.chat-new-dm-picker__title {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  letter-spacing: 0.02em;
+  color: var(--text-primary);
+}
+.chat-new-dm-picker__close {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+}
+.chat-new-dm-picker__close:hover { color: var(--text-primary); }
+.chat-new-dm-picker__list {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: var(--space-2) 0;
+}
+.chat-new-dm-picker__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 10px var(--space-4);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-body);
+  color: var(--text-primary);
+}
+.chat-new-dm-picker__row:hover { background: var(--bg-tertiary); }
+.chat-new-dm-picker__avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+.chat-new-dm-picker__name {
+  font-size: var(--text-body-sm);
+  font-weight: 600;
+}
+
+/* The picker positions against the nearest positioned ancestor. We need
+   .chat-page (standalone) and .chat-popup__body (widget) to be positioned
+   so the overlay scopes to the chat content area, not the whole popup or
+   the viewport. */
+.chat-page,
+.chat-popup__body { position: relative; }
 
 /* One thread row — looks like a list-button. Active row gets a tinted
    background so the user always knows which thread they're in. */
@@ -7894,5 +8267,164 @@ label .form-label__hint {
   color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.06em;
+}
+
+/* ============================================================
+   CHAT POPUP — floating widget on every league-context page.
+   Built lazily by chat-widget.js into <body>. Three states are
+   driven by [data-state]: closed, open, minimized.
+   z-index sits below modals (1000) so a fight-card / edit-event
+   modal still covers the chat when one is open.
+   ============================================================ */
+
+.chat-popup {
+  position: fixed;
+  bottom: var(--space-4);
+  right: var(--space-4);
+  z-index: 900;
+  width: 640px;
+  max-width: calc(100vw - var(--space-8));
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.chat-popup[data-state="minimized"] {
+  width: 280px;
+  height: auto;
+}
+.chat-popup[data-state="minimized"] .chat-popup__body { display: none; }
+
+/* Bar serves double duty: chat header when open, launcher when minimized.
+   Crimson background so it reads as a persistent CTA against any page. */
+.chat-popup__bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 10px 14px;
+  background: var(--accent-crimson);
+  border: none;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.15);
+  color: white;
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 14px;
+  text-align: left;
+  width: 100%;
+  box-sizing: border-box;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.chat-popup__bar:hover { background: var(--accent-crimson-hover); }
+.chat-popup[data-state="minimized"] .chat-popup__bar {
+  border-bottom: none;
+}
+
+.chat-popup__bar-title {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Inverted badge — white pill with crimson digits — high-contrast against
+   the crimson bar. */
+.chat-popup__bar-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: #F5F5F0;
+  color: var(--accent-crimson);
+  font-size: 11px;
+  font-weight: 800;
+}
+.chat-popup__bar-badge[hidden] { display: none; }
+
+.chat-popup__bar-controls {
+  display: inline-flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.chat-popup__bar-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  font-size: 16px;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.chat-popup__bar-icon:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: white;
+}
+
+/* Body holds sidebar + chat-window. The popup uses flex (not grid) so the
+   body stretches/shrinks cleanly between the bar (top) and viewport edge. */
+.chat-popup__body {
+  display: flex;
+  flex: 1;
+  min-height: 480px;
+  max-height: 70vh;
+  overflow: hidden;
+}
+.chat-popup__body .chat-sidebar {
+  width: 200px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--border-subtle);
+}
+/* The shared .chat-window styles include their own border + radius — kill
+   those inside the popup so the inner panes blend with the popup chrome. */
+.chat-popup__body .chat-window {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+/* Mobile / narrow viewports: open state goes fullscreen as a sheet,
+   minimized state shrinks the bar to span the bottom of the screen. */
+@media (max-width: 700px) {
+  .chat-popup[data-state="open"] {
+    bottom: 0;
+    right: 0;
+    left: 0;
+    top: 0;
+    width: auto;
+    max-width: none;
+    border-radius: 0;
+    border: none;
+  }
+  .chat-popup[data-state="open"] .chat-popup__body {
+    flex-direction: column;
+    max-height: none;
+    flex: 1;
+  }
+  .chat-popup[data-state="open"] .chat-popup__body .chat-sidebar {
+    width: auto;
+    max-height: 180px;
+    border-right: none;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .chat-popup[data-state="minimized"] {
+    left: var(--space-3);
+    right: var(--space-3);
+    width: auto;
+  }
 }
 

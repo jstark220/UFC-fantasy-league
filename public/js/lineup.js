@@ -156,6 +156,8 @@ let isLocked      = false;       // true when lineup edits are blocked: lock_tim
 let isPastEvent   = false;       // true when selectedEvent.event_date is before today
 let isViewMode    = false;   // true when browsing another manager's lineup from standings
 let viewedMember  = null;    // the member object being viewed (null when viewing own lineup)
+let isCommish     = false;   // true when the viewer is a commissioner of this league
+let lockCountdownTimer = null;  // interval id for the per-second lock countdown
 let selections    = new Set();  // fighter IDs currently started
 let selectionRowIds = {};       // fighter_id -> starter_selections DB row id
 let selectionSlots  = {};       // fighter_id -> slot_position (1, 2, or 3)
@@ -174,8 +176,8 @@ async function initLineup() {
   document.getElementById('leagueLink').href = 'league.html?id=' + leagueId;
 
   const [leagueRes, membersRes, eventRes] = await Promise.all([
-    supabaseClient.from('leagues').select('id, name, draft_started').eq('id', leagueId).single(),
-    supabaseClient.from('league_members').select('id, user_id, team_name').eq('league_id', leagueId),
+    supabaseClient.from('leagues').select('id, name, commissioner_id, draft_started').eq('id', leagueId).single(),
+    supabaseClient.from('league_members').select('id, user_id, team_name, is_commissioner').eq('league_id', leagueId),
     // Fetch every event so the user can pick any of them (past or future).
     // Newest first so the dropdown shows the most relevant cards near the top.
     supabaseClient.from('ufc_events')
@@ -203,6 +205,7 @@ async function initLineup() {
   isViewMode   = targetMember.id !== myMember.id;
   myMemberId   = targetMember.id;
   viewedMember = isViewMode ? targetMember : null;
+  isCommish    = Commissioner.memberIsCommissioner(league, myMember);
 
   // Build the event picker list and pick a sensible default — next upcoming
   // event when one exists, otherwise the most recent past event.
@@ -292,11 +295,22 @@ function recomputeLockStatus() {
   isPastEvent = !!(selectedEvent && selectedEvent.event_date < todayISO);
   if (!selectedEvent) {
     isLocked = false;
-    return;
+  } else {
+    const lockTimePassed = !!(selectedEvent.lineup_lock_time &&
+                              new Date() >= new Date(selectedEvent.lineup_lock_time));
+    isLocked = isPastEvent || lockTimePassed;
   }
-  const lockTimePassed = !!(selectedEvent.lineup_lock_time &&
-                            new Date() >= new Date(selectedEvent.lineup_lock_time));
-  isLocked = isPastEvent || lockTimePassed;
+  applyLockStateClasses();
+}
+
+// Toggles page-level state classes used by CSS to give the locked/past
+// lineup a distinct read-only appearance. View mode keeps its own
+// styling and isn't tinted by these classes.
+function applyLockStateClasses() {
+  const page = document.getElementById('pageContent');
+  if (!page) return;
+  page.classList.toggle('lineup-locked', isLocked && !isViewMode);
+  page.classList.toggle('lineup-past',   isPastEvent && !isViewMode);
 }
 
 // Load everything that's tied to the selected event: the starter_selections
@@ -371,6 +385,8 @@ function renderEventBanner() {
   // Right-side counter — once any scores exist for the event (past final,
   // or live-scored mid-event, or commissioner-tested pre-event), show the
   // running points total. Otherwise show the lock-time hint + slots set.
+  // When a future lock_time is known, the hint becomes a live countdown
+  // updated every second by startLockCountdown() below.
   var rightSubText;
   var anyEventScores = Object.keys(selectedEventScores).length > 0;
   if (anyEventScores) {
@@ -379,6 +395,8 @@ function renderEventBanner() {
     // fighters in selections, since selectedEventScores is keyed by them).
     Object.keys(selectedEventScores).forEach(function(id) { totalScored += selectedEventScores[id] || 0; });
     rightSubText = started + '/3 started &middot; ' + (Math.round(totalScored * 100) / 100).toFixed(2) + ' pts';
+  } else if (selectedEvent && selectedEvent.lineup_lock_time && !isLocked && !isPastEvent) {
+    rightSubText = 'Locks in <span class="lock-countdown" id="lockCountdownValue">--:--:--</span> &middot; ' + started + '/3 set';
   } else {
     rightSubText = 'Locks at first prelim &middot; ' + started + '/3 set';
   }
@@ -422,6 +440,12 @@ function renderEventBanner() {
   else if (isLocked)     eyebrow = 'Locked Lineup';
   else                   eyebrow = 'Set Your Lineup';
 
+  // Commissioner-only "Edit event" button. Hidden in view mode (irrelevant
+  // when viewing another manager's lineup) and when there's no selected event.
+  var editEventBtn = (isCommish && !isViewMode && selectedEvent)
+    ? '<button class="btn-ghost fight-card-btn" id="editEventBtn">Edit event &rarr;</button>'
+    : '';
+
   el.innerHTML =
     picker +
     '<div class="this-week-card" style="margin-bottom: var(--space-8);">' +
@@ -432,6 +456,7 @@ function renderEventBanner() {
         (eventMatchup ? '<p class="this-week-card__matchup">' + escapeHtml(eventMatchup) + '</p>' : '') +
         '<div class="lineup-banner-actions">' +
           '<button class="btn-ghost fight-card-btn" id="viewFightCardBtn">View fight card &rarr;</button>' +
+          '<button class="btn-ghost fight-card-btn" id="viewWholeTeamBtn">Whole team &rarr;</button>' +
           // Lets the user pop over to the all-members lineups view for the
           // same event. We pass ?event= so they land on the same card they
           // were just looking at, not the page's default.
@@ -439,6 +464,7 @@ function renderEventBanner() {
               encodeURIComponent(leagueId) +
               (selectedEvent ? '&event=' + encodeURIComponent(selectedEvent.id) : '') +
               '">View all lineups &rarr;</a>' +
+          editEventBtn +
         '</div>' +
       '</div>' +
       '<div class="this-week-card__right">' +
@@ -448,10 +474,71 @@ function renderEventBanner() {
     '</div>';
 
   document.getElementById('viewFightCardBtn').addEventListener('click', showFightCardModal);
+  document.getElementById('viewWholeTeamBtn').addEventListener('click', showWholeTeamModal);
+  var editBtn = document.getElementById('editEventBtn');
+  if (editBtn) editBtn.addEventListener('click', showEditEventModal);
   var pickEl = document.getElementById('lineupEventSelect');
   if (pickEl) {
     pickEl.addEventListener('change', function() { onSelectEvent(this.value); });
   }
+
+  // Always restart the countdown after a banner render — it clears any
+  // existing timer first and skips itself when the lineup is already
+  // locked or there's no lock_time on the event.
+  startLockCountdown();
+}
+
+// ========================================================================
+// LOCK COUNTDOWN
+// Per-second tick on the "Locks in HH:MM:SS" indicator inside the event
+// banner. When the timer reaches zero the page auto-transitions to the
+// locked state without a refresh — recomputeLockStatus + re-render.
+// ========================================================================
+function clearLockCountdown() {
+  if (lockCountdownTimer != null) {
+    clearInterval(lockCountdownTimer);
+    lockCountdownTimer = null;
+  }
+}
+
+function startLockCountdown() {
+  clearLockCountdown();
+  if (isLocked || isPastEvent || !selectedEvent || !selectedEvent.lineup_lock_time) return;
+
+  const valueEl = document.getElementById('lockCountdownValue');
+  if (!valueEl) return;
+  const lockMs = new Date(selectedEvent.lineup_lock_time).getTime();
+  if (isNaN(lockMs)) return;
+
+  function tick() {
+    const remaining = lockMs - Date.now();
+    if (remaining <= 0) {
+      // Lock just fired — drop the timer and re-render the page through
+      // the locked state so all the visual cues and gating apply.
+      clearLockCountdown();
+      recomputeLockStatus();
+      renderEventBanner();
+      renderStarterSlots();
+      renderRosterList();
+      return;
+    }
+    valueEl.textContent = formatCountdown(remaining);
+  }
+
+  tick(); // paint immediately so the user never sees the "--:--:--" placeholder
+  lockCountdownTimer = setInterval(tick, 1000);
+}
+
+// Format a millisecond duration as "Xd HH:MM:SS" (days only when > 0).
+function formatCountdown(ms) {
+  const totalSec = Math.floor(ms / 1000);
+  const days  = Math.floor(totalSec / 86400);
+  const hours = Math.floor((totalSec % 86400) / 3600);
+  const mins  = Math.floor((totalSec % 3600) / 60);
+  const secs  = totalSec % 60;
+  function pad(n) { return n < 10 ? '0' + n : '' + n; }
+  const time = pad(hours) + ':' + pad(mins) + ':' + pad(secs);
+  return days > 0 ? days + 'd ' + time : time;
 }
 
 // ========================================================================
@@ -1413,6 +1500,27 @@ function showFightCardModal() {
   var existing = document.getElementById('fightCardModal');
   if (existing) existing.remove();
 
+  // Build name-keyed lookups so each corner can be tagged with its roster
+  // ownership state. Skipped in view mode — "Yours"/"Starter" pills don't
+  // make sense when looking at another manager's lineup. Once real fight
+  // card data lands (see PLACEHOLDER_FIGHTS TODO above), swap to ID matching.
+  var rosterNames  = {};
+  var starterNames = {};
+  if (!isViewMode) {
+    myRoster.forEach(function(f) { rosterNames[f.name.toLowerCase()] = true; });
+    selections.forEach(function(id) {
+      var f = myRoster.find(function(x) { return x.id === id; });
+      if (f) starterNames[f.name.toLowerCase()] = true;
+    });
+  }
+  function cornerClass(name, sideMod) {
+    var key = name.toLowerCase();
+    var classes = 'fight-row__fighter ' + sideMod;
+    if (starterNames[key])      classes += ' fight-row__fighter--starter';
+    else if (rosterNames[key])  classes += ' fight-row__fighter--mine';
+    return classes;
+  }
+
   var sectionsHtml = PLACEHOLDER_FIGHTS.map(function(section) {
     var fightsHtml = section.fights.map(function(fight) {
       var badgeHtml = fight.badge
@@ -1420,13 +1528,13 @@ function showFightCardModal() {
         : '';
       return (
         '<div class="fight-row">' +
-          '<span class="fight-row__fighter fight-row__fighter--red">' + escapeHtml(fight.redCorner) + '</span>' +
+          '<span class="' + cornerClass(fight.redCorner,  'fight-row__fighter--red')  + '">' + escapeHtml(fight.redCorner)  + '</span>' +
           '<div class="fight-row__center">' +
             badgeHtml +
             '<span class="fight-row__weight">' + escapeHtml(fight.weightClass) + '</span>' +
             '<span class="fight-row__vs">vs</span>' +
           '</div>' +
-          '<span class="fight-row__fighter fight-row__fighter--blue">' + escapeHtml(fight.blueCorner) + '</span>' +
+          '<span class="' + cornerClass(fight.blueCorner, 'fight-row__fighter--blue') + '">' + escapeHtml(fight.blueCorner) + '</span>' +
         '</div>'
       );
     }).join('');
@@ -1476,6 +1584,307 @@ function closeFightCardModal() {
 
 function handleModalEscape(e) {
   if (e.key === 'Escape') closeFightCardModal();
+}
+
+// ========================================================================
+// WHOLE TEAM MODAL
+// Compact 5×4 grid of every fighter on the user's roster, fits on a single
+// desktop screen without scrolling. Starters are highlighted; click any
+// tile to open the existing fighter detail modal. Read-only — Bench/Start
+// edits still happen on the main lineup page.
+// ========================================================================
+function showWholeTeamModal() {
+  var existing = document.getElementById('wholeTeamModal');
+  if (existing) existing.remove();
+
+  var titleText = selectedEvent
+    ? 'My Roster &middot; ' + escapeHtml(selectedEvent.name)
+    : 'My Roster';
+
+  // Group fighters by slot type using the same assignment the main roster
+  // list uses, so the modal mirrors how the user already thinks about
+  // their team (men's divisions, women's flex, any-division flex).
+  var assigned = assignSlots(myRoster);
+  var groups = {};
+  MENS_DIVISIONS.forEach(function(d) { groups[d] = []; });
+  groups['women_flex'] = [];
+  groups['any_flex']   = [];
+  assigned.forEach(function(item) {
+    if (groups[item.slotType]) groups[item.slotType].push(item.fighter);
+  });
+
+  // Section options:
+  //   showDivision — print the fighter's actual division on the tile.
+  //                  Useful in flex sections (where it's not implied by
+  //                  the section header), redundant in everywhere else.
+  var sectionsHtml = '';
+  MENS_DIVISIONS.forEach(function(div) {
+    if (groups[div].length > 0) {
+      sectionsHtml += renderTeamSection(DIVISION_LABELS[div], groups[div], {});
+    }
+  });
+  if (groups['women_flex'].length > 0) {
+    sectionsHtml += renderTeamSection("Women's Flex", groups['women_flex'], { showDivision: true });
+  }
+  if (groups['any_flex'].length > 0) {
+    sectionsHtml += renderTeamSection('Any-Division Flex', groups['any_flex'], { showDivision: true });
+  }
+
+  var modal = document.createElement('div');
+  modal.id = 'wholeTeamModal';
+  modal.className = 'fight-card-modal-overlay';
+  modal.innerHTML =
+    '<div class="fight-card-modal whole-team-modal" role="dialog" aria-modal="true" aria-label="Whole team">' +
+      '<div class="fight-card-modal__header">' +
+        '<div>' +
+          '<p class="fight-card-modal__eyebrow">Whole Team</p>' +
+          '<p class="fight-card-modal__title">' + titleText + '</p>' +
+        '</div>' +
+        '<button class="fight-card-modal__close" id="closeWholeTeamBtn" aria-label="Close">&times;</button>' +
+      '</div>' +
+      '<div class="fight-card-modal__body whole-team-modal__body">' +
+        (myRoster.length === 0
+          ? '<p class="draft-empty">No fighters on your roster yet.</p>'
+          : '<div class="whole-team-sections">' + sectionsHtml + '</div>') +
+      '</div>' +
+    '</div>';
+
+  document.body.appendChild(modal);
+
+  document.getElementById('closeWholeTeamBtn').addEventListener('click', closeWholeTeamModal);
+  modal.addEventListener('click', function(e) {
+    if (e.target === modal) closeWholeTeamModal();
+  });
+  document.addEventListener('keydown', handleWholeTeamEscape);
+
+  // Click a tile → open the existing fighter detail modal. Tiles defer to
+  // showFighterModal (loaded on this page) so we get the same rich view as
+  // anywhere else without duplicating render logic.
+  modal.querySelectorAll('[data-team-tile-id]').forEach(function(tile) {
+    tile.addEventListener('click', function() {
+      var fid = tile.getAttribute('data-team-tile-id');
+      if (fid && typeof showFighterModal === 'function') showFighterModal(fid);
+    });
+  });
+}
+
+function closeWholeTeamModal() {
+  var modal = document.getElementById('wholeTeamModal');
+  if (modal) modal.remove();
+  document.removeEventListener('keydown', handleWholeTeamEscape);
+}
+
+function handleWholeTeamEscape(e) {
+  if (e.key === 'Escape') closeWholeTeamModal();
+}
+
+// One section = a weight-class label with its fighters laid out below.
+// Pads to 2 slots with dashed empty placeholders so a section with only
+// one fighter doesn't look lopsided next to a fully-filled neighbor.
+function renderTeamSection(label, fighters, opts) {
+  opts = opts || {};
+  var slotCount = 2;
+  var tilesHtml = fighters.map(function(f) { return renderTeamTile(f, opts); }).join('');
+  for (var i = fighters.length; i < slotCount; i++) {
+    tilesHtml += '<div class="whole-team-tile-empty" aria-hidden="true"></div>';
+  }
+  return (
+    '<div class="whole-team-section">' +
+      '<p class="whole-team-section__label">' + escapeHtml(label) + '</p>' +
+      '<div class="whole-team-section__tiles">' + tilesHtml + '</div>' +
+    '</div>'
+  );
+}
+
+// One tile = photo + rank badge + starter mark + name (and optional division).
+// Champion gets a gold accent on the rank badge; starter gets a crimson border.
+// `opts.showDivision` adds a division line beneath the name — only useful in
+// flex sections where the section header doesn't already imply the division.
+function renderTeamTile(fighter, opts) {
+  opts = opts || {};
+  var isStarter = selections.has(fighter.id);
+  var rankLabel = fighter.is_champion ? 'C' : (fighter.current_rank ? '#' + fighter.current_rank : 'NR');
+  // Strip the "Men's "/"Women's " prefix — the section header already
+  // establishes that context and the long version overflows narrow tiles.
+  var rawDiv  = DIVISION_LABELS[fighter.primary_division] || fighter.primary_division || '';
+  var divLabel = rawDiv.replace(/^Men's\s+/, '').replace(/^Women's\s+/, '');
+  var photoHtml = fighter.photo_url
+    ? '<img class="whole-team-tile__photo" src="' + fighter.photo_url + '" alt="" onerror="this.style.display=\'none\'">'
+    : '<div class="whole-team-tile__photo-placeholder"></div>';
+
+  var classes = 'whole-team-tile';
+  if (isStarter)            classes += ' whole-team-tile--starter';
+  if (fighter.is_champion)  classes += ' whole-team-tile--champion';
+
+  return (
+    '<button class="' + classes + '" data-team-tile-id="' + fighter.id + '" type="button">' +
+      '<div class="whole-team-tile__photo-wrap">' +
+        photoHtml +
+        '<span class="whole-team-tile__rank">' + escapeHtml(rankLabel) + '</span>' +
+        (isStarter
+          ? '<span class="whole-team-tile__badge" title="Starter" aria-label="Starter">&#9733;</span>'
+          : '') +
+      '</div>' +
+      '<div class="whole-team-tile__info">' +
+        '<p class="whole-team-tile__name" title="' + escapeHtml(fighter.name) + '">' + escapeHtml(fighter.name) + '</p>' +
+        (opts.showDivision
+          ? '<p class="whole-team-tile__div">' + escapeHtml(divLabel) + '</p>'
+          : '') +
+      '</div>' +
+    '</button>'
+  );
+}
+
+// ========================================================================
+// EDIT EVENT MODAL (commissioner-only)
+// Lets a commissioner update name / full_name / event_date / lineup_lock_time
+// / venue on the currently selected event. Fight management is delegated to
+// score-event.html via the "Manage fights" link — that page is the canonical
+// fight CRUD surface and we don't duplicate it here.
+// Note: ufc_events is GLOBAL across leagues, so edits affect every league
+// using this event. The modal surfaces this so the commissioner isn't surprised.
+// ========================================================================
+
+// Convert a Postgres timestamptz / ISO string into the value format expected
+// by an <input type="datetime-local">: "YYYY-MM-DDTHH:mm" in the browser's
+// local timezone. Returns '' when the input is missing.
+function isoToLocalDatetime(iso) {
+  if (!iso) return '';
+  var d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  var off = d.getTimezoneOffset() * 60000;
+  return new Date(d.getTime() - off).toISOString().slice(0, 16);
+}
+
+function showEditEventModal() {
+  if (!isCommish || !selectedEvent) return;
+
+  var existing = document.getElementById('editEventModal');
+  if (existing) existing.remove();
+
+  var ev = selectedEvent;
+  var modal = document.createElement('div');
+  modal.id = 'editEventModal';
+  modal.className = 'fight-card-modal-overlay';
+  modal.innerHTML =
+    '<div class="fight-card-modal" role="dialog" aria-modal="true" aria-label="Edit Event">' +
+      '<div class="fight-card-modal__header">' +
+        '<div>' +
+          '<p class="fight-card-modal__eyebrow">Commissioner Tools</p>' +
+          '<p class="fight-card-modal__title">Edit Event</p>' +
+        '</div>' +
+        '<button class="fight-card-modal__close" id="closeEditEventBtn" aria-label="Close">&times;</button>' +
+      '</div>' +
+      '<div class="fight-card-modal__body">' +
+        '<p class="form-hint" style="margin-bottom: var(--space-4);">' +
+          'This event is shared across every league. Changes here affect all leagues using it.' +
+        '</p>' +
+        '<div class="form-group">' +
+          '<label for="editEventName">Event name <span style="color: var(--accent-crimson);">*</span></label>' +
+          '<input type="text" id="editEventName" placeholder="UFC 315" value="' + escapeHtml(ev.name || '') + '">' +
+        '</div>' +
+        '<div class="form-group">' +
+          '<label for="editEventFullName">Full name</label>' +
+          '<input type="text" id="editEventFullName" placeholder="UFC 315: Makhachev vs Tsarukyan" value="' + escapeHtml(ev.full_name || '') + '">' +
+        '</div>' +
+        '<div class="form-group">' +
+          '<label for="editEventDate">Event date <span style="color: var(--accent-crimson);">*</span></label>' +
+          '<input type="date" id="editEventDate" value="' + escapeHtml(ev.event_date || '') + '">' +
+        '</div>' +
+        '<div class="form-group">' +
+          '<label for="editEventLockTime">Lineup lock time</label>' +
+          '<input type="datetime-local" id="editEventLockTime" value="' + isoToLocalDatetime(ev.lineup_lock_time) + '">' +
+        '</div>' +
+        '<div class="form-group">' +
+          '<label for="editEventVenue">Venue</label>' +
+          '<input type="text" id="editEventVenue" placeholder="T-Mobile Arena, Las Vegas" value="' + escapeHtml(ev.venue || '') + '">' +
+        '</div>' +
+        '<div style="display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); margin-top: var(--space-6); flex-wrap: wrap;">' +
+          '<a class="btn-ghost" href="score-event.html?league=' + encodeURIComponent(leagueId) + '">Manage fights &rarr;</a>' +
+          '<div style="display: flex; gap: var(--space-3);">' +
+            '<button class="btn-ghost" id="cancelEditEventBtn" type="button">Cancel</button>' +
+            '<button class="btn-primary" id="saveEditEventBtn" type="button">Save changes</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+  document.body.appendChild(modal);
+
+  document.getElementById('closeEditEventBtn').addEventListener('click', closeEditEventModal);
+  document.getElementById('cancelEditEventBtn').addEventListener('click', closeEditEventModal);
+  document.getElementById('saveEditEventBtn').addEventListener('click', saveEditEvent);
+
+  modal.addEventListener('click', function(e) {
+    if (e.target === modal) closeEditEventModal();
+  });
+
+  document.addEventListener('keydown', handleEditEventEscape);
+  document.getElementById('editEventName').focus();
+}
+
+function closeEditEventModal() {
+  var modal = document.getElementById('editEventModal');
+  if (modal) modal.remove();
+  document.removeEventListener('keydown', handleEditEventEscape);
+}
+
+function handleEditEventEscape(e) {
+  if (e.key === 'Escape') closeEditEventModal();
+}
+
+async function saveEditEvent() {
+  if (!isCommish || !selectedEvent) return;
+
+  var name      = document.getElementById('editEventName').value.trim();
+  var fullName  = document.getElementById('editEventFullName').value.trim() || null;
+  var date      = document.getElementById('editEventDate').value;
+  var lockLocal = document.getElementById('editEventLockTime').value;
+  var venue     = document.getElementById('editEventVenue').value.trim() || null;
+
+  if (!name) { alert('Event name is required.'); return; }
+  if (!date) { alert('Event date is required.'); return; }
+
+  // datetime-local omits seconds and timezone — new Date() interprets it as
+  // local time, then toISOString() gives us the UTC value Postgres stores.
+  var lockIso = lockLocal ? new Date(lockLocal).toISOString() : null;
+
+  var saveBtn = document.getElementById('saveEditEventBtn');
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving...';
+
+  var { error } = await supabaseClient
+    .from('ufc_events')
+    .update({
+      name:              name,
+      full_name:         fullName,
+      event_date:        date,
+      lineup_lock_time:  lockIso,
+      venue:             venue
+    })
+    .eq('id', selectedEvent.id);
+
+  if (error) {
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Save changes';
+    alert('Could not save changes: ' + error.message);
+    return;
+  }
+
+  // Merge the saved values into local state so the page reflects them
+  // without a full reload. recomputeLockStatus picks up date/lock changes.
+  selectedEvent.name              = name;
+  selectedEvent.full_name         = fullName;
+  selectedEvent.event_date        = date;
+  selectedEvent.lineup_lock_time  = lockIso;
+  selectedEvent.venue             = venue;
+  var idx = availableEvents.findIndex(function(e) { return e.id === selectedEvent.id; });
+  if (idx !== -1) availableEvents[idx] = selectedEvent;
+
+  closeEditEventModal();
+  recomputeLockStatus();
+  renderEventBanner();
+  renderRosterList(); // matchup chips on the roster rows depend on the event
 }
 
 // ========================================================================

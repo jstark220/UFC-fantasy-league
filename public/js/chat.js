@@ -24,6 +24,12 @@
 //   content. Realtime updates the cache live.
 // ========================================================================
 
+// IIFE wrapper — keeps chat.js's module state out of the global scope.
+// Without this, top-level `let leagueId` (and the others below) would
+// collide with other page scripts that also declare `let leagueId` at
+// top level, throwing SyntaxError and blanking the page.
+(function () {
+
 // ---------- Module state ----------
 let leagueId      = null;
 let myMember      = null;       // { id, user_id, team_name, dm_last_seen_at, chat_last_seen_at }
@@ -42,21 +48,46 @@ let threadCache   = {};
 
 let realtimeChannel = null;
 
+// League activity events that surface inside the group chat thread (not DMs).
+// Keep narrow on purpose — the activity.html feed is the full firehose; the
+// in-chat view is just the highlights worth interrupting conversation for.
+// Add new kinds here when you want them to appear in chat.
+const CHAT_EVENT_KINDS = ['drop', 'claim_won', 'trade_accepted'];
+
+// ---- DOM scoping ----
+// rootEl scopes all chat-internal DOM lookups so the same code can drive
+// chat.html (rootEl = document) or a popup widget injected anywhere on
+// another page (rootEl = the popup container). Page-chrome lookups
+// (leagueBackLink, leagueName, pageContent) stay on document — those are
+// chat.html-specific and the widget callers don't pass them.
+let rootEl  = null;
+let syncUrl = false;  // when true, switchThread mirrors the active thread into ?thread=
+
+function $$(sel) {
+  return rootEl ? rootEl.querySelector(sel) : document.querySelector(sel);
+}
+
 // ========================================================================
 // INIT
+// Three entry points:
+//   * initChat()                    — chat.html standalone page (auto-runs at bottom of file)
+//   * initChatWidget(leagueId, container)
+//                                   — popup widget on any page (called by chat-widget.js)
+//   * initChatCore(opts)            — shared loader; both entry points call this
 // ========================================================================
-async function initChat() {
-  const user = await requireAuth();
-  if (!user) return;
 
-  const params = new URLSearchParams(window.location.search);
-  leagueId = params.get('id');
-  if (!leagueId) {
-    window.location.href = 'dashboard.html';
-    return;
+async function initChatCore(opts) {
+  const user = await requireAuth();
+  if (!user) return false;
+
+  if (!opts.leagueId) {
+    if (opts.onAbort) opts.onAbort('missing-league');
+    return false;
   }
 
-  document.getElementById('leagueBackLink').href = 'league.html?id=' + leagueId;
+  leagueId = opts.leagueId;
+  rootEl   = opts.rootEl   || null;
+  syncUrl  = !!opts.syncUrl;
 
   const [leagueRes, membersRes] = await Promise.all([
     supabaseClient.from('leagues').select('id, name').eq('id', leagueId).single(),
@@ -66,32 +97,34 @@ async function initChat() {
   ]);
 
   if (leagueRes.error || !leagueRes.data) {
-    window.location.href = 'dashboard.html';
-    return;
+    if (opts.onAbort) opts.onAbort('league-load-failed');
+    return false;
   }
 
   const league  = leagueRes.data;
   const members = membersRes.data || [];
 
   myMember = members.find(function(m) { return m.user_id === user.id; });
-  if (!myMember) { window.location.href = 'dashboard.html'; return; }
+  if (!myMember) {
+    if (opts.onAbort) opts.onAbort('not-a-member');
+    return false;
+  }
 
+  memberMap = {};
   members.forEach(function(m) { memberMap[m.id] = m; });
   otherMembers = members
     .filter(function(m) { return m.id !== myMember.id; })
     .sort(function(a, b) { return (a.team_name || '').localeCompare(b.team_name || ''); });
 
-  document.title = league.name + ' Chat - Knockdown Fantasy';
-  document.getElementById('leagueName').textContent = league.name + ' — Chat';
+  if (opts.onLeagueLoaded) opts.onLeagueLoaded(league);
 
-  // Decide initial active thread from the URL — default group.
-  const threadParam = params.get('thread');
-  if (threadParam && threadParam !== 'group' && memberMap[threadParam]) {
-    activeThread = { kind: 'dm', otherMemberId: threadParam };
+  // Resolve initial active thread. The page entry point passes a URL param;
+  // the widget passes a value from localStorage.
+  if (opts.initialThread && opts.initialThread !== 'group' && memberMap[opts.initialThread]) {
+    activeThread = { kind: 'dm', otherMemberId: opts.initialThread };
+  } else {
+    activeThread = { kind: 'group' };
   }
-
-  // Reveal the page now that we know the user can see it
-  document.getElementById('pageContent').style.display = '';
 
   wireComposer();
 
@@ -113,7 +146,49 @@ async function initChat() {
   document.addEventListener('visibilitychange', function() {
     if (!document.hidden) markActiveThreadSeen();
   });
+
+  return true;
 }
+
+// Entry point for chat.html — reads URL params, sets page chrome.
+async function initChat() {
+  const params = new URLSearchParams(window.location.search);
+  const lid = params.get('id');
+  if (!lid) { window.location.href = 'dashboard.html'; return; }
+
+  document.getElementById('leagueBackLink').href = 'league.html?id=' + lid;
+
+  await initChatCore({
+    leagueId:      lid,
+    rootEl:        null,                      // global doc lookups
+    syncUrl:       true,
+    initialThread: params.get('thread'),
+    onAbort:       function() { window.location.href = 'dashboard.html'; },
+    onLeagueLoaded: function(league) {
+      document.title = league.name + ' Chat - Knockdown Fantasy';
+      document.getElementById('leagueName').textContent = league.name + ' — Chat';
+      document.getElementById('pageContent').style.display = '';
+    }
+  });
+}
+
+// Entry point for the popup widget — invoked by chat-widget.js after it
+// has injected the chat DOM into a container element. No page chrome is
+// touched. Returns the same boolean as initChatCore so the caller can
+// react to load failures (e.g., display an error in the popup).
+async function initChatWidget(leagueId, container, opts) {
+  opts = opts || {};
+  return await initChatCore({
+    leagueId:      leagueId,
+    rootEl:        container,
+    syncUrl:       false,
+    initialThread: opts.initialThread || null,
+    onAbort:       opts.onAbort || null
+  });
+}
+
+// Expose the widget entry point so chat-widget.js can call it.
+window.initChatWidget = initChatWidget;
 
 // ========================================================================
 // LOAD ALL THREADS — initial fetch
@@ -125,6 +200,17 @@ async function loadAllThreads() {
     .select('id, member_id, recipient_id, body, created_at')
     .eq('league_id', leagueId)
     .is('recipient_id', null)
+    .order('created_at', { ascending: false })
+    .limit(100);
+
+  // Recent league activity that surfaces in group chat (drops/claims/trades).
+  // Cap matches the message limit so the chat stays balanced — events don't
+  // crowd out actual conversation.
+  const eventsPromise = supabaseClient
+    .from('league_events')
+    .select('id, kind, data, actor_member_id, created_at')
+    .eq('league_id', leagueId)
+    .in('kind', CHAT_EVENT_KINDS)
     .order('created_at', { ascending: false })
     .limit(100);
 
@@ -144,9 +230,20 @@ async function loadAllThreads() {
       .limit(100);
   });
 
-  const [groupRes, ...dmResults] = await Promise.all([groupPromise].concat(dmPromises));
+  const [groupRes, eventsRes, ...dmResults] = await Promise.all(
+    [groupPromise, eventsPromise].concat(dmPromises)
+  );
 
-  threadCache['group'] = (groupRes.data || []).slice().reverse();
+  // Merge group messages + events into a single time-ordered cache. Events
+  // are tagged with _kind = 'event' so the renderer can dispatch styling.
+  const groupMsgs = (groupRes.data || []).slice();
+  const events    = (eventsRes.data || []).map(function(ev) {
+    return Object.assign({ _kind: 'event' }, ev);
+  });
+  const merged    = groupMsgs.concat(events).sort(function(a, b) {
+    return new Date(a.created_at) - new Date(b.created_at);
+  });
+  threadCache['group'] = merged;
 
   otherMembers.forEach(function(other, idx) {
     const res = dmResults[idx];
@@ -156,10 +253,10 @@ async function loadAllThreads() {
 
 // ========================================================================
 // REALTIME
-// Subscribe to all INSERTs on league_messages for this league. RLS will
-// only deliver group messages + DMs the user is a party to, so we don't
-// have to filter again here. But we DO need to route the new row into the
-// right thread cache.
+// One channel listens to two tables: league_messages (chat) and
+// league_events (drops / claims / trades surfaced in chat). RLS handles
+// the visibility rules; we just route incoming rows into the right
+// thread cache.
 // ========================================================================
 function subscribeRealtime() {
   realtimeChannel = supabaseClient
@@ -172,7 +269,34 @@ function subscribeRealtime() {
     }, function(payload) {
       handleIncomingMessage(payload.new);
     })
+    .on('postgres_changes', {
+      event:  'INSERT',
+      schema: 'public',
+      table:  'league_events',
+      filter: 'league_id=eq.' + leagueId
+    }, function(payload) {
+      if (CHAT_EVENT_KINDS.indexOf(payload.new.kind) === -1) return;
+      handleIncomingEvent(payload.new);
+    })
     .subscribe();
+}
+
+// Activity events always belong to the group thread — they're league-wide
+// announcements, not DMs. Renders inline alongside chat messages.
+function handleIncomingEvent(row) {
+  const cache = threadCache['group'] || (threadCache['group'] = []);
+  if (cache.some(function(m) { return m._kind === 'event' && m.id === row.id; })) return;
+
+  const tagged = Object.assign({ _kind: 'event' }, row);
+  cache.push(tagged);
+
+  if (activeThread.kind === 'group') {
+    const wasAtBottom = isPinnedToBottom();
+    appendItem(tagged);
+    if (wasAtBottom) scrollToBottom();
+  }
+
+  renderSidebar();
 }
 
 function handleIncomingMessage(row) {
@@ -222,7 +346,8 @@ function activeThreadKey() {
 // most recent message in that thread.
 // ========================================================================
 function renderSidebar() {
-  const el = document.getElementById('chatSidebar');
+  const el = $$('#chatSidebar');
+  if (!el) return;
 
   // ----- League Chat row -----
   const groupCache = threadCache['group'] || [];
@@ -230,12 +355,23 @@ function renderSidebar() {
   const groupLast   = groupCache.length > 0 ? groupCache[groupCache.length - 1] : null;
   const groupActive = activeThread.kind === 'group';
 
+  // Sub-line for the League Chat row — last message body OR the headline
+  // of the latest activity event, whichever is most recent.
+  let groupSub;
+  if (!groupLast) {
+    groupSub = 'No messages yet';
+  } else if (groupLast._kind === 'event') {
+    groupSub = truncate(formatChatEventPlain(groupLast), 32);
+  } else {
+    groupSub = truncate(groupLast.body, 32);
+  }
+
   let html = '<div class="chat-sidebar__section">';
   html += '<div class="chat-sidebar__section-label">Channels</div>';
   html += renderThreadRow({
     key:      'group',
     name:     'League Chat',
-    sub:      groupCache.length === 0 ? 'No messages yet' : truncate(groupLast.body, 32),
+    sub:      groupSub,
     when:     groupLast ? formatTimeShort(groupLast.created_at) : '',
     unread:   groupUnread,
     active:   groupActive
@@ -245,7 +381,10 @@ function renderSidebar() {
   // ----- Direct messages -----
   if (otherMembers.length > 0) {
     html += '<div class="chat-sidebar__section">';
-    html += '<div class="chat-sidebar__section-label">Direct Messages</div>';
+    html += '<div class="chat-sidebar__section-label">' +
+              '<span>Direct Messages</span>' +
+              '<button class="chat-new-dm-btn" id="newDmBtn" type="button" aria-label="New direct message">+ New</button>' +
+            '</div>';
 
     // Sort DM threads by most recent activity desc; threads with no
     // messages fall to the bottom in alpha order.
@@ -291,6 +430,76 @@ function renderSidebar() {
       switchThread(row.getAttribute('data-thread-key'));
     });
   });
+
+  const newDmBtn = el.querySelector('#newDmBtn');
+  if (newDmBtn) newDmBtn.addEventListener('click', showNewDmPicker);
+}
+
+// ========================================================================
+// NEW DM PICKER
+// Inline overlay that lets the user pick a manager to start a DM with.
+// Lives inside the popup container (or .chat-page on standalone) so it
+// scopes correctly when multiple chat surfaces could exist.
+// ========================================================================
+function showNewDmPicker() {
+  // Container that the overlay positions against. We target the chat
+  // content area (popup body or standalone chat page) — NOT the whole
+  // popup — so the bar stays visible/clickable while the picker is up.
+  const container = rootEl
+    ? (rootEl.querySelector('.chat-popup__body') || rootEl)
+    : (document.querySelector('.chat-page') || document.body);
+
+  // Remove any existing picker so re-clicking the button doesn't stack
+  const existing = container.querySelector('#chatNewDmPicker');
+  if (existing) { existing.remove(); return; }
+
+  const picker = document.createElement('div');
+  picker.id = 'chatNewDmPicker';
+  picker.className = 'chat-new-dm-picker';
+  picker.setAttribute('role', 'dialog');
+  picker.setAttribute('aria-modal', 'true');
+  picker.setAttribute('aria-label', 'Start a new direct message');
+
+  let listHtml = '';
+  otherMembers.forEach(function(m) {
+    const initials = (m.team_name || '?')
+      .split(/\s+/).map(function(w) { return w[0]; }).join('').slice(0, 2).toUpperCase();
+    listHtml +=
+      '<button class="chat-new-dm-picker__row" data-other-id="' + escapeHtml(m.id) + '" type="button">' +
+        '<span class="chat-new-dm-picker__avatar" aria-hidden="true">' + escapeHtml(initials) + '</span>' +
+        '<span class="chat-new-dm-picker__name">' + escapeHtml(m.team_name) + '</span>' +
+      '</button>';
+  });
+
+  picker.innerHTML =
+    '<div class="chat-new-dm-picker__panel">' +
+      '<div class="chat-new-dm-picker__header">' +
+        '<span class="chat-new-dm-picker__title">Start a new DM</span>' +
+        '<button class="chat-new-dm-picker__close" type="button" aria-label="Close">&times;</button>' +
+      '</div>' +
+      '<div class="chat-new-dm-picker__list">' + listHtml + '</div>' +
+    '</div>';
+
+  container.appendChild(picker);
+
+  function close() {
+    picker.remove();
+    document.removeEventListener('keydown', onKey);
+  }
+  function onKey(e) { if (e.key === 'Escape') close(); }
+  document.addEventListener('keydown', onKey);
+
+  picker.addEventListener('click', function(e) {
+    if (e.target === picker) close(); // backdrop click
+  });
+  picker.querySelector('.chat-new-dm-picker__close').addEventListener('click', close);
+  picker.querySelectorAll('[data-other-id]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      const otherId = btn.getAttribute('data-other-id');
+      close();
+      switchThread('dm:' + otherId);
+    });
+  });
 }
 
 function renderThreadRow(opts) {
@@ -325,10 +534,19 @@ async function switchThread(threadKey) {
     return;
   }
 
-  // Reflect in the URL so refresh keeps the same thread open
-  const url = new URL(window.location);
-  url.searchParams.set('thread', activeThread.kind === 'group' ? 'group' : activeThread.otherMemberId);
-  history.replaceState(null, '', url);
+  // Reflect in the URL so refresh keeps the same thread open. Skipped in
+  // widget mode — the popup persists its active thread via localStorage
+  // and shouldn't pollute the host page's URL.
+  if (syncUrl) {
+    const url = new URL(window.location);
+    url.searchParams.set('thread', activeThread.kind === 'group' ? 'group' : activeThread.otherMemberId);
+    history.replaceState(null, '', url);
+  }
+
+  // Notify widget host (if any) so it can persist the active thread.
+  if (typeof window.onChatThreadChange === 'function') {
+    window.onChatThreadChange(activeThread.kind === 'group' ? 'group' : activeThread.otherMemberId);
+  }
 
   renderSidebar();
   renderActiveThread();
@@ -341,29 +559,34 @@ async function switchThread(threadKey) {
 // ========================================================================
 function renderActiveThread() {
   // Header text
-  const titleEl = document.getElementById('chatHeaderTitle');
-  const subEl   = document.getElementById('chatHeaderSub');
-  if (activeThread.kind === 'group') {
-    titleEl.textContent = 'League Chat';
-    subEl.textContent   = otherMembers.length + 1 + ' managers';
-  } else {
-    const other = memberMap[activeThread.otherMemberId];
-    titleEl.textContent = other ? other.team_name : 'Direct Message';
-    subEl.textContent   = 'Direct message';
+  const titleEl = $$('#chatHeaderTitle');
+  const subEl   = $$('#chatHeaderSub');
+  if (titleEl && subEl) {
+    if (activeThread.kind === 'group') {
+      titleEl.textContent = 'League Chat';
+      subEl.textContent   = otherMembers.length + 1 + ' managers';
+    } else {
+      const other = memberMap[activeThread.otherMemberId];
+      titleEl.textContent = other ? other.team_name : 'Direct Message';
+      subEl.textContent   = 'Direct message';
+    }
   }
 
   // Composer placeholder
-  const inputEl = document.getElementById('chatInput');
-  if (activeThread.kind === 'group') {
-    inputEl.placeholder = 'Send a message to the league...';
-  } else {
-    const other = memberMap[activeThread.otherMemberId];
-    inputEl.placeholder = 'Message ' + (other ? other.team_name : 'manager') + '...';
+  const inputEl = $$('#chatInput');
+  if (inputEl) {
+    if (activeThread.kind === 'group') {
+      inputEl.placeholder = 'Send a message to the league...';
+    } else {
+      const other = memberMap[activeThread.otherMemberId];
+      inputEl.placeholder = 'Message ' + (other ? other.team_name : 'manager') + '...';
+    }
   }
 
   // Message list
   const cache = threadCache[activeThreadKey()] || [];
-  const el = document.getElementById('chatMessages');
+  const el = $$('#chatMessages');
+  if (!el) return;
 
   if (cache.length === 0) {
     el.innerHTML = '<p class="chat-state">No messages yet. Start the conversation.</p>';
@@ -380,30 +603,40 @@ function renderActiveThread() {
               '</div>';
       lastDate = dayKey;
     }
-    html += renderMessage(m);
+    html += renderItem(m);
   });
 
   el.innerHTML = html;
 }
 
-function appendMessage(row) {
-  const el = document.getElementById('chatMessages');
+function appendMessage(row) { appendItem(row); }
+
+function appendItem(item) {
+  const el = $$('#chatMessages');
+  if (!el) return;
 
   if (el.querySelector('.chat-state')) el.innerHTML = '';
 
   const lastDayDivider = el.querySelector('.chat-divider:last-of-type');
-  const newDay = dayKeyFor(row.created_at);
+  const newDay = dayKeyFor(item.created_at);
   const lastDay = lastDayDivider ? lastDayDivider.getAttribute('data-day') : null;
 
   if (lastDay !== newDay) {
     el.insertAdjacentHTML('beforeend',
       '<div class="chat-divider" data-day="' + escapeHtml(newDay) + '">' +
-        escapeHtml(dayLabel(row.created_at)) +
+        escapeHtml(dayLabel(item.created_at)) +
       '</div>'
     );
   }
 
-  el.insertAdjacentHTML('beforeend', renderMessage(row));
+  el.insertAdjacentHTML('beforeend', renderItem(item));
+}
+
+// Dispatcher — items in the cache are either chat messages (default shape)
+// or activity events (tagged with _kind='event' at load/realtime time).
+function renderItem(item) {
+  if (item && item._kind === 'event') return renderEvent(item);
+  return renderMessage(item);
 }
 
 function renderMessage(m) {
@@ -428,13 +661,80 @@ function renderMessage(m) {
   );
 }
 
+// Renders one activity event as a centered system notice. Distinct shape
+// from chat-message so the eye treats it as an announcement, not someone
+// talking. The headline already escapes its inputs.
+function renderEvent(ev) {
+  return (
+    '<div class="chat-event">' +
+      '<span class="chat-event__text">' + formatChatEventHtml(ev) + '</span>' +
+      '<span class="chat-event__time">' + escapeHtml(formatTimeShort(ev.created_at)) + '</span>' +
+    '</div>'
+  );
+}
+
+// Compose the HTML headline for an event. Mirrors the wording in
+// activity.js's renderEventRow but trimmed to chat tone (single sentence,
+// no extra metadata). Returns escaped HTML — safe to drop into innerHTML.
+function formatChatEventHtml(ev) {
+  const actor = lookupActorName(ev.actor_member_id, ev.data);
+  const d = ev.data || {};
+  const a = '<strong>' + escapeHtml(actor) + '</strong>';
+
+  switch (ev.kind) {
+    case 'drop': {
+      const tail = d.source === 'auto'  ? ' (auto-drop)'
+                 : d.source === 'claim' ? ' (replaced via claim)'
+                 : '';
+      return a + ' dropped <strong>' + escapeHtml(d.fighter_name || 'a fighter') + '</strong>' + tail;
+    }
+    case 'claim_won': {
+      let h = a + ' claimed <strong>' + escapeHtml(d.fighter_name || 'a fighter') + '</strong>';
+      if (d.dropped_fighter_name) h += ', dropping ' + escapeHtml(d.dropped_fighter_name);
+      return h;
+    }
+    case 'trade_accepted': {
+      const offered   = (d.offered_fighter_names   || []).filter(Boolean);
+      const requested = (d.requested_fighter_names || []).filter(Boolean);
+      let h = a + ' accepted a trade';
+      if (offered.length || requested.length) {
+        const left  = offered.length   ? offered.join(', ')   : '(nothing)';
+        const right = requested.length ? requested.join(', ') : '(nothing)';
+        h += ': ' + escapeHtml(left) + ' for ' + escapeHtml(right);
+      }
+      return h;
+    }
+    default:
+      return a + ' — ' + escapeHtml(ev.kind);
+  }
+}
+
+// Plain-text version used by the sidebar's "last activity" preview.
+function formatChatEventPlain(ev) {
+  const actor = lookupActorName(ev.actor_member_id, ev.data);
+  const d = ev.data || {};
+  switch (ev.kind) {
+    case 'drop':           return actor + ' dropped ' + (d.fighter_name || 'a fighter');
+    case 'claim_won':      return actor + ' claimed ' + (d.fighter_name || 'a fighter');
+    case 'trade_accepted': return actor + ' accepted a trade';
+    default:               return actor + ' — ' + ev.kind;
+  }
+}
+
+function lookupActorName(actorMemberId, data) {
+  if (actorMemberId && memberMap[actorMemberId]) return memberMap[actorMemberId].team_name;
+  if (data && data.actor_team_name) return data.actor_team_name;
+  return 'Someone';
+}
+
 // ========================================================================
 // SEND
 // ========================================================================
 function wireComposer() {
-  const form  = document.getElementById('chatForm');
-  const input = document.getElementById('chatInput');
-  const btn   = document.getElementById('chatSendBtn');
+  const form  = $$('#chatForm');
+  const input = $$('#chatInput');
+  const btn   = $$('#chatSendBtn');
+  if (!form || !input || !btn) return;
 
   input.addEventListener('input', function() {
     input.style.height = 'auto';
@@ -523,22 +823,26 @@ function countUnread(cache, lastSeenIso) {
   const cutoff = lastSeenIso ? new Date(lastSeenIso).getTime() : 0;
   let count = 0;
   for (let i = cache.length - 1; i >= 0; i--) {
-    const t = new Date(cache[i].created_at).getTime();
+    const item = cache[i];
+    const t = new Date(item.created_at).getTime();
     if (t <= cutoff) break;
-    // Don't count messages I sent myself as unread
-    if (cache[i].member_id !== myMember.id) count++;
+    // Don't count my own messages or my own activity events as unread.
+    // Events have actor_member_id; messages have member_id.
+    const isMine = item.member_id === myMember.id ||
+                   item.actor_member_id === myMember.id;
+    if (!isMine) count++;
   }
   return count;
 }
 
 function isPinnedToBottom() {
-  const el = document.getElementById('chatMessages');
+  const el = $$('#chatMessages');
   if (!el) return true;
   return (el.scrollHeight - el.clientHeight - el.scrollTop) < 80;
 }
 
 function scrollToBottom() {
-  const el = document.getElementById('chatMessages');
+  const el = $$('#chatMessages');
   if (el) el.scrollTop = el.scrollHeight;
 }
 
@@ -579,4 +883,11 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-initChat();
+// Auto-init only on chat.html (where the chat DOM is present at page load).
+// On other pages, chat.js is loaded as a dependency and chat-widget.js
+// drives initialization via initChatWidget() when the popup opens.
+if (document.getElementById('chatSidebar')) {
+  initChat();
+}
+
+})();
