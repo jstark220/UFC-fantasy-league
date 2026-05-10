@@ -1,7 +1,7 @@
 # UFC Fantasy League — Product Requirements Document
 
-**Version:** 1.0
-**Last Updated:** April 22, 2026
+**Version:** 1.1
+**Last Updated:** May 9, 2026
 **Owner:** Jacob Stark
 **Status:** MVP in Development
 
@@ -444,7 +444,60 @@ These are flagged for future discussion and tracked here:
 
 ---
 
-## 10. Glossary
+## 10. Future Feature Backlog
+
+These are ideas captured for future consideration. They are NOT scoped, prioritized, or committed to a phase yet. The roadmap in Section 8 remains authoritative for what is actually being built. Some items overlap with existing "out of scope" notes in Section 4 and are restated here so the full wishlist lives in one place.
+
+### 10.1 Auth & Account
+
+- **Sign in with Google.** OAuth login alongside email/password. Already noted as post-MVP in 4.1.
+- **Phone number + 2FA.** Capture phone at signup, enable SMS or TOTP second factor.
+- **Account settings page.** Change email, change password, update display name, delete account.
+
+### 10.2 Social & Discovery
+
+- **Invite link (not just code).** Sharable URL that auto-joins the league on signup or click. Currently only a 6-char code (4.2).
+- **Friend system.** Add friends across the platform, see what leagues they are in, invite them with one click.
+- **Public league interface.** Browse and join open leagues run by strangers, not just friend leagues.
+- **Site-wide leaderboard.** Cross-league rankings (best managers across the whole platform).
+
+### 10.3 Draft Experience
+
+- **Draft chat.** Real-time chat inside the draft room.
+- **Draft sound effects.** Pick clock ticks, on-the-clock alert, pick-confirmed sound, etc.
+- **Better desktop and mobile draft room.** Reference target: ESPN fantasy football draft room. Both layouts need rework, mobile especially.
+
+### 10.4 Lineup & Roster
+
+- **Whole-team single-screen view.** See all 20 roster fighters at once without scrolling between sections.
+- **Distinct locked-lineup visual state.** Lineup page should look meaningfully different (read-only treatment, not just a disabled button) once starters are locked.
+- **Highlight your fighters on the fight card.** When viewing the upcoming card from the lineup page, mark which fighters belong to your roster.
+- **Commissioner roster edit power.** Commish can manually adjust any manager's roster (corrections, dropped-fighter recovery, dispute resolution).
+- **Country flags on fighter cards.** Small flag icon next to fighter name / photo.
+
+### 10.5 Communication
+
+- **Chat as a pop-up.** Floating / always-accessible chat overlay rather than a dedicated page, so trash talk happens without navigating away.
+- **Fighter AI bot.** Chat-based assistant that answers questions about fighters (recent form, matchup history, projection rationale).
+
+### 10.6 Data & Integrations
+
+- **Event API.** Auto-ingest the UFC schedule (events, fight cards, weigh-ins) instead of commissioner manual entry.
+- **Scoring API.** Auto-ingest fight stats and results (replace manual commissioner scoring noted in 4.5).
+- **Fighter API.** Auto-update fighter records, weight class, status (active / cut / retired / injured).
+- **Polymarket API.** Pull live fight odds for display on the lineup and fight card pages.
+- **Rankings sync.** Keep the official UFC rankings current automatically and surface them on fighter cards.
+- **Projections.** Per-fighter projected fantasy points per upcoming fight, shown during lineup-setting.
+
+### 10.7 Format & Engagement
+
+- **Playoffs format option.** Optional bracket-style playoffs instead of (or after) cumulative-points season. Currently 6.3 explicitly says no playoffs.
+- **Winner / loser animations.** Celebratory animation for matchup or weekly winner, commiseration animation for the worst score.
+- **Mobile integration.** Deeper mobile UX work beyond responsive polish (possible PWA install, push notifications, lineup-setting from phone optimized for fight night).
+
+---
+
+## 11. Glossary
 
 - **BMF:** Baddest Motherf*** (UFC's secondary lightweight title awarded by Dana White to create marquee fights)
 - **Interim title:** Temporary championship awarded when a champion is inactive

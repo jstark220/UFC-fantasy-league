@@ -919,25 +919,27 @@ function renderRosterRow(fighter, ctx, slotType) {
     btnHtml = '<button class="btn-secondary lineup-row-btn" data-fighter-id="' + fighter.id + '">Start</button>';
   }
 
-  // "→ Flex": only when not already in any_flex, lineup isn't locked, AND either a
-  // flex slot is open OR a valid swap partner exists in flex.
+  // "→ Flex": only when not already in any_flex, AND either a flex slot is
+  // open OR a valid swap partner exists in flex.
   // Men: swap partner must share division (so they can return to that slot).
   // Women: any woman in flex can swap back to women_flex, regardless of specific division.
+  // Roster slot moves are independent of event state (they change slot_override
+  // on the rosters row, not anything event-scoped), so we don't gate on isLocked.
   var fighterIsWoman = WOMENS_DIVISIONS.indexOf(fighter.primary_division) !== -1;
   var flexSwapExists = fighterIsWoman
     ? ctx.flexDivisions.some(function(d) { return WOMENS_DIVISIONS.indexOf(d) !== -1; })
     : ctx.flexDivisions.indexOf(fighter.primary_division) !== -1;
-  var flexEligible = !isLocked && slotType !== 'any_flex' &&
+  var flexEligible = slotType !== 'any_flex' &&
     (ctx.flexCount < 2 || flexSwapExists);
   var flexBtn = (!isViewMode && flexEligible)
     ? '<button class="lineup-flex-btn" data-flex-id="' + fighter.id + '" title="Move to Any-Division Flex">&rarr; Flex</button>'
     : '';
 
-  var unflexBtn = (!isViewMode && !isLocked && slotType === 'any_flex')
+  var unflexBtn = (!isViewMode && slotType === 'any_flex')
     ? '<button class="lineup-flex-btn" data-unflex-id="' + fighter.id + '" title="Move back to division slot">&larr; Out</button>'
     : '';
 
-  const dropBtn = (!isViewMode && !isLocked)
+  const dropBtn = !isViewMode
     ? '<button class="lineup-drop-btn" data-drop-id="' + fighter.id + '" title="Drop from roster">Drop</button>'
     : '';
 
@@ -1031,7 +1033,7 @@ async function toggleStarter(fighterId) {
 // 3am ET on (drop_date + 2 days), regardless of the current waiver phase.
 // ========================================================================
 async function dropFighter(fighterId) {
-  if (isLocked) return;
+  if (isViewMode) return;
 
   const fighter = myRoster.find(function(f) { return f.id === fighterId; });
   if (!fighter) return;
@@ -1105,7 +1107,7 @@ async function dropFighter(fighterId) {
 // flex slots are taken, they pick which flex fighter to swap out.
 // ========================================================================
 function showMoveToFlexModal(fighterId) {
-  if (isLocked) return;
+  if (isViewMode) return;
 
   const mover = myRoster.find(function(f) { return f.id === fighterId; });
   if (!mover) return;
@@ -1269,7 +1271,7 @@ async function moveToFlex(moverId, swapPartnerId) {
 // picks one of those division fighters to bump to flex in exchange.
 // ========================================================================
 function showMoveOutOfFlexModal(fighterId) {
-  if (isLocked) return;
+  if (isViewMode) return;
 
   const mover = myRoster.find(function(f) { return f.id === fighterId; });
   if (!mover) return;
