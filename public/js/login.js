@@ -9,6 +9,7 @@ const emailInput    = document.getElementById('email');
 const passwordInput = document.getElementById('password');
 const submitBtn     = document.getElementById('submitBtn');
 const messageEl     = document.getElementById('message');
+const googleBtn     = document.getElementById('googleBtn');
 
 // ========================================================================
 // HELPER: SHOW/HIDE MESSAGE BANNER
@@ -57,5 +58,39 @@ loginForm.addEventListener('submit', async function(event) {
     showMessage(err.message, 'error');
     submitBtn.disabled = false;
     submitBtn.textContent = 'Log In';
+  }
+});
+
+// ========================================================================
+// GOOGLE SIGN-IN
+// signInWithOAuth redirects the browser to Google. After the user signs in,
+// Google sends them to the Supabase callback URL configured for this project,
+// Supabase exchanges the code for a session, then redirects to redirectTo
+// below. We derive the dashboard URL from the current page's directory so
+// the same code works whether the dev server points at the project root
+// (URLs include /public/) or at the public/ folder (URLs at root).
+// The function returns before the navigation happens, so the only code that
+// matters after success is what runs on dashboard.html via auth-guard.
+// ========================================================================
+function dashboardUrl() {
+  const path = window.location.pathname;
+  const dir = path.substring(0, path.lastIndexOf('/'));
+  return window.location.origin + dir + '/dashboard.html';
+}
+
+googleBtn.addEventListener('click', async function() {
+  hideMessage();
+  googleBtn.disabled = true;
+
+  try {
+    const { error } = await supabaseClient.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: dashboardUrl() }
+    });
+    if (error) throw error;
+    // On success, the browser navigates away — nothing more to do here.
+  } catch (err) {
+    showMessage(err.message, 'error');
+    googleBtn.disabled = false;
   }
 });

@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <script src="js/theme.js"></script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="styles/tokens.css">
+  <link rel="stylesheet" href="styles/components.css">
+
+  <title>Account - Knockdown Fantasy</title>
+</head>
+<body>
+
+  <div class="dashboard-page" id="pageContent" style="display: none;">
+
+    <nav class="top-nav">
+      <a href="index.html" class="top-nav__logo">
+        <span class="kf-red">Knockdown</span> Fantasy
+      </a>
+      <div class="top-nav__links">
+        <a href="dashboard.html" class="btn-ghost" id="backLink">&larr; Back</a>
+      </div>
+      <div class="top-nav__actions">
+        <button class="btn-theme" onclick="toggleTheme()" aria-label="Toggle theme">☾</button>
+        <button id="globalLogoutBtn" class="btn-ghost" onclick="logOut()">Log out</button>
+      </div>
+    </nav>
+
+    <div class="league-header">
+      <div class="league-header__inner">
+        <h1 class="league-header__name">Account Settings</h1>
+      </div>
+    </div>
+
+    <div class="dashboard-body">
+
+      <!-- Inline status banner — populated by account.js for any save action -->
+      <div id="message" class="message"></div>
+
+      <!-- ============================================================
+           PROFILE — display name (saved to profiles.display_name)
+           ============================================================ -->
+      <section class="settings-section">
+        <h2 class="settings-section__title">Profile</h2>
+        <p class="settings-section__hint">Your display name appears alongside your team name throughout the app.</p>
+
+        <div class="form-group">
+          <label for="displayName">Display name</label>
+          <input type="text" id="displayName" maxlength="40" placeholder="How you appear to others">
+        </div>
+
+        <button type="button" class="btn-primary" id="saveDisplayBtn">Save profile</button>
+      </section>
+
+      <!-- ============================================================
+           EMAIL — current + change form
+           Supabase emails confirmation to both old and new addresses; the
+           change doesn't take effect until both links are clicked.
+           ============================================================ -->
+      <section class="settings-section">
+        <h2 class="settings-section__title">Email</h2>
+        <p class="settings-section__hint">
+          Current email:
+          <strong id="currentEmail">—</strong>
+        </p>
+
+        <div class="form-group">
+          <label for="newEmail">New email address</label>
+          <input type="email" id="newEmail" placeholder="you@example.com">
+          <p class="form-hint">
+            We'll send a confirmation link to both your current and new email addresses.
+            The change won't take effect until you click both links.
+          </p>
+        </div>
+
+        <button type="button" class="btn-primary" id="saveEmailBtn">Update email</button>
+      </section>
+
+      <!-- ============================================================
+           PASSWORD — change form
+           Only visible if the user has an email/password identity. OAuth-
+           only users (Google) don't have a password to change, so we hide
+           the whole section for them.
+           ============================================================ -->
+      <section class="settings-section" id="passwordSection" style="display: none;">
+        <h2 class="settings-section__title">Password</h2>
+        <p class="settings-section__hint">Set a new password. You'll stay signed in on this device.</p>
+
+        <div class="form-group">
+          <label for="newPassword">New password</label>
+          <input type="password" id="newPassword" placeholder="At least 8 characters" minlength="8">
+        </div>
+
+        <div class="form-group">
+          <label for="confirmNewPassword">Confirm new password</label>
+          <input type="password" id="confirmNewPassword" placeholder="Repeat your new password" minlength="8">
+        </div>
+
+        <button type="button" class="btn-primary" id="savePasswordBtn">Update password</button>
+      </section>
+
+      <!-- ============================================================
+           SIGN-IN METHODS — informational list of providers linked to
+           this account. Populated by account.js from auth.users.identities.
+           ============================================================ -->
+      <section class="settings-section">
+        <h2 class="settings-section__title">Sign-in methods</h2>
+        <p class="settings-section__hint">How you can sign in to your account.</p>
+        <ul class="settings-providers" id="providersList"></ul>
+      </section>
+
+      <!-- ============================================================
+           DANGER ZONE — delete account
+           Self-serve delete needs server-side privileges Supabase doesn't
+           expose to the client SDK. For now this opens a mailto: link.
+           Replace with a Supabase Edge Function + admin.deleteUser() once
+           we have one.
+           ============================================================ -->
+      <section class="settings-section settings-section--danger">
+        <h2 class="settings-section__title">Delete account</h2>
+        <p class="settings-section__hint">
+          Permanently delete your account, all league memberships, and related data.
+          This cannot be undone.
+        </p>
+        <a class="btn-danger" id="deleteAccountBtn"
+           href="mailto:jacobwindu@gmail.com?subject=Delete%20my%20Knockdown%20Fantasy%20account">
+          Request account deletion
+        </a>
+      </section>
+
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/auth-guard.js"></script>
+  <script src="js/account.js"></script>
+
+  <script>
+    document.querySelectorAll('.btn-theme').forEach(function(btn) {
+      var theme = document.documentElement.getAttribute('data-theme');
+      btn.textContent = theme === 'light' ? '☀' : '☾';
+    });
+  </script>
+
+</body>
+</html>

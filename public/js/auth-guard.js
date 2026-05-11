@@ -27,6 +27,20 @@ async function requireAuth() {
     document.body.appendChild(btn);
   }
 
+  // Inject an Account link into the top-nav next to the logout button, on
+  // every page that has one. Skipped on account.html itself (the link is
+  // self-referential there). Done once per page load.
+  const existingLogout = document.getElementById('globalLogoutBtn');
+  const onAccountPage  = window.location.pathname.endsWith('/account.html');
+  if (existingLogout && !document.getElementById('accountLink') && !onAccountPage) {
+    const link = document.createElement('a');
+    link.id = 'accountLink';
+    link.className = 'btn-ghost';
+    link.textContent = 'Account';
+    link.href = 'account.html';
+    existingLogout.parentNode.insertBefore(link, existingLogout);
+  }
+
   // Return the user object so the calling page can use the user's id and email
   return data.session.user;
 }

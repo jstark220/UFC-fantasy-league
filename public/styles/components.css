@@ -221,6 +221,63 @@ body {
   margin: 0 0 var(--space-8) 0;
 }
 
+/* ========================================================================
+   AUTH — OAuth buttons + "or" divider
+   Used on login.html and signup.html above the email/password form.
+   ======================================================================== */
+
+.btn-oauth {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 16px;
+  background: white;
+  color: #1f1f1f;
+  border: 1px solid #dadce0;
+  border-radius: 6px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+  box-sizing: border-box;
+}
+.btn-oauth:hover {
+  background: #f8f9fa;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+.btn-oauth:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn-oauth__icon {
+  flex-shrink: 0;
+}
+
+/* Horizontal "or" rule that separates OAuth options from the email form. */
+.auth-divider {
+  display: flex;
+  align-items: center;
+  margin: var(--space-4) 0;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border-subtle);
+}
+.auth-divider span {
+  padding: 0 var(--space-3);
+}
+
 /* Interactive card — used for league list items, etc. */
 .card-interactive {
   cursor: pointer;
@@ -744,6 +801,77 @@ body {
   max-width: var(--content-max);
   margin: 0 auto;
   padding: var(--space-8);
+}
+
+/* ========================================================================
+   ACCOUNT SETTINGS PAGE
+   Stacked cards, one per logical section (Profile / Email / Password /
+   Sign-in methods / Delete account). Constrained narrow so forms read
+   like a form, not a wide dashboard layout.
+   ======================================================================== */
+
+.settings-section {
+  max-width: 640px;
+  margin: 0 auto var(--space-6) auto;
+  padding: var(--space-6);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+}
+.settings-section__title {
+  font-family: var(--font-display);
+  font-size: var(--text-h2);
+  color: var(--text-primary);
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  margin: 0 0 var(--space-2) 0;
+}
+.settings-section__hint {
+  color: var(--text-secondary);
+  font-size: var(--text-body-sm);
+  margin: 0 0 var(--space-4) 0;
+}
+.settings-section--danger {
+  border-color: rgba(193, 59, 46, 0.4);
+  background: rgba(193, 59, 46, 0.04);
+}
+.settings-section--danger .settings-section__title {
+  color: var(--accent-crimson);
+}
+
+/* Provider list (Sign-in methods) — name on left, email on right */
+.settings-providers {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.settings-providers__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 10px var(--space-3);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+}
+.settings-providers__name {
+  font-weight: 700;
+  color: var(--text-primary);
+  font-size: var(--text-body-sm);
+}
+.settings-providers__detail {
+  color: var(--text-tertiary);
+  font-size: var(--text-caption);
+  font-variant-numeric: tabular-nums;
+}
+.settings-providers__empty {
+  color: var(--text-tertiary);
+  font-size: var(--text-body-sm);
+  font-style: italic;
 }
 
 /* Three-column stat strip */

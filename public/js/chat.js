@@ -253,14 +253,15 @@ async function loadAllThreads() {
 
 // ========================================================================
 // REALTIME
-// One channel listens to two tables: league_messages (chat) and
-// league_events (drops / claims / trades surfaced in chat). RLS handles
-// the visibility rules; we just route incoming rows into the right
-// thread cache.
+// Two separate channels — one for chat messages, one for activity events.
+// Splitting by table is more reliable than chaining multiple .on() calls
+// on a single channel; in practice Supabase has been known to drop one of
+// the subscriptions when two tables share a channel. RLS handles
+// visibility, so we just route incoming rows into the right cache.
 // ========================================================================
 function subscribeRealtime() {
   realtimeChannel = supabaseClient
-    .channel('league_chat_' + leagueId)
+    .channel('league_messages_' + leagueId)
     .on('postgres_changes', {
       event:  'INSERT',
       schema: 'public',
@@ -269,6 +270,10 @@ function subscribeRealtime() {
     }, function(payload) {
       handleIncomingMessage(payload.new);
     })
+    .subscribe();
+
+  supabaseClient
+    .channel('league_events_' + leagueId)
     .on('postgres_changes', {
       event:  'INSERT',
       schema: 'public',

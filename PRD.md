@@ -450,9 +450,19 @@ These are ideas captured for future consideration. They are NOT scoped, prioriti
 
 ### 10.1 Auth & Account
 
-- **Sign in with Google.** OAuth login alongside email/password. Already noted as post-MVP in 4.1.
-- **Phone number + 2FA.** Capture phone at signup, enable SMS or TOTP second factor.
-- **Account settings page.** Change email, change password, update display name, delete account.
+**Shipped (May 2026):**
+- ✅ **Sign in with Google.** OAuth login alongside email/password. Live on login.html and signup.html.
+- ✅ **Account settings page** at `account.html`. Linked from the top nav next to "Log out" on every authenticated page. Covers: display name (writes to `profiles.display_name`), email change (double-confirmation flow), password change (only for users with an email/password identity), and a read-only list of linked sign-in methods.
+- ✅ **Display name** is read by the dashboard welcome header, with the email-local part as a fallback when unset. Stored in `public.profiles.display_name` per migration `2026-05-10_profiles_display_name.sql`.
+
+**Still open:**
+- **Phone number + 2FA.** Capture phone at signup, enable SMS or TOTP second factor. Most useful once leagues might involve money/prizes — for a friends-only league it's polish, not protection.
+- **Self-serve account deletion.** The Delete Account section on `account.html` currently opens a mailto link. Real self-deletion needs server-side privileges (Supabase JS client can't call `auth.admin.deleteUser`). Two paths: (a) a Supabase Edge Function with the service role that validates the caller is the user being deleted, or (b) a SQL function with elevated permissions. (a) is cleaner.
+- **Forgot password flow.** The "Forgot password?" link on `login.html` is currently `href="#"`. Wire up `supabaseClient.auth.resetPasswordForEmail()` + a `reset-password.html` page that uses `auth.updateUser({ password })` after the email link lands.
+- **Display name everywhere.** Currently only the dashboard welcome header reads `display_name`. Other surfaces that show "you" still rely on email or per-league `team_name`. Audit and decide which surfaces should use display_name; chat/standings/etc. legitimately use `team_name` (per-league identity) and shouldn't change.
+- **Link/unlink OAuth providers.** Users who signed up with email can't currently add Google to their account, and vice versa. Supabase supports identity linking (`auth.linkIdentity`); needs UI on `account.html`.
+- **Display name validation & uniqueness.** Currently accepts any string up to 40 chars. No profanity filter, no uniqueness check. Probably fine for a friends league but worth flagging.
+- **Profile picture / avatar.** Currently only initials are shown anywhere there's an avatar slot (chat messages, etc.). Adding an uploaded avatar would require Supabase Storage setup.
 
 ### 10.2 Social & Discovery
 

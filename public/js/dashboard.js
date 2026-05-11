@@ -12,9 +12,16 @@ async function initDashboard() {
   // Auth confirmed — reveal the page
   document.getElementById('dashboardContent').style.display = 'block';
 
-  // Use the local part of the email as a display name until profiles exist
-  const username = user.email.split('@')[0];
-  document.getElementById('welcomeName').textContent = username;
+  // Prefer the user's saved display_name from profiles; fall back to the
+  // local part of their email if they haven't set one yet.
+  const fallback = (user.email || '').split('@')[0];
+  const { data: profile } = await supabaseClient
+    .from('profiles')
+    .select('display_name')
+    .eq('id', user.id)
+    .maybeSingle();
+  const displayName = (profile && profile.display_name) || fallback;
+  document.getElementById('welcomeName').textContent = displayName;
 
   // ---- Fetch the user's league memberships with league details ----
   const { data: memberships, error } = await supabaseClient

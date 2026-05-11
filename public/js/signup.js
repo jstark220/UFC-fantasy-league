@@ -11,6 +11,7 @@ const passwordInput = document.getElementById('password');
 const confirmInput  = document.getElementById('confirmPassword');
 const submitBtn     = document.getElementById('submitBtn');
 const messageEl     = document.getElementById('message');
+const googleBtn     = document.getElementById('googleBtn');
 
 // ========================================================================
 // HELPER: SHOW/HIDE MESSAGE BANNER
@@ -80,5 +81,37 @@ signupForm.addEventListener('submit', async function(event) {
     showMessage(err.message, 'error');
     submitBtn.disabled = false;
     submitBtn.textContent = 'Create Account';
+  }
+});
+
+// ========================================================================
+// GOOGLE SIGN-UP
+// Same call as login — signInWithOAuth upserts the user, so it works whether
+// the Google account is new to us or existing. The handle_new_user trigger
+// fires on first OAuth sign-in just like it does for password signups, so
+// the public.profiles row gets created automatically.
+// dashboardUrl() derives the post-auth URL from the current page so it
+// works whether dev serves from the project root or from public/.
+// ========================================================================
+function dashboardUrl() {
+  const path = window.location.pathname;
+  const dir = path.substring(0, path.lastIndexOf('/'));
+  return window.location.origin + dir + '/dashboard.html';
+}
+
+googleBtn.addEventListener('click', async function() {
+  hideMessage();
+  googleBtn.disabled = true;
+
+  try {
+    const { error } = await supabaseClient.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: dashboardUrl() }
+    });
+    if (error) throw error;
+    // On success, the browser navigates away — nothing more to do here.
+  } catch (err) {
+    showMessage(err.message, 'error');
+    googleBtn.disabled = false;
   }
 });
