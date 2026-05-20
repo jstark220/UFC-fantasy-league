@@ -2036,6 +2036,29 @@ body {
   letter-spacing: 0.02em;
   line-height: 1;
   margin: 0 0 var(--space-2) 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+/* "Commish" pill shown beside a league name on the dashboard when the
+   viewer is the primary owner or a co-commissioner. Smaller body font so
+   it doesn't compete with the display-font league name. */
+.commish-badge {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent-crimson);
+  background: rgba(193, 59, 46, 0.12);
+  border: 1px solid rgba(193, 59, 46, 0.4);
+  border-radius: 4px;
+  padding: 3px 8px;
+  line-height: 1;
 }
 
 .dashboard-league-row__meta {
@@ -4677,6 +4700,20 @@ body {
   opacity: 0.5;
 }
 
+/* Tier-colored pip variants — used on the draft roster panel so each slot
+   dot reflects the strength of the fighter occupying it. Empty slots fall
+   through to .pip-empty above; the tier classes win when both are set. */
+.pip-tier-champion {
+  background: var(--accent-gold);
+  box-shadow: 0 0 0 1px rgba(212, 168, 75, 0.4);
+}
+.pip-tier-ranked {
+  background: var(--accent-crimson);
+}
+.pip-tier-unranked {
+  background: var(--text-tertiary);
+}
+
 /* ========================================================================
    RESPONSIVE ADJUSTMENTS
    ======================================================================== */
@@ -4863,7 +4900,10 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 400;
+  /* Sits above the fight-card / whole-team / edit-event modals (z-index
+     1000) so the fighter detail view always lands on top when opened
+     from inside one of those modals. */
+  z-index: 1500;
   padding: var(--space-4);
   animation: fadeIn 0.15s ease;
 }
@@ -6316,7 +6356,11 @@ body {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  background: var(--bg-primary);
+  /* Panels sit clearly above the page bg-primary so they read as
+     distinct surfaces. Hard-coded values (rather than bg-tertiary) so
+     they don't affect hover-bg semantics elsewhere in the app. */
+  background: #24242A;
+  border: 1px solid var(--border-strong);
 }
 
 /* Board panel has only header + body (no controls row), so override the
@@ -6327,6 +6371,12 @@ body {
    1fr, the body always fills whatever height the panel has. */
 .panel-board {
   grid-template-rows: auto 1fr;
+  /* The board panel sits darker than the bottom panels — the colored
+     cells inside already supply all the visual energy, so the chrome
+     around them should recede. Bottom panels (Available Fighters / Queue
+     / Roster) stay lighter so they read as separate card-like surfaces. */
+  background: #141418;
+  border-color: var(--border-subtle);
 }
 
 /* In the stacked layout the roster gets a fixed width on the right; the
@@ -6340,6 +6390,20 @@ body {
   flex-shrink: 0;
 }
 .draft-panel__header .section-label { margin: 0; }
+
+/* Small crimson vertical bar before each panel's section label — ESPN-style
+   accent that gives the panel headers presence without restyling type.
+   Scoped to draft panels so the rest of the app's section labels stay clean. */
+.draft-panel__header .section-label::before {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  height: 12px;
+  background: var(--accent-crimson);
+  border-radius: 1px;
+  margin-right: 8px;
+  vertical-align: -1px;
+}
 
 /* Header variant with a trailing action button (e.g. "View All →") */
 .draft-panel__header--with-action {
@@ -7039,8 +7103,27 @@ label .form-label__hint {
 .draft-pool-row {
   margin-bottom: var(--space-2);
 }
+
+/* Division-colored left border. Each row sets --div-accent inline based on
+   the fighter's primary_division (see draft.js divisionColor()). Provides
+   an instant at-a-glance read of weight class across the list. */
+.draft-pool-row--divcolor {
+  border-left: 3px solid var(--div-accent, var(--border-subtle));
+}
+
+/* Division label inherits the same accent so the color appears on both
+   the border and the text — reinforces the connection. Slightly bolder
+   weight so muted colors stay readable. */
+.draft-pool-row--divcolor .draft-pool-row__division {
+  color: var(--div-accent, var(--text-tertiary));
+  font-weight: 700;
+}
+
+/* When the row is pickable (it's your turn AND a roster slot is free),
+   gold wins — that's the more time-sensitive signal. */
+.draft-pool-row--pickable.draft-pool-row--divcolor,
 .draft-pool-row--pickable {
-  border-left: 3px solid var(--accent-gold);
+  border-left-color: var(--accent-gold);
 }
 .draft-pool-row--invalid {
   opacity: 0.45;
@@ -7056,45 +7139,80 @@ label .form-label__hint {
    ============================================================ */
 
 .draft-board {
-  padding: var(--space-3);
+  /* No top padding — the column headers should sit flush with the top of
+     the scrollable area so the page-level panel header above this element
+     visually connects straight to the team headers. */
+  padding: 0 var(--space-3) var(--space-3);
   overflow: auto;
   height: 100%;
-  background: var(--bg-primary);
+  /* Transparent so the panel's bg-secondary shows through — keeps the
+     panel as the single visible surface instead of nesting bg-primary
+     inside bg-secondary. */
+  background: transparent;
 }
 
 .draft-board__table {
   width: 100%;
   border-collapse: separate;
-  border-spacing: 6px;
+  /* 6px horizontal gap between columns; 5px vertical gap between rows.
+     The vertical spacing has to leave enough room that the sticky header
+     visually clears the cell beneath it on scroll — too tight and the
+     next row's content shows through the gap awkwardly. */
+  border-spacing: 6px 5px;
   table-layout: fixed;
+  /* border-spacing applies a 5px gap above the first row too. Pull the
+     whole table up to consume that gap so the header sits flush with
+     the top of the scrollable area. */
+  margin-top: -5px;
 }
 
-/* Manager headers along the top of the board */
+/* Manager headers along the top of the board.
+   --team-accent is set inline per column by draft.js (see teamColor()).
+   Header bg is heavily tinted with the team color (color-mix 45%) so the
+   header reads as a saturated colored band that visually OWNS the column
+   beneath it — same Sleeper-style team identity. */
 .draft-board__col-header {
-  padding: 10px var(--space-3);
+  padding: 12px var(--space-3);
   text-align: center;
-  font-size: var(--text-caption);
-  font-weight: 700;
-  letter-spacing: 0.06em;
+  font-size: var(--text-body-sm);
+  font-weight: 800;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--text-secondary);
-  background: var(--bg-secondary);
-  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.95);
+  background: color-mix(in srgb, var(--team-accent, var(--bg-secondary)) 45%, var(--bg-primary));
+  border-radius: 8px 8px 0 0;
+  border-bottom: 3px solid var(--team-accent, var(--border-strong));
+  /* Dark shadow so the team name stays crisp across all team colors. */
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+  /* Drop shadow below the sticky header so cells visibly slide under it
+     on scroll instead of looking flush. Gives the header a "floating on
+     top" cue without needing to bump opacity or color contrast. */
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
   /* Sticky so the header row stays visible while the body scrolls
      vertically — handy when the panel has 20 rounds of draft slots. */
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: 10;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* Clickable — opens the team's roster modal */
+  cursor: pointer;
+  transition: filter 0.12s ease;
 }
+.draft-board__col-header:hover {
+  filter: brightness(1.15);
+}
+/* User's own column gets a subtle crimson inner ring on top of the team
+   color — so "this is you" still reads even if your team color is teal. */
 .draft-board__col-header--mine {
-  color: var(--accent-crimson);
-  background: rgba(193, 59, 46, 0.10);
+  box-shadow: inset 0 0 0 1px rgba(193, 59, 46, 0.55);
 }
 
-/* Cells — each one is a card */
+/* Cells — each one is a card. Left border picks up --div-accent when the
+   cell has a pick (showing weight class at a glance) and falls back to
+   --team-accent for empty cells so columns are still traceable top to
+   bottom by team color. */
 .draft-board__cell {
   position: relative;
   padding: 0;
@@ -7104,15 +7222,17 @@ label .form-label__hint {
   border-radius: 8px;
   vertical-align: middle;
   transition: transform 0.12s ease, box-shadow 0.12s ease;
+  border-left: 3px solid var(--div-accent, var(--team-accent, var(--border-subtle)));
 }
 
-/* Tier tints (only applied when a pick has been made). Subtle alpha
-   tints so cells stay legible against the background but still read
-   as "this column has high-value picks" at a distance. */
-.draft-board__cell--champion { background: rgba(212, 168, 75, 0.18); }
-.draft-board__cell--top5     { background: rgba(193, 59, 46, 0.14); }
-.draft-board__cell--top15    { background: rgba(74, 157, 111, 0.10); }
-.draft-board__cell--unranked { background: var(--bg-tertiary); }
+/* Picked cells get a strong, division-tinted background (Sleeper-style).
+   color-mix blends the division accent at 55% over the page background,
+   producing a saturated pastel-on-dark that stays readable for white text.
+   This replaces the previous tier-tint backgrounds — tier info is still
+   carried by the rank badge text (C / #1-5 / etc.). */
+.draft-board__cell--made {
+  background: color-mix(in srgb, var(--div-accent, var(--bg-tertiary)) 55%, var(--bg-primary));
+}
 
 /* Empty slots are dimmer than picked ones so the eye gets pulled to
    the activity. */
@@ -7128,18 +7248,12 @@ label .form-label__hint {
   outline-offset: -2px;
 }
 
-/* "Mine" cells get a crimson hairline on the left edge so you can
-   trace your column at a glance. */
-.draft-board__cell--mine::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: 3px;
-  background: var(--accent-crimson);
-  border-top-left-radius: 8px;
-  border-bottom-left-radius: 8px;
+/* "Mine" cells get a soft crimson outline around the team-accent border
+   so the user's column always reads as theirs — even if their team color
+   happens to be teal or olive. The team accent border still shows on the
+   left; the crimson ring is a secondary visual layered on top. */
+.draft-board__cell--mine {
+  box-shadow: inset 0 0 0 1px rgba(193, 59, 46, 0.45);
 }
 
 /* Lift on hover for clickable cells */
@@ -7151,14 +7265,56 @@ label .form-label__hint {
 /* Pick label "1.1" / "2.5" in the top-right corner */
 .draft-board__pick-num {
   position: absolute;
-  top: 4px;
-  right: 6px;
-  font-size: 10px;
-  color: var(--text-tertiary);
+  top: 6px;
+  right: 8px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.92);
   font-variant-numeric: tabular-nums;
   pointer-events: none;
-  letter-spacing: 0.04em;
-  font-weight: 600;
+  letter-spacing: 0.06em;
+  font-weight: 800;
+  text-transform: uppercase;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+}
+
+/* Snake-order arrows. Each cell shows a small chevron in the gutter
+   pointing toward where the next pick will land. Right for odd rounds,
+   left for even rounds, down at row transitions where the snake turns.
+   Muted by default so the arrows guide the eye without competing with
+   the colored cells. */
+.draft-board__arrow {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.75);
+  pointer-events: none;
+  z-index: 3;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+.draft-board__arrow--right {
+  right: 5px;
+  bottom: 4px;
+}
+.draft-board__arrow--left {
+  right: 5px;
+  bottom: 4px;
+}
+.draft-board__arrow--down {
+  bottom: 4px;
+  right: 5px;
+}
+
+/* Light-mode: arrows flip from white-on-dark to dark-on-light so they
+   read against the lighter board panel and pastel cells. */
+[data-theme="light"] .draft-board__arrow {
+  color: rgba(20, 20, 24, 0.55);
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.5);
 }
 
 /* The clickable inner button that fills a made cell */
@@ -7187,6 +7343,10 @@ label .form-label__hint {
   height: 36px;
   border-radius: 50%;
   object-fit: cover;
+  /* UFC fighter photos are full-body with the head at the top of the
+     image — default center-cover crops to the torso. Anchor to top so
+     the head shows inside the circular crop. */
+  object-position: top center;
   background: var(--bg-tertiary);
   flex-shrink: 0;
 }
@@ -7204,23 +7364,82 @@ label .form-label__hint {
 
 .draft-board__pick-name {
   font-size: var(--text-body-sm);
-  font-weight: 700;
+  font-weight: 800;
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   letter-spacing: 0.01em;
+  /* Subtle dark shadow so the heavy name stays crisp on top of a saturated
+     division-color background. */
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
 }
 
 .draft-board__pick-meta {
   font-size: 10px;
-  color: var(--text-tertiary);
+  color: rgba(255, 255, 255, 0.92);
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  font-weight: 600;
+  font-weight: 800;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* Dark text-shadow so the meta line stays crisp across all division
+     backgrounds — the darker bg colors (crimson, burnt orange) were
+     swallowing black text, lighter bg colors (gold, lime) need contrast
+     punch too. White-with-shadow works on both ends of the spectrum. */
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+}
+
+/* ============================================================
+   LIGHT MODE OVERRIDES — Draft board + panels
+   The base draft styles target a dark page; in light mode we
+   swap the hardcoded dark panel bgs for white/off-white, and
+   flip white-on-dark text shadows to dark-on-light so the
+   colored cells stay readable on cream/pastel surfaces.
+   ============================================================ */
+
+/* Bottom panels (Available Fighters / My Queue / My Roster) sit darker
+   than the page bg so they read as recessed wells, not floating cards —
+   matches the dark-mode visual hierarchy where panels are clearly
+   distinct from the page surface. */
+[data-theme="light"] .draft-panel {
+  background: #DCDCD5;
+  border-color: var(--border-strong);
+}
+/* Board panel goes lighter than the bottom panels so the colored cells
+   stay the dominant visual element on the page. */
+[data-theme="light"] .panel-board {
+  background: #FFFFFF;
+}
+
+/* Empty cells: render a touch darker than the panel so unfilled slots
+   stay visible (in dark mode bg-secondary at 0.55 opacity reads as
+   dim; in light mode it'd blend into the panel without this nudge). */
+[data-theme="light"] .draft-board__cell--empty {
+  background: var(--bg-tertiary);
+  opacity: 0.7;
+}
+
+/* Column header — dark text on the pastel team band, light shadow to
+   keep edges crisp against light bg-mix. */
+[data-theme="light"] .draft-board__col-header {
+  color: rgba(20, 20, 24, 0.95);
+  text-shadow: 0 1px 1px rgba(255, 255, 255, 0.45);
+}
+
+/* Fighter name auto-flips dark via --text-primary; just swap the shadow
+   from dark→light so it doesn't drag the name into the bg. */
+[data-theme="light"] .draft-board__pick-name {
+  text-shadow: 0 1px 1px rgba(255, 255, 255, 0.45);
+}
+
+/* Meta line + pick number: hardcoded white above, so explicitly flip to
+   near-black in light mode for legibility on the pastel cells. */
+[data-theme="light"] .draft-board__pick-meta,
+[data-theme="light"] .draft-board__pick-num {
+  color: rgba(20, 20, 24, 0.88);
+  text-shadow: 0 1px 1px rgba(255, 255, 255, 0.45);
 }
 
 /* "On the clock" label in the active cell */

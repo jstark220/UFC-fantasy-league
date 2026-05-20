@@ -24,6 +24,18 @@ async function initJoinLeague() {
   const pageContent = document.getElementById('pageContent');
   if (pageContent) pageContent.style.display = '';
 
+  // Prefill the invite code from the URL when the user arrived via an
+  // invite link (/join-league.html?code=ABC123). Uppercased to match the
+  // DB shape; field is still editable in case the user wants to swap codes.
+  const codeFromUrl = (new URLSearchParams(window.location.search).get('code') || '').toUpperCase();
+  if (codeFromUrl) {
+    const codeInput = document.getElementById('inviteCode');
+    codeInput.value = codeFromUrl;
+    // Move focus to the team name field — the friction point is naming yourself.
+    const teamInput = document.getElementById('teamName');
+    if (teamInput) teamInput.focus();
+  }
+
   document.getElementById('joinForm').addEventListener('submit', async function(event) {
     event.preventDefault();
     hideMessage();

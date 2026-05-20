@@ -31,6 +31,45 @@ const DIVISION_LABELS = {
   heavyweight:       "Men's Heavyweight"
 };
 
+// CSS custom-property names for each division's accent color. Defined in
+// tokens.css. Looked up at render time and applied as an inline style on
+// the row so we don't have to fan out 11 selectors in the stylesheet.
+const DIVISION_COLOR_VAR = {
+  strawweight:        '--div-strawweight',
+  flyweight_w:        '--div-flyweight-w',
+  bantamweight_w:     '--div-bantamweight-w',
+  flyweight:          '--div-flyweight',
+  bantamweight:       '--div-bantamweight',
+  featherweight:      '--div-featherweight',
+  lightweight:        '--div-lightweight',
+  welterweight:       '--div-welterweight',
+  middleweight:       '--div-middleweight',
+  light_heavyweight:  '--div-light_heavyweight',
+  heavyweight:        '--div-heavyweight'
+};
+
+// Returns the var(--div-…) reference for a fighter's primary_division.
+// Falls back to a neutral border color so unknown divisions never break the row.
+function divisionColor(primaryDivision) {
+  const cssVar = DIVISION_COLOR_VAR[primaryDivision];
+  return cssVar ? 'var(' + cssVar + ')' : 'var(--border-strong)';
+}
+
+// ========================================================================
+// TEAM ACCENT COLORS
+// Up to 8 managers per league, each gets a deterministic palette slot
+// (tokens.css var(--team-1) through var(--team-8)). Assignment is by
+// position in league.draft_order so it stays stable across re-renders.
+// ========================================================================
+function teamColor(memberId) {
+  if (!league || !league.draft_order) return 'var(--border-strong)';
+  const idx = league.draft_order.indexOf(memberId);
+  if (idx < 0) return 'var(--border-strong)';
+  // 1-indexed to match the token names; modulo so 9th+ wrap (shouldn't happen
+  // at 8-manager cap, but defensive).
+  return 'var(--team-' + ((idx % 8) + 1) + ')';
+}
+
 // ========================================================================
 // MODULE-LEVEL STATE
 // All rendering functions read from these variables rather than taking
@@ -190,6 +229,14 @@ async function initDraft() {
     }
   });
 
+  // Same pattern for team-roster headers — clicking any column header on
+  // the draft board opens that team's roster in the whole-roster modal.
+  document.addEventListener('click', function(e) {
+    var trigger = e.target.closest('[data-open-team-roster]');
+    if (!trigger) return;
+    showWholeRosterModal(trigger.getAttribute('data-open-team-roster'));
+  });
+
   // Delegated listener for the fighter-modal Draft button. The modal lives
   // outside our normal render tree, so per-render wiring won't catch it —
   // a delegated handler at document level does.
@@ -220,6 +267,10 @@ async function initDraft() {
   // View All button — opens the fullscreen browse modal
   var viewAllBtn = document.getElementById('viewAllBtn');
   if (viewAllBtn) viewAllBtn.addEventListener('click', openViewAll);
+
+  // Whole Roster button — opens the sectioned roster modal
+  var viewWholeRosterBtn = document.getElementById('viewWholeRosterBtn');
+  if (viewWholeRosterBtn) viewWholeRosterBtn.addEventListener('click', showWholeRosterModal);
 
   // Reveal the page now that everything is ready
   // Clear the inline display:none so CSS's display:flex takes over.
@@ -824,15 +875,20 @@ function renderFighterPool() {
                        queueBtnLabel +
                      '</button>';
 
+    // Inline --div-accent on the row so the row's left-border and division
+    // label can pull from a single variable — keeps the styling DRY despite
+    // having 11 different division colors.
+    const divAccent = divisionColor(f.primary_division);
+
     html +=
-      '<div class="lineup-roster-row' + rowMods + '"' + titleAttr + '>' +
+      '<div class="lineup-roster-row draft-pool-row--divcolor' + rowMods + '" style="--div-accent: ' + divAccent + '"' + titleAttr + '>' +
         '<div class="lineup-roster-row__photo-wrap">' + photoHtml + '</div>' +
         '<span class="lineup-roster-row__rank ' + rankClass + '">' + escapeHtml(rankLabel) + '</span>' +
         '<div class="lineup-roster-row__info">' +
           '<button class="lineup-roster-row__name" data-open-fighter="' + f.id + '">' +
             escapeHtml(f.name) +
           '</button>' +
-          '<span class="lineup-roster-row__division">' + escapeHtml(divLabel) + '</span>' +
+          '<span class="lineup-roster-row__division draft-pool-row__division">' + escapeHtml(divLabel) + '</span>' +
         '</div>' +
         '<span class="lineup-roster-row__record">' + record + '</span>' +
         queueBtn +
@@ -1097,7 +1153,16 @@ function renderDraftBoard() {
   league.draft_order.forEach(function(memberId) {
     const member = memberMap[memberId];
     const isMe   = memberId === myMemberId;
-    html += '<th class="draft-board__col-header' + (isMe ? ' draft-board__col-header--mine' : '') + '">';
+    // Inline --team-accent on the header cell so all descendants (the
+    // header's bottom border, the column's pick cells via CSS inheritance)
+    // can reference the same color via var(--team-accent).
+    const accent = teamColor(memberId);
+    // data-open-team-roster makes the header clickable; the document-level
+    // delegated handler in initDraft opens the per-team roster modal.
+    html += '<th class="draft-board__col-header' + (isMe ? ' draft-board__col-header--mine' : '') +
+            '" style="--team-accent: ' + accent + '"' +
+            ' data-open-team-roster="' + escapeHtml(memberId) + '"' +
+            ' title="View this team\'s roster">';
     html += escapeHtml(member ? member.team_name : '?');
     html += '</th>';
   });
@@ -1137,13 +1202,42 @@ function renderDraftBoard() {
       else if (isCurrent)   cellClass += ' draft-board__cell--current';
       else                  cellClass += ' draft-board__cell--empty';
 
-      html += '<td class="' + cellClass + '">';
+      // Each cell carries two custom properties:
+      //   --team-accent : the column's team color (used by empty cells so
+      //                   the column reads as a colored vertical band)
+      //   --div-accent  : the picked fighter's weight-class color (used by
+      //                   cells with picks so each card pops by division)
+      // CSS picks --div-accent when set, falls back to --team-accent for
+      // empty cells so columns stay traceable end-to-end.
+      const cellAccent = teamColor(memberId);
+      let cellStyle = '--team-accent: ' + cellAccent;
+      if (fighter) {
+        cellStyle += '; --div-accent: ' + divisionColor(fighter.primary_division);
+      }
+      html += '<td class="' + cellClass + '" style="' + cellStyle + '">';
       // "round.position" label in the top-right of every cell. Snake-aware:
       // round 2 reads 2.1, 2.2, ... right-to-left, matching pick order.
       // Suppressed on the on-the-clock cell so it doesn't compete visually
       // with the "On the clock" label.
       if (!isCurrent) {
         html += '<span class="draft-board__pick-num">' + round + '.' + positionInRound + '</span>';
+      }
+
+      // Snake-order arrow in the gutter pointing at the next pick. In odd
+      // rounds picks flow left→right (→); even rounds flow right→left (←);
+      // at the end of every round the snake turns (↓). The final pick gets
+      // no arrow since there's nothing after it.
+      if (pickNum < totalPicks) {
+        const lastInRound = positionInRound === n;
+        let arrowDir;
+        if (lastInRound)         arrowDir = 'down';
+        else if (round % 2 === 1) arrowDir = 'right';
+        else                      arrowDir = 'left';
+        const arrowGlyph = arrowDir === 'right' ? '&rarr;'
+                         : arrowDir === 'left'  ? '&larr;'
+                         :                        '&darr;';
+        html += '<span class="draft-board__arrow draft-board__arrow--' + arrowDir +
+                '" aria-hidden="true">' + arrowGlyph + '</span>';
       }
 
       if (fighter) {
@@ -1190,25 +1284,23 @@ function renderDraftBoard() {
 function renderMyRoster() {
   const myPickFighters = getMyPickFighters();
 
-  // Tally picks by slot category
-  const menCounts = {};
-  MENS_DIVISIONS.forEach(function(d) { menCounts[d] = 0; });
-  let womenCount = 0;
+  // Group fighters into the slot category they'd actually occupy. Each
+  // division holds up to 2; women's flex holds up to 2; everything past
+  // that overflows into Any-Division Flex.
+  const menInDiv  = {};
+  MENS_DIVISIONS.forEach(function(d) { menInDiv[d] = []; });
+  const womenFlex = [];
+  const anyFlex   = [];
 
   myPickFighters.forEach(function(f) {
     if (WOMENS_DIVISIONS.includes(f.primary_division)) {
-      womenCount++;
-    } else if (menCounts[f.primary_division] !== undefined) {
-      menCounts[f.primary_division]++;
+      if (womenFlex.length < 2) womenFlex.push(f);
+      else                       anyFlex.push(f);
+    } else if (MENS_DIVISIONS.includes(f.primary_division)) {
+      if (menInDiv[f.primary_division].length < 2) menInDiv[f.primary_division].push(f);
+      else                                          anyFlex.push(f);
     }
   });
-
-  // Overflow into any-division flex
-  let menOverflow = 0;
-  MENS_DIVISIONS.forEach(function(div) {
-    menOverflow += Math.max(0, menCounts[div] - 2);
-  });
-  const flexUsed = menOverflow + Math.max(0, womenCount - 2);
 
   document.getElementById('myPickCount').textContent = myPickFighters.length;
 
@@ -1217,18 +1309,18 @@ function renderMyRoster() {
   MENS_DIVISIONS.forEach(function(div) {
     html += '<div class="draft-slots__row">';
     html += '<span class="draft-slots__label">' + escapeHtml(DIVISION_LABELS[div]) + '</span>';
-    html += '<span class="draft-slots__pips">' + renderPips(Math.min(menCounts[div], 2), 2) + '</span>';
+    html += '<span class="draft-slots__pips">' + renderPips(menInDiv[div], 2) + '</span>';
     html += '</div>';
   });
 
   html += '<div class="draft-slots__row">';
   html += '<span class="draft-slots__label">Women\'s Flex</span>';
-  html += '<span class="draft-slots__pips">' + renderPips(Math.min(womenCount, 2), 2) + '</span>';
+  html += '<span class="draft-slots__pips">' + renderPips(womenFlex, 2) + '</span>';
   html += '</div>';
 
   html += '<div class="draft-slots__row">';
   html += '<span class="draft-slots__label">Any-Division Flex</span>';
-  html += '<span class="draft-slots__pips">' + renderPips(flexUsed, 2) + '</span>';
+  html += '<span class="draft-slots__pips">' + renderPips(anyFlex.slice(0, 2), 2) + '</span>';
   html += '</div>';
 
   html += '</div>';
@@ -1264,6 +1356,153 @@ function renderMyRoster() {
   document.getElementById('myRoster').innerHTML = html;
 }
 
+// ========================================================================
+// WHOLE ROSTER MODAL
+// Single-screen sectioned view of every fighter on a team's draft roster.
+// memberId is optional — defaults to the current user's roster. Pass any
+// member's id (e.g., from a clicked draft-board column header) to view
+// their roster instead. Uses the same whole-team-* styles already defined
+// for the lineup page so the visual language stays consistent. Click any
+// tile to open the existing fighter detail modal.
+// ========================================================================
+function showWholeRosterModal(memberId) {
+  var existing = document.getElementById('wholeRosterModal');
+  if (existing) existing.remove();
+
+  var targetMemberId = memberId || myMemberId;
+  var targetMember   = memberMap[targetMemberId];
+  if (!targetMember) return;
+  var isMyRoster     = (targetMemberId === myMemberId);
+  var fighters       = picks
+    .filter(function(p) { return p.league_member_id === targetMemberId; })
+    .map(function(p) { return fighterMap[p.fighter_id]; })
+    .filter(Boolean);
+
+  // Group by slot (same logic as renderMyRoster). Each men's division
+  // holds up to 2; women's flex up to 2; everything past those overflows
+  // into Any-Division Flex.
+  var menInDiv  = {};
+  MENS_DIVISIONS.forEach(function(d) { menInDiv[d] = []; });
+  var womenFlex = [];
+  var anyFlex   = [];
+
+  fighters.forEach(function(f) {
+    if (WOMENS_DIVISIONS.includes(f.primary_division)) {
+      if (womenFlex.length < 2) womenFlex.push(f);
+      else                       anyFlex.push(f);
+    } else if (MENS_DIVISIONS.includes(f.primary_division)) {
+      if (menInDiv[f.primary_division].length < 2) menInDiv[f.primary_division].push(f);
+      else                                          anyFlex.push(f);
+    }
+  });
+
+  // Always render every men's division section + the two flex sections,
+  // even when empty — empty placeholders communicate which slots still
+  // need to be filled during the draft.
+  var sectionsHtml = '';
+  MENS_DIVISIONS.forEach(function(div) {
+    sectionsHtml += renderWholeRosterSection(DIVISION_LABELS[div], menInDiv[div], {});
+  });
+  sectionsHtml += renderWholeRosterSection("Women's Flex",       womenFlex,             { showDivision: true });
+  sectionsHtml += renderWholeRosterSection('Any-Division Flex',  anyFlex.slice(0, 2),   { showDivision: true });
+
+  var eyebrowText = isMyRoster ? 'Whole Roster' : 'Team Roster';
+  var titleText   = (isMyRoster ? 'My Picks' : escapeHtml(targetMember.team_name)) +
+                    ' &middot; ' + fighters.length + ' / 20';
+
+  var modal = document.createElement('div');
+  modal.id = 'wholeRosterModal';
+  modal.className = 'fight-card-modal-overlay';
+  modal.innerHTML =
+    '<div class="fight-card-modal whole-team-modal" role="dialog" aria-modal="true" aria-label="Roster">' +
+      '<div class="fight-card-modal__header">' +
+        '<div>' +
+          '<p class="fight-card-modal__eyebrow">' + eyebrowText + '</p>' +
+          '<p class="fight-card-modal__title">' + titleText + '</p>' +
+        '</div>' +
+        '<button class="fight-card-modal__close" id="closeWholeRosterBtn" aria-label="Close">&times;</button>' +
+      '</div>' +
+      '<div class="fight-card-modal__body whole-team-modal__body">' +
+        '<div class="whole-team-sections">' + sectionsHtml + '</div>' +
+      '</div>' +
+    '</div>';
+
+  document.body.appendChild(modal);
+
+  document.getElementById('closeWholeRosterBtn').addEventListener('click', closeWholeRosterModal);
+  modal.addEventListener('click', function(e) {
+    if (e.target === modal) closeWholeRosterModal();
+  });
+  document.addEventListener('keydown', handleWholeRosterEscape);
+
+  // Click a tile → open the existing fighter detail modal
+  modal.querySelectorAll('[data-roster-tile-id]').forEach(function(tile) {
+    tile.addEventListener('click', function() {
+      var fid = tile.getAttribute('data-roster-tile-id');
+      if (fid && typeof showFighterModal === 'function') showFighterModal(fid);
+    });
+  });
+}
+
+function closeWholeRosterModal() {
+  var modal = document.getElementById('wholeRosterModal');
+  if (modal) modal.remove();
+  document.removeEventListener('keydown', handleWholeRosterEscape);
+}
+
+function handleWholeRosterEscape(e) {
+  if (e.key === 'Escape') closeWholeRosterModal();
+}
+
+// One section column = weight class label + up to 2 fighter tiles below.
+// Pads to 2 slots with dashed empty placeholders so sections with one
+// (or zero) drafted fighters still read as balanced.
+function renderWholeRosterSection(label, fighters, opts) {
+  opts = opts || {};
+  var slotCount = 2;
+  var tilesHtml = fighters.map(function(f) { return renderWholeRosterTile(f, opts); }).join('');
+  for (var i = fighters.length; i < slotCount; i++) {
+    tilesHtml += '<div class="whole-team-tile-empty" aria-hidden="true"></div>';
+  }
+  return (
+    '<div class="whole-team-section">' +
+      '<p class="whole-team-section__label">' + escapeHtml(label) + '</p>' +
+      '<div class="whole-team-section__tiles">' + tilesHtml + '</div>' +
+    '</div>'
+  );
+}
+
+// One tile = photo + rank badge + name (and optional division for flex sections).
+function renderWholeRosterTile(fighter, opts) {
+  opts = opts || {};
+  var rankLabel = fighter.is_champion ? 'C' : (fighter.current_rank ? '#' + fighter.current_rank : 'NR');
+  // Strip the "Men's "/"Women's " prefix when the division does show — the
+  // section header already establishes that context.
+  var rawDiv  = DIVISION_LABELS[fighter.primary_division] || fighter.primary_division || '';
+  var divLabel = rawDiv.replace(/^Men's\s+/, '').replace(/^Women's\s+/, '');
+  var photoHtml = fighter.photo_url
+    ? '<img class="whole-team-tile__photo" src="' + escapeHtml(fighter.photo_url) + '" alt="" onerror="this.style.display=\'none\'">'
+    : '<div class="whole-team-tile__photo-placeholder"></div>';
+
+  var classes = 'whole-team-tile';
+  if (fighter.is_champion) classes += ' whole-team-tile--champion';
+
+  return (
+    '<button class="' + classes + '" data-roster-tile-id="' + fighter.id + '" type="button">' +
+      '<div class="whole-team-tile__photo-wrap">' +
+        photoHtml +
+        '<span class="whole-team-tile__rank">' + escapeHtml(rankLabel) + '</span>' +
+      '</div>' +
+      '<div class="whole-team-tile__info">' +
+        '<p class="whole-team-tile__name" title="' + escapeHtml(fighter.name) + '">' + escapeHtml(fighter.name) + '</p>' +
+        (opts.showDivision
+          ? '<p class="whole-team-tile__div">' + escapeHtml(divLabel) + '</p>'
+          : '') +
+      '</div>' +
+    '</button>'
+  );
+}
+
 // Returns the fighter objects for the current user's picks, in pick order
 function getMyPickFighters() {
   return picks
@@ -1272,11 +1511,24 @@ function getMyPickFighters() {
     .filter(Boolean);
 }
 
-// Renders filled/empty dot indicators for a given slot category
-function renderPips(filled, total) {
+// Renders dot indicators for a slot category. Each dot reflects the tier
+// of the fighter occupying that slot, or shows an empty/outline state if
+// the slot isn't filled:
+//   champion   → gold
+//   ranked     → crimson
+//   unranked   → muted gray fill
+//   empty slot → hollow outline
+// Lets you scan your roster and instantly see slot strength per division.
+function renderPips(fighters, total) {
   let html = '';
   for (let i = 0; i < total; i++) {
-    html += '<span class="pip ' + (i < filled ? 'pip-filled' : 'pip-empty') + '"></span>';
+    const f = fighters[i];
+    let cls = 'pip';
+    if (!f)                       cls += ' pip-empty';
+    else if (f.is_champion)       cls += ' pip-tier-champion';
+    else if (f.current_rank)      cls += ' pip-tier-ranked';
+    else                          cls += ' pip-tier-unranked';
+    html += '<span class="' + cls + '"></span>';
   }
   return html;
 }

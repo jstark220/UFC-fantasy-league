@@ -196,7 +196,21 @@ async function initSettings() {
       navigator.clipboard.writeText(league.invite_code).then(function() {
         document.getElementById('copyInviteBtn').textContent = 'Copied!';
         setTimeout(function() {
-          document.getElementById('copyInviteBtn').textContent = 'Copy';
+          document.getElementById('copyInviteBtn').textContent = 'Copy code';
+        }, 2000);
+      });
+    });
+
+    document.getElementById('copyInviteLinkBtn').addEventListener('click', function() {
+      // Build the shareable URL from current origin + directory so it
+      // works in both local dev (/public/) and prod (root).
+      const path = window.location.pathname;
+      const dir = path.substring(0, path.lastIndexOf('/'));
+      const link = window.location.origin + dir + '/join-league.html?code=' + encodeURIComponent(league.invite_code);
+      navigator.clipboard.writeText(link).then(function() {
+        document.getElementById('copyInviteLinkBtn').textContent = 'Copied!';
+        setTimeout(function() {
+          document.getElementById('copyInviteLinkBtn').textContent = 'Copy link';
         }, 2000);
       });
     });

@@ -5,6 +5,17 @@
 // ========================================================================
 
 // Grab references to the DOM elements we'll read from and update
+// Propagate ?next= onto the "Log in" cross-link so a deep-link visitor
+// who already has an account can switch to login without losing their
+// destination.
+(function preserveNextOnLoginLink() {
+  const next = new URLSearchParams(window.location.search).get('next');
+  if (!next || next.charAt(0) !== '/') return;
+  document.querySelectorAll('a[href="login.html"]').forEach(function(a) {
+    a.href = 'login.html?next=' + encodeURIComponent(next);
+  });
+})();
+
 const signupForm    = document.getElementById('signupForm');
 const emailInput    = document.getElementById('email');
 const passwordInput = document.getElementById('password');
@@ -73,8 +84,9 @@ signupForm.addEventListener('submit', async function(event) {
 
     if (error) throw error;
 
-    // Account created and session is live - go to dashboard
-    window.location.href = 'dashboard.html';
+    // Account created and session is live — go to the page the user was
+    // trying to reach (preserved by auth-guard via ?next=) or dashboard.
+    window.location.href = nextDestination();
 
   } catch (err) {
     // Common Supabase error: "User already registered"
@@ -85,18 +97,34 @@ signupForm.addEventListener('submit', async function(event) {
 });
 
 // ========================================================================
+// nextDestination — same pattern as login.js. Used after a successful
+// signup to return the user to whatever deep link they were trying to
+// reach (e.g., an invite URL), defaulting to the dashboard.
+// ========================================================================
+function nextDestination() {
+  const next = new URLSearchParams(window.location.search).get('next');
+  if (next && next.charAt(0) === '/') return next;
+  const path = window.location.pathname;
+  const dir = path.substring(0, path.lastIndexOf('/'));
+  return dir + '/dashboard.html';
+}
+
+// ========================================================================
 // GOOGLE SIGN-UP
 // Same call as login — signInWithOAuth upserts the user, so it works whether
 // the Google account is new to us or existing. The handle_new_user trigger
 // fires on first OAuth sign-in just like it does for password signups, so
 // the public.profiles row gets created automatically.
 // dashboardUrl() derives the post-auth URL from the current page so it
-// works whether dev serves from the project root or from public/.
+// works whether dev serves from the project root or from public/, and
+// propagates ?next= so deep links survive the OAuth round-trip.
 // ========================================================================
 function dashboardUrl() {
   const path = window.location.pathname;
   const dir = path.substring(0, path.lastIndexOf('/'));
-  return window.location.origin + dir + '/dashboard.html';
+  const next = new URLSearchParams(window.location.search).get('next');
+  const qs = (next && next.charAt(0) === '/') ? '?next=' + encodeURIComponent(next) : '';
+  return window.location.origin + dir + '/dashboard.html' + qs;
 }
 
 googleBtn.addEventListener('click', async function() {

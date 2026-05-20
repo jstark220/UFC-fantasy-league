@@ -14,6 +14,17 @@ let userRef     = null;
 let leagueIdRef = null;
 let myMemberId  = null;  // current user's league_members.id, needed for roster inserts
 
+// Builds the absolute shareable join URL for an invite code, derived from
+// the current page's directory so it works in both local dev (/public/…)
+// and production (root). Friends click this and land on join-league with
+// the code prefilled — or get bounced through login/signup and back if
+// they're not yet authenticated (auth-guard preserves ?next=).
+function buildInviteLink(code) {
+  const path = window.location.pathname;
+  const dir = path.substring(0, path.lastIndexOf('/'));
+  return window.location.origin + dir + '/join-league.html?code=' + encodeURIComponent(code);
+}
+
 const DIVISION_LABELS = {
   strawweight:       "Women's Strawweight",
   flyweight_w:       "Women's Flyweight",
@@ -163,7 +174,16 @@ async function initLeague() {
       navigator.clipboard.writeText(league.invite_code).then(function() {
         document.getElementById('copyInviteBtn').textContent = 'Copied!';
         setTimeout(function() {
-          document.getElementById('copyInviteBtn').textContent = 'Copy';
+          document.getElementById('copyInviteBtn').textContent = 'Copy code';
+        }, 2000);
+      });
+    });
+
+    document.getElementById('copyInviteLinkBtn').addEventListener('click', function() {
+      navigator.clipboard.writeText(buildInviteLink(league.invite_code)).then(function() {
+        document.getElementById('copyInviteLinkBtn').textContent = 'Copied!';
+        setTimeout(function() {
+          document.getElementById('copyInviteLinkBtn').textContent = 'Copy link';
         }, 2000);
       });
     });

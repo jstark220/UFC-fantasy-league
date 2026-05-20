@@ -42,6 +42,35 @@
   --tier-top5:     #C8C8C8; /* silver */
   --tier-top15:    #B87333; /* bronze */
 
+  /* -- Team accent palette (draft board, leaderboards) --
+     8 colors for the up-to-8 managers in a league. Assignment is
+     deterministic per league_member id (see draft.js teamColor()).
+     Saturated enough to read against the dark page but not eye-burning. */
+  --team-1: #C13B2E; /* crimson      */
+  --team-2: #D4A84B; /* gold         */
+  --team-3: #3F9C8B; /* teal         */
+  --team-4: #8E6BC4; /* purple       */
+  --team-5: #E07A5F; /* coral        */
+  --team-6: #4F9DCC; /* sky blue     */
+  --team-7: #A5B05A; /* olive        */
+  --team-8: #7A8A95; /* slate        */
+
+  /* -- Division accent palette (fighter pool, roster grouping) --
+     One color per weight class. Subtler than team colors since they
+     appear on many rows at once. Roughly hue-mapped to division weight
+     (lighter weights = cooler, heavier = warmer); women's are pink/violet. */
+  --div-strawweight:      #D14B82; /* magenta-pink (W) */
+  --div-flyweight-w:      #C77AAE; /* pink (W)         */
+  --div-bantamweight-w:   #A878C9; /* violet (W)       */
+  --div-flyweight:        #4F9DCC; /* sky blue         */
+  --div-bantamweight:     #3F9C8B; /* teal             */
+  --div-featherweight:    #4FB07A; /* green            */
+  --div-lightweight:      #A5B05A; /* lime             */
+  --div-welterweight:     #D4A84B; /* gold             */
+  --div-middleweight:     #E07A5F; /* coral            */
+  --div-light_heavyweight:#C5563E; /* burnt orange     */
+  --div-heavyweight:      #C13B2E; /* crimson          */
+
   /* -- Font families -- */
   --font-display: "Bebas Neue", "Archivo Black", system-ui, sans-serif; /* headers, fighter names */
   --font-body:    "Space Grotesk", "Inter", "SF Pro Text", system-ui, sans-serif; /* all body and UI text */

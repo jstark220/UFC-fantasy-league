@@ -29,7 +29,7 @@
       </div>
       <div class="top-nav__actions">
         <button class="btn-theme" onclick="toggleTheme()" aria-label="Toggle theme">☾</button>
-        <button class="btn-ghost" onclick="logOut()">Log out</button>
+        <button id="globalLogoutBtn" class="btn-ghost" onclick="logOut()">Log out</button>
       </div>
     </nav>
 
@@ -142,11 +142,12 @@
           </div>
           <div class="draft-panel__body draft-panel__body--queue" id="queueList"></div>
 
-          <div class="draft-panel__header">
+          <div class="draft-panel__header draft-panel__header--with-action">
             <p class="section-label">
               My Roster
               <span class="section-label__count">(<span id="myPickCount">0</span> / 20)</span>
             </p>
+            <button class="btn-ghost draft-view-all-btn" id="viewWholeRosterBtn">Whole roster &rarr;</button>
           </div>
           <div class="draft-panel__body" id="myRoster"></div>
 

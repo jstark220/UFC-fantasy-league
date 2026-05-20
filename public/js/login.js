@@ -4,6 +4,16 @@
 // Depends on supabaseClient defined in supabase-config.js.
 // ========================================================================
 
+// Propagate ?next= onto the "Sign up" cross-link so deep-link visitors
+// who choose to sign up instead of log in don't lose their destination.
+(function preserveNextOnSignupLink() {
+  const next = new URLSearchParams(window.location.search).get('next');
+  if (!next || next.charAt(0) !== '/') return;
+  document.querySelectorAll('a[href="signup.html"]').forEach(function(a) {
+    a.href = 'signup.html?next=' + encodeURIComponent(next);
+  });
+})();
+
 const loginForm     = document.getElementById('loginForm');
 const emailInput    = document.getElementById('email');
 const passwordInput = document.getElementById('password');
@@ -48,8 +58,9 @@ loginForm.addEventListener('submit', async function(event) {
 
     if (error) throw error;
 
-    // Credentials valid and session stored - go to dashboard
-    window.location.href = 'dashboard.html';
+    // Credentials valid and session stored — go to the page the user was
+    // trying to reach (set by auth-guard's redirect) or the dashboard.
+    window.location.href = nextDestination();
 
   } catch (err) {
     // Supabase returns "Invalid login credentials" for a wrong email or
@@ -60,6 +71,24 @@ loginForm.addEventListener('submit', async function(event) {
     submitBtn.textContent = 'Log In';
   }
 });
+
+// ========================================================================
+// nextDestination — where to send the user after a successful sign-in.
+// Reads ?next= (set by auth-guard when redirecting an unauthenticated
+// user away from a deep link) and falls back to dashboard.html. Only
+// returns paths within this origin to avoid open-redirect risk.
+// ========================================================================
+function nextDestination() {
+  const next = new URLSearchParams(window.location.search).get('next');
+  if (next && next.charAt(0) === '/') {
+    return next; // same-origin relative path — safe to navigate to
+  }
+  // Default: dashboard, derived from the current page's directory so it
+  // works under /public/ in dev and at root in prod.
+  const path = window.location.pathname;
+  const dir = path.substring(0, path.lastIndexOf('/'));
+  return dir + '/dashboard.html';
+}
 
 // ========================================================================
 // GOOGLE SIGN-IN
@@ -75,7 +104,12 @@ loginForm.addEventListener('submit', async function(event) {
 function dashboardUrl() {
   const path = window.location.pathname;
   const dir = path.substring(0, path.lastIndexOf('/'));
-  return window.location.origin + dir + '/dashboard.html';
+  // Propagate ?next= through the OAuth round-trip so deep links (invite
+  // links, etc.) survive the Google sign-in detour. dashboard.js reads
+  // the param on landing and forwards there.
+  const next = new URLSearchParams(window.location.search).get('next');
+  const qs = (next && next.charAt(0) === '/') ? '?next=' + encodeURIComponent(next) : '';
+  return window.location.origin + dir + '/dashboard.html' + qs;
 }
 
 googleBtn.addEventListener('click', async function() {

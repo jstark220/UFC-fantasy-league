@@ -11,8 +11,12 @@ async function requireAuth() {
   const { data } = await supabaseClient.auth.getSession();
 
   if (!data.session) {
-    // No active session - redirect to login before showing any page content
-    window.location.href = 'login.html';
+    // Preserve the intended destination so the login flow can return the
+    // user back here after auth. Used by invite links (/join-league.html?code=…)
+    // and any future deep links that hit the auth gate.
+    const intended = window.location.pathname + window.location.search;
+    const nextParam = '?next=' + encodeURIComponent(intended);
+    window.location.href = 'login.html' + nextParam;
     return null;
   }
 

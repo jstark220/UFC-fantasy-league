@@ -156,12 +156,28 @@ async function initCreateLeague() {
     }
   });
 
-  // Copy button
+  // Copy code button — copies just the 6-char code, handy for SMS where
+  // link previews don't render.
   document.getElementById('copyBtn').addEventListener('click', function() {
     navigator.clipboard.writeText(inviteCode).then(function() {
       const copyBtn = document.getElementById('copyBtn');
       copyBtn.textContent = 'Copied!';
-      setTimeout(function() { copyBtn.textContent = 'Copy'; }, 2000);
+      setTimeout(function() { copyBtn.textContent = 'Copy code'; }, 2000);
+    });
+  });
+
+  // Copy link button — copies the full sharable join URL. Friends who
+  // click it land on the join page with the code prefilled; the auth
+  // gate forwards them through login/signup and back via ?next= if
+  // they're not yet signed in.
+  document.getElementById('copyLinkBtn').addEventListener('click', function() {
+    const path = window.location.pathname;
+    const dir = path.substring(0, path.lastIndexOf('/'));
+    const link = window.location.origin + dir + '/join-league.html?code=' + encodeURIComponent(inviteCode);
+    navigator.clipboard.writeText(link).then(function() {
+      const btn = document.getElementById('copyLinkBtn');
+      btn.textContent = 'Copied!';
+      setTimeout(function() { btn.textContent = 'Copy link'; }, 2000);
     });
   });
 
