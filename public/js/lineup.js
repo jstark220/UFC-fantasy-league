@@ -267,14 +267,33 @@ function pickDefaultEvent(events) {
 
 // Returns the effective lock time for an event as a Date. Prefers the
 // commissioner-set lineup_lock_time when available; otherwise falls back
-// to a default of 22:00 UTC on event_date (~6pm ET in DST, ~5pm ET in
-// winter — a reasonable first-prelim approximation for UFC cards). This
-// lets the countdown render meaningfully on events the commissioner
-// hasn't explicitly configured yet.
+// to 5pm ET on the event date (first-prelim approximation for UFC cards).
+//
+// 5pm ET = 21:00 UTC in summer (EDT, UTC-4) or 22:00 UTC in winter (EST,
+// UTC-5). We use Intl.DateTimeFormat to detect the correct offset for the
+// specific event date so DST transitions are handled correctly.
 function getEffectiveLockTime(event) {
   if (!event || !event.event_date) return null;
   if (event.lineup_lock_time) return new Date(event.lineup_lock_time);
-  return new Date(event.event_date + 'T22:00:00Z');
+
+  const parts = event.event_date.split('-').map(Number);
+  const y = parts[0], m = parts[1], d = parts[2];
+  // Tentative midday UTC on event_date — used only to detect EDT vs EST
+  const tentative = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+  let offsetHours = -5;  // default to EST if Intl is unavailable
+  try {
+    const fmt = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      timeZoneName: 'short',
+    });
+    const tzPart = fmt.formatToParts(tentative).find(function(p) { return p.type === 'timeZoneName'; });
+    if (tzPart && tzPart.value === 'EDT') offsetHours = -4;
+  } catch (e) {
+    // Older runtimes without Intl support — stick with EST default
+  }
+  // 5pm ET = (17 - offsetHours) hours UTC. For EDT (-4) that's 21:00 UTC,
+  // for EST (-5) that's 22:00 UTC.
+  return new Date(Date.UTC(y, m - 1, d, 17 - offsetHours, 0, 0));
 }
 
 // Decide whether lineup edits should be blocked. True when the lock_time
