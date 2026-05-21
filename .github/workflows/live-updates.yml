@@ -62,9 +62,13 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
-      # Re-derive champions in case a title fight finished
-      - name: Recalculate champions
-        run: node recalculateChampions.js
+      # Re-derive interim/BMF holders from fresh fight results.
+      # Divisional champions come from UFC.com via the weekly applyRankings
+      # job; we don't touch those here to avoid overwriting them with a
+      # potentially-stale fight-history view (e.g. Aspinall promoted to
+      # undisputed when Jones retired — fight history can't see that).
+      - name: Recalculate interim/BMF holders
+        run: node recalculateChampions.js --interim-only
         continue-on-error: true
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

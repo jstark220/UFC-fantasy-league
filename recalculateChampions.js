@@ -1,25 +1,24 @@
 // ============================================================================
 // recalculateChampions.js
-// Determines the current UFC champion of each division by replaying actual
-// title fight results in chronological order. The fight result IS the source
-// of truth — whoever won the most recent valid title fight in a division is
-// the champion of that division.
-//
-// Why this exists:
-//   The Octagon API rankings (used by applyRankings.js) can lag months behind
-//   reality on title changes. Our own fight_results table is more authoritative
-//   because we scrape it from ufcstats.com (which posts results within minutes
-//   of an event ending). This script uses that data to set is_champion flags
-//   correctly regardless of what the rankings API says.
+// Determines the current UFC champion (and interim/BMF holders) of each
+// division by replaying actual title fight results in chronological order.
 //
 // Run modes:
-//   node recalculateChampions.js --dry-run   show changes without applying
-//   node recalculateChampions.js              apply changes to the DB
+//   node recalculateChampions.js                  apply ALL champion updates
+//   node recalculateChampions.js --interim-only   apply ONLY interim/BMF
+//                                                 (leaves is_champion alone —
+//                                                 UFC.com handles those)
+//   node recalculateChampions.js --dry-run         show changes without applying
 //
-// Filters false-positive title fights:
-//   - Both fighters must have primary_division matching the inferred division
-//   - Winner must be in our fighters table
-//   - Skips fights with no winner (e.g. NC, future events not yet completed)
+// Why two modes:
+//   UFC.com/rankings is the authoritative source for divisional champions
+//   (set by applyRankings.js). But UFC.com doesn't list interim/BMF holders
+//   separately. So in normal operation we want UFC.com to win for divisional
+//   champs, but fight history to win for interim/BMF. The --interim-only
+//   flag enforces this split, used by both the weekly and live workflows.
+//
+//   Full mode (no flag) is kept for one-off data fixes and the special case
+//   where you trust fight history over UFC.com for everything.
 // ============================================================================
 
 require('dotenv').config();
@@ -35,7 +34,8 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-const DRY_RUN = process.argv.includes('--dry-run');
+const DRY_RUN       = process.argv.includes('--dry-run');
+const INTERIM_ONLY  = process.argv.includes('--interim-only');
 
 // All UFC main divisions. Catch-weight bouts, openweight, and Road to UFC
 // tournament finals are NOT in this list — their winners do not become UFC champs.
@@ -49,7 +49,10 @@ const DIVISIONS = [
 // MAIN
 // ============================================================================
 async function main() {
-  console.log(DRY_RUN ? 'DRY RUN — no DB writes\n' : 'LIVE RUN — will update is_champion flags\n');
+  const modeLabel = DRY_RUN     ? 'DRY RUN — no DB writes'
+                  : INTERIM_ONLY ? 'INTERIM-ONLY — will update is_sub_champion only'
+                  :                'FULL — will update is_champion and is_sub_champion';
+  console.log(modeLabel + '\n');
 
   // Load all fighters for division lookup
   console.log('Loading fighters...');
@@ -214,36 +217,40 @@ async function main() {
   console.log('\nApplying updates...');
   let written = 0;
 
-  // First, demote everyone who shouldn't be champion. Also re-rank them as
-  // #1 in their division — the Octagon API typically omits a fighter from
-  // contender rankings while they're listed as champion in the API, so when
-  // we demote them they end up with current_rank=null. Slot them at #1
-  // since they're the deposed champion / top contender for the rematch.
-  for (const id of clears) {
-    const fighter = fightersById[id];
-    const update = { is_champion: false };
-    if (fighter && fighter.current_rank == null) {
-      update.current_rank = 1;
+  if (!INTERIM_ONLY) {
+    // First, demote everyone who shouldn't be champion. Also re-rank them as
+    // #1 in their division — the Octagon API typically omits a fighter from
+    // contender rankings while they're listed as champion in the API, so when
+    // we demote them they end up with current_rank=null. Slot them at #1
+    // since they're the deposed champion / top contender for the rematch.
+    for (const id of clears) {
+      const fighter = fightersById[id];
+      const update = { is_champion: false };
+      if (fighter && fighter.current_rank == null) {
+        update.current_rank = 1;
+      }
+      const { error } = await supabase
+        .from('fighters')
+        .update(update)
+        .eq('id', id);
+      if (error) console.warn(`  Error demoting ${id}: ${error.message}`);
+      else written++;
     }
-    const { error } = await supabase
-      .from('fighters')
-      .update(update)
-      .eq('id', id);
-    if (error) console.warn(`  Error demoting ${id}: ${error.message}`);
-    else written++;
-  }
 
-  // Then promote the new champs
-  for (const { id } of updates) {
-    const { error } = await supabase
-      .from('fighters')
-      .update({
-        is_champion:    true,
-        current_rank:   null,    // champions have no numeric rank
-      })
-      .eq('id', id);
-    if (error) console.warn(`  Error promoting ${id}: ${error.message}`);
-    else written++;
+    // Then promote the new champs
+    for (const { id } of updates) {
+      const { error } = await supabase
+        .from('fighters')
+        .update({
+          is_champion:    true,
+          current_rank:   null,    // champions have no numeric rank
+        })
+        .eq('id', id);
+      if (error) console.warn(`  Error promoting ${id}: ${error.message}`);
+      else written++;
+    }
+  } else {
+    console.log('  (--interim-only: skipping divisional champion updates)');
   }
 
   // Clear is_sub_champion (interim/BMF) for anyone whose interim title
@@ -264,8 +271,16 @@ async function main() {
       else { written++; console.log(`  Cleared interim/BMF for ${f.name}`); }
     }
   }
-  // Set current interim holders
+  // Set current interim holders. Skip if the fighter is currently the
+  // divisional champion (per UFC.com) — they can't be both, and UFC.com wins
+  // in that case (e.g., interim holder gets promoted to undisputed when the
+  // divisional champ retires without a fight, like Aspinall).
   for (const [division, id] of Object.entries(newInterim)) {
+    const f = fightersById[id];
+    if (f && f.is_champion) {
+      console.log(`  Skipping interim for ${f.name} (already divisional champion)`);
+      continue;
+    }
     const { error } = await supabase
       .from('fighters')
       .update({ is_sub_champion: true, sub_title_type: 'interim' })
@@ -274,6 +289,11 @@ async function main() {
     else written++;
   }
   for (const [division, id] of Object.entries(newBmf)) {
+    const f = fightersById[id];
+    if (f && f.is_champion) {
+      console.log(`  Skipping BMF for ${f.name} (already divisional champion)`);
+      continue;
+    }
     const { error } = await supabase
       .from('fighters')
       .update({ is_sub_champion: true, sub_title_type: 'bmf' })

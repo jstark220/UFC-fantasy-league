@@ -107,7 +107,19 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
-      # ---- Step 8: Fetch headshot photos for any new fighters ----
+      # ---- Step 8: Detect interim and BMF title holders ----
+      # UFC.com's rankings page only lists divisional champions, not interim
+      # or BMF holders. Replay our own title-fight history to figure out who
+      # currently holds each. --interim-only mode leaves is_champion alone so
+      # the divisional-champ data UFC.com just set isn't overwritten.
+      - name: Detect interim and BMF holders
+        run: node recalculateChampions.js --interim-only
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      # ---- Step 9: Fetch headshot photos for any new fighters ----
       - name: Fetch fighter photos
         run: node scrapePhotos.js
         continue-on-error: true
