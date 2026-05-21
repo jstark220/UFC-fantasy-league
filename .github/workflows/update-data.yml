@@ -84,7 +84,29 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
-      # ---- Step 6: Fetch headshot photos for any new fighters ----
+      # ---- Step 6: Merge any duplicate fighters created by ingestion ----
+      # ingestFightResults.js auto-creates fighters with "ufcstats-" prefix
+      # when it can't match a name. Periodically these accumulate alongside
+      # canonical Octagon API entries and need merging back together.
+      - name: Merge duplicate fighter records
+        run: node mergeDuplicateFighters.js
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      # ---- Step 7: Recalculate champions from actual fight history ----
+      # The Octagon API rankings can lag months behind on title changes; this
+      # script uses our own fight_results data (scraped from ufcstats.com
+      # which posts within minutes of each event) as the source of truth.
+      - name: Recalculate champions from fight history
+        run: node recalculateChampions.js
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      # ---- Step 8: Fetch headshot photos for any new fighters ----
       - name: Fetch fighter photos
         run: node scrapePhotos.js
         continue-on-error: true

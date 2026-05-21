@@ -78,7 +78,7 @@ async function buildFighterLookup() {
   while (true) {
     const { data, error } = await supabaseClient
       .from('fighters')
-      .select('id, name, ufcstats_name, current_rank')
+      .select('id, name, ufcstats_name, current_rank, ufc_id, is_active')
       .range(from, from + PAGE - 1);
     if (error) throw new Error('Failed to load fighters: ' + error.message);
     all.push(...data);
@@ -91,7 +91,20 @@ async function buildFighterLookup() {
   // Map normalized name -> { id, dbName, rank } (fallback + rank lookup)
   const byNormName = new Map();
 
-  for (const f of all) {
+  // Sort so canonical entries are processed LAST and win the Map.set() race.
+  // Canonical = Octagon API entry (ufc_id without "ufcstats-" prefix).
+  // This prevents the lookup from returning a "ufcstats-" duplicate when a
+  // canonical version of the same fighter exists.
+  const sorted = all.slice().sort((a, b) => {
+    const aIsDupe = a.ufc_id && a.ufc_id.startsWith('ufcstats-') ? 1 : 0;
+    const bIsDupe = b.ufc_id && b.ufc_id.startsWith('ufcstats-') ? 1 : 0;
+    // Process dupes first (they go in the map first, then canonicals overwrite)
+    if (aIsDupe !== bIsDupe) return bIsDupe - aIsDupe;
+    // Among same-canonical-status, active fighters win over inactive
+    return (a.is_active ? 1 : 0) - (b.is_active ? 1 : 0);
+  });
+
+  for (const f of sorted) {
     if (f.ufcstats_name) {
       byUfcstatsName.set(f.ufcstats_name, f.id);
     }
