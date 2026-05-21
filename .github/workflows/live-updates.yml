@@ -1,0 +1,71 @@
+# ============================================================================
+# live-updates.yml
+# Runs every 5 minutes during typical UFC event windows to pick up fight
+# results as they're posted to ufcstats.com.
+#
+# UFC events run Saturday nights US time:
+#   ~7pm ET prelims start, ~10pm ET main card, ~1am ET event ends
+#   = roughly 23:00 UTC Saturday through 07:00 UTC Sunday
+# We schedule a 5-min cron across that window. Outside of event windows the
+# job doesn't fire, so this costs ~25 min × 5 = ~2 hours of Actions time
+# per event night (well within the 2,000 min/month free tier).
+#
+# What it does each run:
+#   1. ingestFightResults.js --recent — scrapes ufcstats for results in the
+#      last 3 days. ufcstats posts results within minutes of fights ending,
+#      so this picks up new results within ~5 minutes of each fight.
+#   2. recalculateChampions.js — re-derives champions from the updated
+#      fight history. If a title fight just finished, the new champion is
+#      reflected in the app immediately.
+#
+# This delivers "between-fight live scoring": fantasy scores update within
+# minutes of each fight ending, even though the actual fight is in progress.
+# True in-fight (round-by-round) live data would require a paid API and is
+# not implemented here.
+# ============================================================================
+
+name: Live UFC Update
+
+on:
+  schedule:
+    # Saturday evenings 23:00 UTC through 23:55 UTC
+    - cron: '*/5 23 * * 6'
+    # Sunday early morning 00:00 UTC through 07:55 UTC (continuation of Saturday event)
+    - cron: '*/5 0-7 * * 0'
+  # Allow manual trigger any time (e.g. for mid-week Fight Night cards)
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    name: Refresh fight results + champions
+    runs-on: ubuntu-latest
+    timeout-minutes: 10  # Each run should finish in under 5 min; 10 is a safety cap
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Scrape ufcstats for recent fight results
+      - name: Ingest recent fight results
+        run: node ingestFightResults.js --recent
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      # Re-derive champions in case a title fight finished
+      - name: Recalculate champions
+        run: node recalculateChampions.js
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

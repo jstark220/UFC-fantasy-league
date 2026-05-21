@@ -651,13 +651,17 @@ async function persistNameUpdates(pendingNameUpdates) {
 // MAIN
 // ============================================================================
 async function main() {
-  const args = process.argv.slice(2);
-  const runAll = args[0] === '--all';
-  const singleId = !runAll ? args[0] : null;
+  const args     = process.argv.slice(2);
+  const runAll   = args[0] === '--all';
+  // --recent: scrape only events from the last 3 days (used by the live-update
+  // workflow that runs every 5 minutes during UFC event windows).
+  const runRecent = args[0] === '--recent';
+  const singleId  = (!runAll && !runRecent) ? args[0] : null;
 
-  if (!runAll && !singleId) {
+  if (!runAll && !runRecent && !singleId) {
     console.error('Usage: node ingestFightResults.js <event-hex-id>');
     console.error('       node ingestFightResults.js --all');
+    console.error('       node ingestFightResults.js --recent  (last 3 days)');
     process.exit(1);
   }
 
@@ -682,17 +686,21 @@ async function main() {
     await processEvent(data, lookup, pendingNameUpdates);
 
   } else {
-    // All events since 2023-01-01 that have a ufcstats_id
+    // Build event date window. --all = 2023+ ; --recent = last 3 days.
+    const since = runRecent
+      ? new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+      : '2023-01-01';
+
     const { data: events, error } = await supabaseClient
       .from('ufc_events')
       .select('id, name, full_name, ufcstats_id, event_date')
       .not('ufcstats_id', 'is', null)
-      .gte('event_date', '2023-01-01')
+      .gte('event_date', since)
       .order('event_date', { ascending: true });
 
     if (error) throw new Error('Failed to load events: ' + error.message);
 
-    console.log(`Found ${events.length} events from 2023+ to process`);
+    console.log(`Found ${events.length} events since ${since} to process`);
 
     for (const ev of events) {
       await processEvent(ev, lookup, pendingNameUpdates);
