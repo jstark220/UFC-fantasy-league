@@ -265,6 +265,18 @@ function pickDefaultEvent(events) {
   return events[0]; // most recent past event
 }
 
+// Returns the effective lock time for an event as a Date. Prefers the
+// commissioner-set lineup_lock_time when available; otherwise falls back
+// to a default of 22:00 UTC on event_date (~6pm ET in DST, ~5pm ET in
+// winter — a reasonable first-prelim approximation for UFC cards). This
+// lets the countdown render meaningfully on events the commissioner
+// hasn't explicitly configured yet.
+function getEffectiveLockTime(event) {
+  if (!event || !event.event_date) return null;
+  if (event.lineup_lock_time) return new Date(event.lineup_lock_time);
+  return new Date(event.event_date + 'T22:00:00Z');
+}
+
 // Decide whether lineup edits should be blocked. True when the lock_time
 // has passed OR the event is in the past (which is always read-only).
 function recomputeLockStatus() {
@@ -273,8 +285,11 @@ function recomputeLockStatus() {
   if (!selectedEvent) {
     isLocked = false;
   } else {
-    const lockTimePassed = !!(selectedEvent.lineup_lock_time &&
-                              new Date() >= new Date(selectedEvent.lineup_lock_time));
+    // Effective lock time falls back to event_date + 22:00 UTC if commissioner
+    // hasn't set lineup_lock_time. This keeps the countdown / lock state
+    // sensible for events that haven't been explicitly configured.
+    const effectiveLock = getEffectiveLockTime(selectedEvent);
+    const lockTimePassed = !!(effectiveLock && new Date() >= effectiveLock);
     isLocked = isPastEvent || lockTimePassed;
   }
   applyLockStateClasses();
@@ -417,7 +432,10 @@ function renderEventBanner() {
   // countdown to event start (lineup_lock_time = first prelim).
   var rightHtml;
   var anyEventScores = Object.keys(selectedEventScores).length > 0;
-  var hasFutureLock  = selectedEvent && selectedEvent.lineup_lock_time && !isLocked && !isPastEvent;
+  // Use the effective lock time (with sensible default) so the countdown
+  // shows even when the commissioner hasn't explicitly set lineup_lock_time.
+  var effectiveLock  = getEffectiveLockTime(selectedEvent);
+  var hasFutureLock  = !!(effectiveLock && !isLocked && !isPastEvent);
 
   if (anyEventScores) {
     var totalScored = 0;
@@ -546,7 +564,7 @@ function clearLockCountdown() {
 
 function startLockCountdown() {
   clearLockCountdown();
-  if (isLocked || isPastEvent || !selectedEvent || !selectedEvent.lineup_lock_time) return;
+  if (isLocked || isPastEvent || !selectedEvent) return;
 
   const daysEl  = document.getElementById('cdDays');
   const hoursEl = document.getElementById('cdHours');
@@ -554,7 +572,9 @@ function startLockCountdown() {
   const secsEl  = document.getElementById('cdSecs');
   if (!daysEl || !hoursEl || !minsEl || !secsEl) return;
 
-  const lockMs = new Date(selectedEvent.lineup_lock_time).getTime();
+  const effectiveLock = getEffectiveLockTime(selectedEvent);
+  if (!effectiveLock) return;
+  const lockMs = effectiveLock.getTime();
   if (isNaN(lockMs)) return;
 
   function pad(n) { return n < 10 ? '0' + n : '' + n; }
