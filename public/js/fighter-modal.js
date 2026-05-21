@@ -70,7 +70,7 @@ async function showFighterModal(fighterId) {
   var fetchPromises = [
     supabaseClient
       .from('fighters')
-      .select('id, name, nickname, primary_division, current_rank, is_champion, is_sub_champion, sub_title_type, record_wins, record_losses, record_draws, photo_url, country, age, date_of_birth')
+      .select('id, name, nickname, primary_division, current_rank, is_champion, is_sub_champion, sub_title_type, record_wins, record_losses, record_draws, photo_url, country, age')
       .eq('id', fighterId)
       .single(),
 
@@ -358,10 +358,16 @@ function buildFighterModalHtml(fighter, fights, fighterId, opponentMap, tradeCtx
         '<div class="fighter-modal__hero-info">' +
           (fighter.nickname ? '<p class="fighter-modal__nickname">"' + _mEsc(fighter.nickname) + '"</p>' : '') +
           '<h2 class="fighter-modal__name">' + _mEsc(fighter.name) + '</h2>' +
-          (fighter.country ? '<p class="fighter-modal__country">' + _mEsc(fighter.country) + '</p>' : '') +
           (function() {
-            var age = _modalAgeFromDob(fighter.date_of_birth);
-            return '<p class="fighter-modal__country">Age ' + (age != null ? age : '[age]') + '</p>';
+            // Country (with flag) and age on a single line. Each piece is
+            // optional — falls through when missing instead of showing
+            // placeholders.
+            var flag    = (typeof countryFlag === 'function') ? countryFlag(fighter.country) : '';
+            var country = fighter.country ? (flag ? flag + ' ' : '') + _mEsc(fighter.country) : '';
+            var ageStr  = fighter.age != null ? 'Age ' + fighter.age : '';
+            if (!country && !ageStr) return '';
+            var sep = (country && ageStr) ? ' · ' : '';
+            return '<p class="fighter-modal__country">' + country + sep + ageStr + '</p>';
           })() +
           // CTAs — multiple may show at once.
           //
@@ -462,14 +468,3 @@ function _modalFormatDate(dateStr) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-// Whole-year age from a YYYY-MM-DD birth date. Returns null if missing/unparseable.
-function _modalAgeFromDob(dob) {
-  if (!dob) return null;
-  var birth = new Date(dob);
-  if (isNaN(birth.getTime())) return null;
-  var today = new Date();
-  var age   = today.getFullYear() - birth.getFullYear();
-  var m = today.getMonth() - birth.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
-  return age;
-}
