@@ -549,6 +549,16 @@ async function processEvent(dbEvent, lookup, pendingNameUpdates) {
       else if (normWinner === normalizeName(nameB)) winnerId = fighterBId;
     }
 
+    // No-contest detection: if the method looked decisive (KO/TKO/sub/dec/DQ)
+    // but ufcstats couldn't surface a winner, the fight was almost certainly
+    // ruled a no-contest after the fact (e.g., Aspinall vs Gane at UFC 321 —
+    // accidental eye poke that ufcstats still records as "KO/TKO"). Override
+    // the outcome so scoring and display treat it correctly.
+    const DECISIVE_OUTCOMES = ['ko_tko', 'submission', 'decision_u', 'decision_s', 'decision_m', 'dq'];
+    if (DECISIVE_OUTCOMES.includes(outcome) && winnerId == null) {
+      outcome = 'no_contest';
+    }
+
     // Title type: belt.png confirms it's a title fight. The fight title text
     // (now in detail.weightClassRaw, which strips "Title Bout") lets us
     // distinguish interim and BMF from a divisional title.

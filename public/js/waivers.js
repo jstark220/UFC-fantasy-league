@@ -762,8 +762,15 @@ function buildFighterPointsMap(fightResults, scoringConfig) {
   var oneYearAgo = new Date();
   oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
 
-  // Pass 1: collect raw fight scores per fighter
+  // Pass 1: collect raw fight scores per fighter.
+  // No-contests are intentionally skipped — neither fighter "competed" in a
+  // meaningful sense (eye pokes, illegal strikes, accidental DQs), so they
+  // shouldn't drag down or inflate either fighter's fantasy value average.
+  // The scoring engine still computes points if asked (point structure is
+  // unchanged); we just don't include those fights in the FV aggregation.
   fightResults.forEach(function(fight) {
+    if (fight.outcome === 'no_contest') return;
+
     var eventDate = fight.event && fight.event.event_date
       ? new Date(fight.event.event_date + 'T12:00:00') : null;
     var isRecent = eventDate && eventDate >= oneYearAgo;
