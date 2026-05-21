@@ -4742,6 +4742,14 @@ body {
   gap: var(--space-2);
 }
 
+/* Used on the waivers page to show the fighter's next booked bout. Less
+   prominent than the gold matchup line — this is informational, not a
+   "you must look at this" signal like a rolling-waiver clearing time. */
+.lineup-roster-row__matchup.waiver-next-fight {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
 .lineup-roster-row__matchup-badge {
   font-size: 9px;
   font-weight: 700;

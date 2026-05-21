@@ -27,6 +27,8 @@ var allFighters       = [];
 var availableFighters = [];
 var ownedByMap        = {}; // fighter_id -> team_name for rostered fighters
 var fighterPointsMap  = {}; // fighter_id -> { totalPts, recentPts, avgPts, fightCount }
+var fighterNextFight  = {}; // fighter_id -> next-fight info from NextFight.loadNextFights
+var upcomingEvents    = []; // list of upcoming UFC events used to populate the event filter
 var myRoster          = [];
 var myClaims          = [];
 var pendingAllClaims  = [];
@@ -121,6 +123,26 @@ async function initWaivers() {
   // and skews the per-fighter point averages).
   var allFightResults = await fetchAllFightResults();
   fighterPointsMap = buildFighterPointsMap(allFightResults, league.scoring_config);
+
+  // Load next-fight info for every active fighter so each row can show
+  // their next booked fight, and the new event filter dropdown can group
+  // fighters by the event they're fighting at.
+  var allFighterIds = allFighters.map(function(f) { return f.id; });
+  if (typeof NextFight !== 'undefined') {
+    fighterNextFight = await NextFight.loadNextFights(allFighterIds);
+  }
+
+  // Distinct upcoming events derived from the next-fight map. Sorted
+  // soonest-first so the picker reads naturally.
+  var seenEventIds = new Set();
+  upcomingEvents = [];
+  Object.values(fighterNextFight).forEach(function(nf) {
+    if (!nf || !nf.event_id) return;
+    if (seenEventIds.has(nf.event_id)) return;
+    seenEventIds.add(nf.event_id);
+    upcomingEvents.push({ id: nf.event_id, name: nf.event_name, date: nf.event_date });
+  });
+  upcomingEvents.sort(function(a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
 
   var allRosters = rostersRes.data || [];
   var ownedIds   = new Set(allRosters.map(function(r) { return r.fighter_id; }));
@@ -1071,6 +1093,21 @@ function wireUpSearch() {
   document.getElementById('statusFilter').addEventListener('change', renderAvailableFighters);
   document.getElementById('sortBy').addEventListener('change', renderAvailableFighters);
   document.getElementById('showAllToggle').addEventListener('change', renderAvailableFighters);
+
+  // Populate the event filter from the upcomingEvents list we collected
+  // during init, then wire it up just like the other filters.
+  var eventSel = document.getElementById('eventFilter');
+  if (eventSel) {
+    upcomingEvents.forEach(function(ev) {
+      var opt = document.createElement('option');
+      opt.value = ev.id;
+      var d = new Date(ev.date + 'T12:00:00');
+      var dStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      opt.textContent = ev.name + ' (' + dStr + ')';
+      eventSel.appendChild(opt);
+    });
+    eventSel.addEventListener('change', renderAvailableFighters);
+  }
 }
 
 // ========================================================================
@@ -1082,6 +1119,8 @@ function renderAvailableFighters() {
   var status     = document.getElementById('statusFilter').value;
   var sortBy     = document.getElementById('sortBy').value;
   var showAll    = document.getElementById('showAllToggle').checked;
+  var eventSelEl = document.getElementById('eventFilter');
+  var eventId    = eventSelEl ? eventSelEl.value : 'all';
 
   // When showAll is on, search the full fighter list; otherwise only free agents.
   var sourceList = showAll ? allFighters : availableFighters;
@@ -1103,7 +1142,15 @@ function renderAvailableFighters() {
       matchesStatus = !f.is_champion && !f.current_rank;
     }
 
-    return matchesName && matchesDiv && matchesStatus;
+    // Event filter — only show fighters whose next booked fight is at this
+    // specific event. Fighters with no next fight at all are excluded.
+    var matchesEvent = true;
+    if (eventId && eventId !== 'all') {
+      var nf = fighterNextFight[f.id];
+      matchesEvent = !!(nf && nf.event_id === eventId);
+    }
+
+    return matchesName && matchesDiv && matchesStatus && matchesEvent;
   });
 
   // Sort a copy so the original array order is preserved for future renders.
@@ -1210,6 +1257,18 @@ function renderAvailableFighters() {
           'On waivers — clears ' + escapeHtml(formatEtDateTime(addMode.closesAt)) +
         '</span>';
     }
+
+    // Next-fight note: small line showing this fighter's next booked bout.
+    // Only rendered when the data is available (NextFight helper loaded
+    // and the fighter has an upcoming fight).
+    var nextFightNote = '';
+    var nf = fighterNextFight[f.id];
+    if (nf && typeof NextFight !== 'undefined') {
+      nextFightNote =
+        '<span class="lineup-roster-row__matchup waiver-next-fight">' +
+          'Fights ' + escapeHtml(NextFight.formatShort(nf)) +
+        '</span>';
+    }
     var photoHtml = f.photo_url
       ? '<img class="lineup-roster-row__photo" src="' + escapeHtml(f.photo_url) + '" alt="' + escapeHtml(f.name) + '" onerror="this.style.display=\'none\'">'
       : '';
@@ -1240,6 +1299,7 @@ function renderAvailableFighters() {
         '<div class="lineup-roster-row__info">' +
           '<button class="lineup-roster-row__name" data-open-fighter="' + f.id + '">' + escapeHtml(f.name) + '</button>' +
           '<span class="lineup-roster-row__division">' + escapeHtml(divLine) + '</span>' +
+          nextFightNote +
           rollingNote +
         '</div>' +
         '<span class="lineup-roster-row__record">' + statHtml + '</span>' +

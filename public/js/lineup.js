@@ -149,6 +149,11 @@ let leagueScoringConfig = null;
 // fought at the event, regardless of whether they were a starter.
 let selectedEventComputedScores = {};
 
+// fighter_id -> next-fight info (any future event the fighter is booked on).
+// Used to show "Fights May 30 vs Pereira" beneath the roster row's
+// division line when the fighter is NOT on the currently-selected event.
+let rosterNextFightMap = {};
+
 // Interval id for the live-update refresh. Fires every 60s while an event
 // is happening today, re-fetching fight results so newly-finished fights
 // surface without the user refreshing.
@@ -243,6 +248,15 @@ async function initLineup() {
       acquired_at:   r.acquired_at   || null
     });
   });
+
+  // Load each rostered fighter's next booked fight so the roster row can
+  // show "Fights May 30 vs Pereira" for fighters NOT on the currently-
+  // selected event (when they're on the current event, the existing matchup
+  // line takes precedence).
+  if (typeof NextFight !== 'undefined') {
+    var rosterIdsForNF = myRoster.map(function(f) { return f.id; });
+    rosterNextFightMap = await NextFight.loadNextFights(rosterIdsForNF);
+  }
 
   // Load the per-event data (starters + scores) for the default event.
   await loadEventData();
@@ -1290,6 +1304,18 @@ function renderRosterRow(fighter, ctx, slotType) {
     rightStat = '<span class="lineup-roster-row__record">' + record + '</span>';
   }
 
+  // Next-fight line: shown only when the fighter is NOT on the currently-
+  // selected event (where the matchup line above already covers them) but
+  // DOES have a future booked fight. Lets the manager see at a glance who's
+  // about to fight at a different event from the one they're viewing.
+  let nextFightLine = '';
+  if (!fightInfo && rosterNextFightMap[fighter.id] && typeof NextFight !== 'undefined') {
+    nextFightLine =
+      '<span class="lineup-roster-row__matchup waiver-next-fight">' +
+        'Fights ' + escapeHtml(NextFight.formatShort(rosterNextFightMap[fighter.id])) +
+      '</span>';
+  }
+
   return (
     '<div class="lineup-roster-row' + rowClass + '" id="roster-row-' + fighter.id + '">' +
       '<div class="lineup-roster-row__photo-wrap">' + photoHtml + '</div>' +
@@ -1302,6 +1328,7 @@ function renderRosterRow(fighter, ctx, slotType) {
               (fightInfo.badge ? ' <span class="lineup-roster-row__matchup-badge">' + escapeHtml(fightInfo.badge) + '</span>' : '') +
             '</span>'
           : '') +
+        nextFightLine +
         '<span class="lineup-roster-row__division">' + escapeHtml(divLine) + '</span>' +
       '</div>' +
       rightStat +

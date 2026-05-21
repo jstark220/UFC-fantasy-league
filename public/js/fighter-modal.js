@@ -369,6 +369,25 @@ function buildFighterModalHtml(fighter, fights, fighterId, opponentMap, tradeCtx
             var sep = (country && ageStr) ? ' · ' : '';
             return '<p class="fighter-modal__country">' + country + sep + ageStr + '</p>';
           })() +
+          (function() {
+            // Next-fight line — derived from the fights list we already have
+            // (no extra query). Earliest fight where outcome is null and the
+            // event date is today or later.
+            var todayISO = new Date().toISOString().split('T')[0];
+            var upcoming = fights
+              .filter(function(f) { return !f.outcome && f.event && f.event.event_date && f.event.event_date >= todayISO; })
+              .sort(function(a, b) { return a.event.event_date < b.event.event_date ? -1 : 1; });
+            if (upcoming.length === 0) return '';
+            var nf = upcoming[0];
+            var oppId = nf.fighter_a_id === fighterId ? nf.fighter_b_id : nf.fighter_a_id;
+            var oppName = opponentMap[oppId] || 'TBD';
+            var d = new Date(nf.event.event_date + 'T12:00:00');
+            var dStr = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+            return '<p class="fighter-modal__next-fight">' +
+                     '<span class="fighter-modal__next-fight-label">Next fight</span> ' +
+                     _mEsc(dStr) + ' · ' + _mEsc(nf.event.name) + ' · vs ' + _mEsc(oppName) +
+                   '</p>';
+          })() +
           // CTAs — multiple may show at once.
           //
           //   Draft (during active draft, only on the draft page where
