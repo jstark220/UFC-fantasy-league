@@ -387,12 +387,15 @@ async function scrapeFightDetail(fightUrl) {
   }
 
   // ---- Title fight detection ----
-  // Weight class is in .b-fight-details__fight-title. Title fight detection is
-  // now done on the event page (belt.png) and passed in via the stub object —
-  // the fight detail page shows perf/fight icons too which broke the old img check.
+  // Weight class is in .b-fight-details__fight-title. The fight detail page
+  // also gives us a secondary title-fight signal: if the title text contains
+  // "title bout" or "championship", treat it as a title fight even if the
+  // event-list belt.png icon was missing (ufcstats sometimes forgets to flag
+  // BMF fights with the belt icon — Holloway vs Gaethje at UFC 300 was one).
   const $title = $('.b-fight-details__fight-title');
   const titleText = $title.text().trim().replace(/\s+/g, ' ');
   const weightClassRaw = titleText.replace(/title bout/i, '').replace(/\s+/g, ' ').trim();
+  const isTitleFromText = /title bout|championship/i.test(titleText);
 
   // ---- Stats from totals table ----
   // ufcstats uses ONE tbody row per fight (not one per fighter).
@@ -444,6 +447,7 @@ async function scrapeFightDetail(fightUrl) {
     round,
     endTimeSecs,
     weightClassRaw,
+    isTitleFromText,
   };
 }
 
@@ -559,12 +563,15 @@ async function processEvent(dbEvent, lookup, pendingNameUpdates) {
       outcome = 'no_contest';
     }
 
-    // Title type: belt.png confirms it's a title fight. The fight title text
-    // (now in detail.weightClassRaw, which strips "Title Bout") lets us
-    // distinguish interim and BMF from a divisional title.
+    // Title type: a fight is a title fight if EITHER the belt.png icon was
+    // present on the event-list page OR the fight detail page's title text
+    // says "Title Bout" / "Championship". The latter catches BMF fights that
+    // ufcstats forgot to flag with the belt icon (e.g. Holloway vs Gaethje
+    // at UFC 300, Oliveira vs Holloway at UFC 326).
+    //
     // is_title_defense cannot be detected from ufcstats — commissioner sets it.
     let title_type = 'none';
-    if (stub.isTitleFight) {
+    if (stub.isTitleFight || detail.isTitleFromText) {
       const rawLower = detail.weightClassRaw.toLowerCase();
       if (rawLower.includes('bmf') || rawLower.includes('baddest mother')) {
         title_type = 'bmf';

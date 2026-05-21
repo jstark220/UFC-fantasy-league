@@ -72,12 +72,18 @@ async function main() {
 
   // Load all title fights from fight_results, OLDEST first so we can
   // replay championship state chronologically.
-  // Restrict to main event / co-main positions only — Road to UFC tournament
-  // finals get incorrectly flagged as title fights by the belt.png icon
-  // detection, but they always appear as regular main-card fights, not as
-  // the headliner. Real UFC divisional title fights are always main or co-main.
+  //
+  // We load ALL card positions here, then filter divisional fights to
+  // main_event/co_main only — Road to UFC tournament finals get incorrectly
+  // flagged as divisional title fights by the belt.png icon detection, but
+  // they always appear as main-card or prelim fights, not as the headliner.
+  //
+  // BMF and interim title fights are kept regardless of card position. They're
+  // rare enough that we trust the title_type detection, AND legitimate ones
+  // sometimes appear lower on the card (e.g. Holloway vs Gaethje BMF at
+  // UFC 300 was the 3rd fight from the top, not the main event).
   console.log('\nLoading title fights...');
-  const { data: titleFights, error: tfError } = await supabase
+  const { data: rawTitleFights, error: tfError } = await supabase
     .from('fight_results')
     .select(`
       title_type,
@@ -91,8 +97,15 @@ async function main() {
     `)
     .neq('title_type', 'none')
     .not('winner_id', 'is', null)
-    .in('card_position', ['main_event', 'co_main'])
     .order('event(event_date)', { ascending: true });
+
+  // Filter divisional title fights to main_event/co_main only.
+  const titleFights = (rawTitleFights || []).filter(f => {
+    if (f.title_type === 'divisional') {
+      return f.card_position === 'main_event' || f.card_position === 'co_main';
+    }
+    return true;  // BMF / interim allowed at any position
+  });
 
   if (tfError) { console.error('DB error:', tfError.message); process.exit(1); }
   console.log(`  Loaded ${titleFights.length} completed title fights.`);
