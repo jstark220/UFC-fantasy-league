@@ -1,0 +1,48 @@
+# ============================================================================
+# rankings-refresh.yml
+# Runs applyRankings.js hourly on Tuesdays (US time) to pick up UFC.com's
+# weekly rankings update whenever it lands. UFC typically pushes new
+# rankings sometime Tuesday morning/afternoon ET, but the exact time varies.
+#
+# Cron schedule covers Tuesday 9am ET through Wednesday 1am ET:
+#   - 14:00–23:00 UTC Tuesday (9am–6pm ET)
+#   - 00:00–05:00 UTC Wednesday (8pm Tue–1am Wed ET)
+# That's ~15 hourly checks per Tuesday, costing ~15 minutes/week of Actions
+# time. Each run is independent — no harm in running too often.
+#
+# This is separate from the full weekly pipeline (update-data.yml) so we
+# don't waste 25 minutes of CI on a re-ingest just to refresh rankings.
+# ============================================================================
+
+name: UFC.com Rankings Refresh
+
+on:
+  schedule:
+    - cron: '0 14-23 * * 2'    # Tuesday 14:00–23:00 UTC (9am–6pm ET)
+    - cron: '0 0-5 * * 3'      # Wednesday 00:00–05:00 UTC (8pm Tue–1am Wed ET)
+  workflow_dispatch:            # Allow manual trigger any time
+
+jobs:
+  refresh:
+    name: Refresh UFC.com rankings
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply UFC.com rankings
+        run: node applyRankings.js
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
