@@ -140,6 +140,15 @@ let rosterRowIds    = {};       // fighter_id -> rosters table row id (needed to
 //     badge, outcome, winnerId, titleType, isFotN }
 let selectedEventFightCard = [];
 
+// League scoring config (JSONB from leagues.scoring_config). Used to compute
+// per-fighter event scores via Scoring.computeFighterScore.
+let leagueScoringConfig = null;
+
+// fighter_id -> computed event score for the selected event (from
+// fight_results, using the scoring engine). Populated for any fighter who
+// fought at the event, regardless of whether they were a starter.
+let selectedEventComputedScores = {};
+
 // ========================================================================
 // INIT
 // ========================================================================
@@ -153,7 +162,7 @@ async function initLineup() {
   document.getElementById('leagueLink').href = 'league.html?id=' + leagueId;
 
   const [leagueRes, membersRes, eventRes] = await Promise.all([
-    supabaseClient.from('leagues').select('id, name, commissioner_id, draft_started').eq('id', leagueId).single(),
+    supabaseClient.from('leagues').select('id, name, commissioner_id, draft_started, scoring_config').eq('id', leagueId).single(),
     supabaseClient.from('league_members').select('id, user_id, team_name, is_commissioner').eq('league_id', leagueId),
     // Fetch every event so the user can pick any of them (past or future).
     // Newest first so the dropdown shows the most relevant cards near the top.
@@ -168,6 +177,7 @@ async function initLineup() {
   }
 
   const league  = leagueRes.data;
+  leagueScoringConfig = league.scoring_config || null;
   const members = membersRes.data || [];
   const myMember = members.find(function(m) { return m.user_id === user.id; });
   if (!myMember) { window.location.href = 'dashboard.html'; return; }
@@ -334,6 +344,7 @@ async function loadEventData() {
   selectionSlots  = {};
   selectedEventScores = {};
   selectedEventFightCard = [];
+  selectedEventComputedScores = {};
 
   if (!selectedEvent) return;
 
@@ -351,7 +362,15 @@ async function loadEventData() {
       .eq('event_id', selectedEvent.id),
     supabaseClient
       .from('fight_results')
-      .select('id, fighter_a_id, fighter_b_id, weight_class, card_position, fight_order, title_type, outcome, winner_id, fight_of_the_night')
+      .select(`
+        id, fighter_a_id, fighter_b_id, weight_class, card_position, fight_order,
+        title_type, is_title_defense, outcome, winner_id, fight_of_the_night,
+        end_round, end_time_seconds,
+        fighter_a_sig_strikes, fighter_a_takedowns, fighter_a_knockdowns,
+        fighter_a_control_seconds, fighter_a_opponent_rank, fighter_a_potn,
+        fighter_b_sig_strikes, fighter_b_takedowns, fighter_b_knockdowns,
+        fighter_b_control_seconds, fighter_b_opponent_rank, fighter_b_potn
+      `)
       .eq('event_id', selectedEvent.id),
   ]);
 
@@ -436,6 +455,23 @@ async function loadEventData() {
     const orderB = CARD_POSITION_ORDER[b.cardPosition] != null ? CARD_POSITION_ORDER[b.cardPosition] : 99;
     return orderA - orderB;
   });
+
+  // Compute per-fighter event scores from fight_results using the shared
+  // scoring engine. Includes BOTH starters and non-starters, so the roster
+  // row can show 'hindsight value' — what each fighter actually scored
+  // whether or not the manager started them.
+  selectedEventComputedScores = {};
+  if (typeof Scoring !== 'undefined' && Scoring.computeFighterScore) {
+    rawFights.forEach(function(fight) {
+      if (!fight.outcome || fight.outcome === 'no_contest') return;
+      [true, false].forEach(function(isA) {
+        var fid = isA ? fight.fighter_a_id : fight.fighter_b_id;
+        if (!fid) return;
+        var score = Scoring.computeFighterScore(fight, isA, leagueScoringConfig);
+        selectedEventComputedScores[fid] = score.total;
+      });
+    });
+  }
 }
 
 // Switch to a different event from the picker. Re-loads per-event state
@@ -1168,6 +1204,35 @@ function renderRosterRow(fighter, ctx, slotType) {
     ? '<button class="lineup-drop-btn" data-drop-id="' + fighter.id + '" title="Drop from roster">Drop</button>'
     : '';
 
+  // Right-side stat block. For events with any scores, show the fighter's
+  // event score (computed from fight_results); otherwise fall back to the
+  // career W-L record. Fighters on the card who haven't fought yet show "—".
+  const hasAnyScores = Object.keys(selectedEventComputedScores).length > 0;
+  let rightStat;
+  if (hasAnyScores) {
+    const computed = selectedEventComputedScores[fighter.id];
+    if (computed != null) {
+      const ptsStr = (Math.round(computed * 100) / 100).toFixed(2);
+      const ptsClass = isStarted ? 'lineup-roster-row__pts lineup-roster-row__pts--started'
+                                 : 'lineup-roster-row__pts';
+      rightStat = '<span class="' + ptsClass + '">' +
+                    '<span class="lineup-roster-row__pts-val">' + ptsStr + '</span>' +
+                    '<span class="lineup-roster-row__pts-label">PTS</span>' +
+                  '</span>';
+    } else if (fightInfo) {
+      // On the card but no score yet — fight upcoming / in progress
+      rightStat = '<span class="lineup-roster-row__pts lineup-roster-row__pts--pending">' +
+                    '<span class="lineup-roster-row__pts-val">—</span>' +
+                    '<span class="lineup-roster-row__pts-label">PTS</span>' +
+                  '</span>';
+    } else {
+      // Not on the card for this event
+      rightStat = '<span class="lineup-roster-row__record">' + record + '</span>';
+    }
+  } else {
+    rightStat = '<span class="lineup-roster-row__record">' + record + '</span>';
+  }
+
   return (
     '<div class="lineup-roster-row' + rowClass + '" id="roster-row-' + fighter.id + '">' +
       '<div class="lineup-roster-row__photo-wrap">' + photoHtml + '</div>' +
@@ -1182,7 +1247,7 @@ function renderRosterRow(fighter, ctx, slotType) {
           : '') +
         '<span class="lineup-roster-row__division">' + escapeHtml(divLine) + '</span>' +
       '</div>' +
-      '<span class="lineup-roster-row__record">' + record + '</span>' +
+      rightStat +
       btnHtml +
       flexBtn +
       unflexBtn +

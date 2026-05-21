@@ -4828,6 +4828,41 @@ body {
   text-align: right;
 }
 
+/* Event-score display that replaces the W-L record when scores exist for
+   the selected event. Numeric value above a small PTS label, styled in
+   the same neighborhood as the starter-card score block. */
+.lineup-roster-row__pts {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex-shrink: 0;
+  min-width: 64px;
+  line-height: 1;
+}
+.lineup-roster-row__pts-val {
+  font-size: var(--text-body);
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.lineup-roster-row__pts-label {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+/* Starter scores get a subtle highlight so the manager can see at a glance
+   which scores came from their actual lineup. */
+.lineup-roster-row__pts--started .lineup-roster-row__pts-val {
+  color: var(--accent-crimson);
+}
+/* Pending: on the card but fight hasn't completed (or scoring not run) */
+.lineup-roster-row__pts--pending .lineup-roster-row__pts-val {
+  color: var(--text-tertiary);
+}
+
 .lineup-row-btn {
   flex-shrink: 0;
   padding: 5px 14px;
