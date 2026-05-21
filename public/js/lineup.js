@@ -413,20 +413,35 @@ function renderEventBanner() {
   // Right-side counter — once any scores exist for the event (past final,
   // or live-scored mid-event, or commissioner-tested pre-event), show the
   // running points total. Otherwise show the lock-time hint + slots set.
-  // When a future lock_time is known, the hint becomes a live countdown
-  // updated every second by startLockCountdown() below.
-  var rightSubText;
+  // When a future lock_time is known, show a prominent day/hour/min/sec
+  // countdown to event start (lineup_lock_time = first prelim).
+  var rightHtml;
   var anyEventScores = Object.keys(selectedEventScores).length > 0;
+  var hasFutureLock  = selectedEvent && selectedEvent.lineup_lock_time && !isLocked && !isPastEvent;
+
   if (anyEventScores) {
     var totalScored = 0;
-    // Sum every starter's saved points for this event (only includes
-    // fighters in selections, since selectedEventScores is keyed by them).
     Object.keys(selectedEventScores).forEach(function(id) { totalScored += selectedEventScores[id] || 0; });
-    rightSubText = started + '/3 started &middot; ' + (Math.round(totalScored * 100) / 100).toFixed(2) + ' pts';
-  } else if (selectedEvent && selectedEvent.lineup_lock_time && !isLocked && !isPastEvent) {
-    rightSubText = 'Locks in <span class="lock-countdown" id="lockCountdownValue">--:--:--</span> &middot; ' + started + '/3 set';
+    rightHtml = '<p class="this-week-card__deadline">' +
+                  started + '/3 started &middot; ' + (Math.round(totalScored * 100) / 100).toFixed(2) + ' pts' +
+                '</p>';
+  } else if (hasFutureLock) {
+    // Prominent countdown — populated by startLockCountdown(). The four
+    // numeric cells are updated every second; the eyebrow + sub line stay
+    // static so we don't rebuild HTML in the tick handler.
+    rightHtml =
+      '<div class="event-countdown" id="eventCountdown">' +
+        '<p class="event-countdown__eyebrow">Event starts in</p>' +
+        '<div class="event-countdown__time">' +
+          '<span class="event-countdown__cell"><span class="event-countdown__num" id="cdDays">--</span><span class="event-countdown__unit">d</span></span>' +
+          '<span class="event-countdown__cell"><span class="event-countdown__num" id="cdHours">--</span><span class="event-countdown__unit">h</span></span>' +
+          '<span class="event-countdown__cell"><span class="event-countdown__num" id="cdMins">--</span><span class="event-countdown__unit">m</span></span>' +
+          '<span class="event-countdown__cell"><span class="event-countdown__num" id="cdSecs">--</span><span class="event-countdown__unit">s</span></span>' +
+        '</div>' +
+        '<p class="event-countdown__hint">' + started + '/3 set</p>' +
+      '</div>';
   } else {
-    rightSubText = 'Locks at first prelim &middot; ' + started + '/3 set';
+    rightHtml = '<p class="this-week-card__deadline">Locks at first prelim &middot; ' + started + '/3 set</p>';
   }
 
   var eventName = 'TBD';
@@ -497,7 +512,7 @@ function renderEventBanner() {
       '</div>' +
       '<div class="this-week-card__right">' +
         '<p class="lineup-lock-status">' + statusLabel + '</p>' +
-        '<p class="this-week-card__deadline">' + rightSubText + '</p>' +
+        rightHtml +
       '</div>' +
     '</div>';
 
@@ -533,10 +548,16 @@ function startLockCountdown() {
   clearLockCountdown();
   if (isLocked || isPastEvent || !selectedEvent || !selectedEvent.lineup_lock_time) return;
 
-  const valueEl = document.getElementById('lockCountdownValue');
-  if (!valueEl) return;
+  const daysEl  = document.getElementById('cdDays');
+  const hoursEl = document.getElementById('cdHours');
+  const minsEl  = document.getElementById('cdMins');
+  const secsEl  = document.getElementById('cdSecs');
+  if (!daysEl || !hoursEl || !minsEl || !secsEl) return;
+
   const lockMs = new Date(selectedEvent.lineup_lock_time).getTime();
   if (isNaN(lockMs)) return;
+
+  function pad(n) { return n < 10 ? '0' + n : '' + n; }
 
   function tick() {
     const remaining = lockMs - Date.now();
@@ -550,23 +571,15 @@ function startLockCountdown() {
       renderRosterList();
       return;
     }
-    valueEl.textContent = formatCountdown(remaining);
+    const totalSec = Math.floor(remaining / 1000);
+    daysEl.textContent  = Math.floor(totalSec / 86400);
+    hoursEl.textContent = pad(Math.floor((totalSec % 86400) / 3600));
+    minsEl.textContent  = pad(Math.floor((totalSec % 3600) / 60));
+    secsEl.textContent  = pad(totalSec % 60);
   }
 
-  tick(); // paint immediately so the user never sees the "--:--:--" placeholder
+  tick(); // paint immediately so the user never sees the "--" placeholder
   lockCountdownTimer = setInterval(tick, 1000);
-}
-
-// Format a millisecond duration as "Xd HH:MM:SS" (days only when > 0).
-function formatCountdown(ms) {
-  const totalSec = Math.floor(ms / 1000);
-  const days  = Math.floor(totalSec / 86400);
-  const hours = Math.floor((totalSec % 86400) / 3600);
-  const mins  = Math.floor((totalSec % 3600) / 60);
-  const secs  = totalSec % 60;
-  function pad(n) { return n < 10 ? '0' + n : '' + n; }
-  const time = pad(hours) + ':' + pad(mins) + ':' + pad(secs);
-  return days > 0 ? days + 'd ' + time : time;
 }
 
 // ========================================================================

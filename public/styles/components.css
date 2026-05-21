@@ -1659,6 +1659,61 @@ body {
   text-align: center;
 }
 
+/* Prominent event countdown shown in the lineup banner right side. Updates
+   every second via lineup.js startLockCountdown. */
+.event-countdown {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+}
+.event-countdown__eyebrow {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0;
+}
+.event-countdown__time {
+  display: flex;
+  gap: var(--space-3);
+  align-items: baseline;
+}
+.event-countdown__cell {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+}
+.event-countdown__num {
+  font-family: var(--font-display, var(--font-body));
+  font-size: 2.4rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  min-width: 1ch;
+}
+.event-countdown__unit {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+}
+.event-countdown__hint {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0;
+}
+
+@media (max-width: 56em) {
+  .event-countdown__num { font-size: 1.8rem; }
+  .event-countdown__time { gap: var(--space-2); }
+}
+
 /* ========================================================================
    LIVE ROW: TOP PERFORMERS + FREE AGENTS
    Two equal-width panels side by side. Stacks vertically on small screens.
