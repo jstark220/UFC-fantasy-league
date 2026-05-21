@@ -365,8 +365,9 @@ async function loadEventData() {
     selectedEventScores[row.fighter_id] = row.total_points;
   });
 
-  // Resolve fighter names for the fight card. Some fighters on the card may
-  // not be on this user's roster, so we need a separate fighters query.
+  // Resolve fighter names, photos, and ranks for the fight card. Some
+  // fighters on the card may not be on this user's roster, so we need a
+  // separate fighters query.
   const rawFights = fightCardRes.data || [];
   const fighterIds = new Set();
   rawFights.forEach(function(f) {
@@ -374,32 +375,48 @@ async function loadEventData() {
     if (f.fighter_b_id) fighterIds.add(f.fighter_b_id);
   });
   const idArr = Array.from(fighterIds);
-  let fighterNameMap = {};
+  let fighterMap = {};
   if (idArr.length > 0) {
     const fighterRes = await supabaseClient
       .from('fighters')
-      .select('id, name')
+      .select('id, name, photo_url, current_rank, is_champion, is_sub_champion, sub_title_type')
       .in('id', idArr);
-    (fighterRes.data || []).forEach(function(f) { fighterNameMap[f.id] = f.name; });
+    (fighterRes.data || []).forEach(function(f) { fighterMap[f.id] = f; });
   }
 
-  // Build the structured card. Main event first, then co-main, then the rest
-  // (we don't currently distinguish prelims from main-card past co-main —
-  // ufcstats's index is lost when we map to the card_position enum).
-  selectedEventFightCard = rawFights.map(function(f) {
+  function fighterInfo(id) {
+    const f = fighterMap[id];
+    if (!f) return { name: '?' };
     return {
       id:           f.id,
+      name:         f.name,
+      photoUrl:     f.photo_url || null,
+      currentRank:  f.current_rank,
+      isChampion:   !!f.is_champion,
+      isSubChamp:   !!f.is_sub_champion,
+      subTitleType: f.sub_title_type,
+    };
+  }
+
+  // Build the structured card. Main event first, then co-main, then the rest.
+  selectedEventFightCard = rawFights.map(function(f) {
+    const red  = fighterInfo(f.fighter_a_id);
+    const blue = fighterInfo(f.fighter_b_id);
+    return {
+      id:           f.id,
+      red:          red,
+      blue:         blue,
+      // Legacy flat fields kept for buildFightCardLookup compatibility
       redId:        f.fighter_a_id,
       blueId:       f.fighter_b_id,
-      redCorner:    fighterNameMap[f.fighter_a_id] || '?',
-      blueCorner:   fighterNameMap[f.fighter_b_id] || '?',
+      redCorner:    red.name,
+      blueCorner:   blue.name,
       weightClass:  DIVISION_LABELS[f.weight_class] || f.weight_class || '',
       cardPosition: f.card_position,
       titleType:    f.title_type,
       outcome:      f.outcome,
       winnerId:     f.winner_id,
       isFotN:       !!f.fight_of_the_night,
-      // Compact badge for display: main event / co-main / title fight indicator
       badge:        f.card_position === 'main_event' ? 'Main Event'
                   : f.card_position === 'co_main'    ? 'Co-Main'
                   : f.title_type && f.title_type !== 'none' ? 'Title Fight'
@@ -1631,22 +1648,57 @@ function showFightCardModal() {
     return f.cardPosition !== 'main_event' && f.cardPosition !== 'co_main';
   });
 
+  // Subline for each fighter: champion / interim / BMF / rank (whichever
+  // applies) — kept compact so the row stays on one line on most screens.
+  function rankSubline(f) {
+    if (!f) return '';
+    if (f.isChampion) return '<span class="fight-row__rank fight-row__rank--champ">Champion</span>';
+    if (f.isSubChamp && f.subTitleType === 'interim') return '<span class="fight-row__rank fight-row__rank--interim">Interim Champion</span>';
+    if (f.isSubChamp && f.subTitleType === 'bmf')     return '<span class="fight-row__rank fight-row__rank--bmf">BMF Champion</span>';
+    if (f.currentRank) return '<span class="fight-row__rank">#' + f.currentRank + '</span>';
+    return '<span class="fight-row__rank fight-row__rank--unranked">Unranked</span>';
+  }
+
+  function ownershipPill(fighterId) {
+    if (starterIds[fighterId]) return '<span class="fight-row__pill fight-row__pill--starter">STARTER</span>';
+    if (rosterIds[fighterId])  return '<span class="fight-row__pill fight-row__pill--yours">YOURS</span>';
+    return '';
+  }
+
+  function fighterSide(fighter, sideMod, isWinner) {
+    if (!fighter || !fighter.id) {
+      return '<div class="fight-row__side ' + sideMod + '"><span class="fight-row__name">TBD</span></div>';
+    }
+    const photoHtml = fighter.photoUrl
+      ? '<img class="fight-row__photo" src="' + escapeHtml(fighter.photoUrl) + '" alt="' + escapeHtml(fighter.name) + '" onerror="this.style.display=\'none\'">'
+      : '<div class="fight-row__photo fight-row__photo--placeholder"></div>';
+    const winnerMark = isWinner ? '<span class="fight-row__winner-mark" title="Winner">✓</span>' : '';
+    return (
+      '<button class="fight-row__side ' + sideMod + '" data-open-fighter="' + fighter.id + '" type="button">' +
+        photoHtml +
+        '<div class="fight-row__text">' +
+          '<span class="fight-row__name">' + winnerMark + escapeHtml(fighter.name) + '</span>' +
+          '<span class="fight-row__sub">' + rankSubline(fighter) + ownershipPill(fighter.id) + '</span>' +
+        '</div>' +
+      '</button>'
+    );
+  }
+
   function fightRowHtml(fight) {
     var badgeHtml = fight.badge
       ? '<span class="fight-row__badge">' + escapeHtml(fight.badge) + '</span>'
       : '';
-    // Mark the winner (past events) with a small indicator
-    var redResult  = fight.outcome && fight.winnerId === fight.redId  ? ' fight-row__fighter--winner' : '';
-    var blueResult = fight.outcome && fight.winnerId === fight.blueId ? ' fight-row__fighter--winner' : '';
+    var redIsWinner  = fight.outcome && fight.winnerId === fight.redId;
+    var blueIsWinner = fight.outcome && fight.winnerId === fight.blueId;
     return (
       '<div class="fight-row">' +
-        '<span class="' + cornerClass(fight.redId,  'fight-row__fighter--red')  + redResult  + '">' + escapeHtml(fight.redCorner)  + '</span>' +
+        fighterSide(fight.red,  'fight-row__side--red',  redIsWinner) +
         '<div class="fight-row__center">' +
           badgeHtml +
           '<span class="fight-row__weight">' + escapeHtml(fight.weightClass) + '</span>' +
           '<span class="fight-row__vs">vs</span>' +
         '</div>' +
-        '<span class="' + cornerClass(fight.blueId, 'fight-row__fighter--blue') + blueResult + '">' + escapeHtml(fight.blueCorner) + '</span>' +
+        fighterSide(fight.blue, 'fight-row__side--blue', blueIsWinner) +
       '</div>'
     );
   }
@@ -1690,6 +1742,17 @@ function showFightCardModal() {
 
   // Close on button click
   document.getElementById('closeFightCardBtn').addEventListener('click', closeFightCardModal);
+
+  // Wire each fighter side to open the fighter modal. We don't close the
+  // fight card modal — the fighter modal opens on top, and dismissing it
+  // returns the user to the same fight card view.
+  modal.querySelectorAll('[data-open-fighter]').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      var fid = btn.getAttribute('data-open-fighter');
+      if (fid && typeof showFighterModal === 'function') showFighterModal(fid);
+    });
+  });
 
   // Close on overlay click (but not on the modal itself)
   modal.addEventListener('click', function(e) {
