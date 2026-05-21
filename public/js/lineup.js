@@ -36,37 +36,8 @@ const DIVISION_LABELS = {
 
 const MAX_STARTERS = 3;
 
-// ---- Placeholder fight card (replace with real ufc_events / fight_results query) ----
-// TODO: fetch fights from the fights/fight_card table once seeded.
-const PLACEHOLDER_FIGHTS = [
-  {
-    section: 'Main Card',
-    fights: [
-      { redCorner: 'Islam Makhachev',     blueCorner: 'Arman Tsarukyan',      weightClass: 'Lightweight',        badge: 'Main Event' },
-      { redCorner: 'Alex Pereira',        blueCorner: 'Jiří Procházka',       weightClass: 'Light Heavyweight',  badge: 'Co-Main'    },
-      { redCorner: 'Shavkat Rakhmonov',   blueCorner: 'Ian Machado Garry',    weightClass: 'Welterweight'                            },
-      { redCorner: 'Robert Whittaker',    blueCorner: 'Ikram Aliskerov',      weightClass: 'Middleweight'                            },
-      { redCorner: 'Justin Gaethje',      blueCorner: 'Dan Hooker',           weightClass: 'Lightweight'                             }
-    ]
-  },
-  {
-    section: 'Prelims',
-    fights: [
-      { redCorner: 'Paddy Pimblett',      blueCorner: 'Michael Chandler',     weightClass: 'Lightweight'   },
-      { redCorner: 'Caio Borralho',       blueCorner: 'Brendan Allen',        weightClass: 'Middleweight'  },
-      { redCorner: 'Chris Curtis',        blueCorner: 'Jack Della Maddalena', weightClass: 'Welterweight'  },
-      { redCorner: 'Tabatha Ricci',       blueCorner: 'Angela Hill',          weightClass: "Women's Strawweight" }
-    ]
-  },
-  {
-    section: 'Early Prelims',
-    fights: [
-      { redCorner: 'Erin Blanchfield',    blueCorner: 'Natalia Silva',        weightClass: "Women's Flyweight" },
-      { redCorner: 'Joshua Van',          blueCorner: 'Raoni Barcelos',       weightClass: 'Bantamweight'      },
-      { redCorner: 'Cody Durden',         blueCorner: 'Felipe dos Santos',    weightClass: 'Flyweight'         }
-    ]
-  }
-];
+// Card-position ordering used to sort fights from headliner down.
+const CARD_POSITION_ORDER = { main_event: 0, co_main: 1, main_card: 2 };
 
 // ---- Placeholder roster (replace with real DB fetch when ready) ----
 // TODO: replace this array with the rosters table query from the existing
@@ -162,6 +133,12 @@ let selections    = new Set();  // fighter IDs currently started
 let selectionRowIds = {};       // fighter_id -> starter_selections DB row id
 let selectionSlots  = {};       // fighter_id -> slot_position (1, 2, or 3)
 let rosterRowIds    = {};       // fighter_id -> rosters table row id (needed to delete)
+
+// Fight card for the currently selected event. Populated by loadEventData()
+// from fight_results table. Each entry:
+//   { id, redId, blueId, redCorner, blueCorner, weightClass, cardPosition,
+//     badge, outcome, winnerId, titleType, isFotN }
+let selectedEventFightCard = [];
 
 // ========================================================================
 // INIT
@@ -314,18 +291,19 @@ function applyLockStateClasses() {
 }
 
 // Load everything that's tied to the selected event: the starter_selections
-// for this member at that event, plus any scores that have been saved. Used
-// by init and by the event-change handler.
+// for this member at that event, plus any scores that have been saved, plus
+// the fight card. Used by init and by the event-change handler.
 async function loadEventData() {
   // Reset per-event state
   selections.clear();
   selectionRowIds = {};
   selectionSlots  = {};
   selectedEventScores = {};
+  selectedEventFightCard = [];
 
   if (!selectedEvent) return;
 
-  const [selectionsRes, scoresRes] = await Promise.all([
+  const [selectionsRes, scoresRes, fightCardRes] = await Promise.all([
     supabaseClient
       .from('starter_selections')
       .select('id, fighter_id, slot_position')
@@ -336,7 +314,11 @@ async function loadEventData() {
       .from('scores')
       .select('fighter_id, total_points')
       .eq('league_member_id', myMemberId)
-      .eq('event_id', selectedEvent.id)
+      .eq('event_id', selectedEvent.id),
+    supabaseClient
+      .from('fight_results')
+      .select('id, fighter_a_id, fighter_b_id, weight_class, card_position, title_type, outcome, winner_id, fight_of_the_night')
+      .eq('event_id', selectedEvent.id),
   ]);
 
   (selectionsRes.data || []).forEach(function(s) {
@@ -347,6 +329,52 @@ async function loadEventData() {
 
   (scoresRes.data || []).forEach(function(row) {
     selectedEventScores[row.fighter_id] = row.total_points;
+  });
+
+  // Resolve fighter names for the fight card. Some fighters on the card may
+  // not be on this user's roster, so we need a separate fighters query.
+  const rawFights = fightCardRes.data || [];
+  const fighterIds = new Set();
+  rawFights.forEach(function(f) {
+    if (f.fighter_a_id) fighterIds.add(f.fighter_a_id);
+    if (f.fighter_b_id) fighterIds.add(f.fighter_b_id);
+  });
+  const idArr = Array.from(fighterIds);
+  let fighterNameMap = {};
+  if (idArr.length > 0) {
+    const fighterRes = await supabaseClient
+      .from('fighters')
+      .select('id, name')
+      .in('id', idArr);
+    (fighterRes.data || []).forEach(function(f) { fighterNameMap[f.id] = f.name; });
+  }
+
+  // Build the structured card. Main event first, then co-main, then the rest
+  // (we don't currently distinguish prelims from main-card past co-main —
+  // ufcstats's index is lost when we map to the card_position enum).
+  selectedEventFightCard = rawFights.map(function(f) {
+    return {
+      id:           f.id,
+      redId:        f.fighter_a_id,
+      blueId:       f.fighter_b_id,
+      redCorner:    fighterNameMap[f.fighter_a_id] || '?',
+      blueCorner:   fighterNameMap[f.fighter_b_id] || '?',
+      weightClass:  DIVISION_LABELS[f.weight_class] || f.weight_class || '',
+      cardPosition: f.card_position,
+      titleType:    f.title_type,
+      outcome:      f.outcome,
+      winnerId:     f.winner_id,
+      isFotN:       !!f.fight_of_the_night,
+      // Compact badge for display: main event / co-main / title fight indicator
+      badge:        f.card_position === 'main_event' ? 'Main Event'
+                  : f.card_position === 'co_main'    ? 'Co-Main'
+                  : f.title_type && f.title_type !== 'none' ? 'Title Fight'
+                  : null,
+    };
+  }).sort(function(a, b) {
+    const orderA = CARD_POSITION_ORDER[a.cardPosition] != null ? CARD_POSITION_ORDER[a.cardPosition] : 99;
+    const orderB = CARD_POSITION_ORDER[b.cardPosition] != null ? CARD_POSITION_ORDER[b.cardPosition] : 99;
+    return orderA - orderB;
   });
 }
 
@@ -673,16 +701,32 @@ function buildEmptySlot(slotNum) {
 
 // ========================================================================
 // FIGHT CARD LOOKUP
-// Builds a map of lowercase fighter name -> matchup info from the fight card
-// data so roster rows can be highlighted and annotated when a fighter is booked.
+// Builds a map of fighter_id -> matchup info from selectedEventFightCard so
+// roster rows can be highlighted and annotated when a fighter is on the card
+// of the currently-selected event. Falls back to lowercase-name keys for any
+// legacy callers that still match by name.
 // ========================================================================
 function buildFightCardLookup() {
   var lookup = {};
-  PLACEHOLDER_FIGHTS.forEach(function(section) {
-    section.fights.forEach(function(fight) {
-      lookup[fight.redCorner.toLowerCase()]  = { opponent: fight.blueCorner,  weightClass: fight.weightClass, badge: fight.badge || null };
-      lookup[fight.blueCorner.toLowerCase()] = { opponent: fight.redCorner,   weightClass: fight.weightClass, badge: fight.badge || null };
-    });
+  selectedEventFightCard.forEach(function(fight) {
+    if (fight.redId) {
+      lookup[fight.redId] = {
+        opponent: fight.blueCorner, opponentId: fight.blueId,
+        weightClass: fight.weightClass, badge: fight.badge,
+        outcome: fight.outcome, winnerId: fight.winnerId,
+      };
+    }
+    if (fight.blueId) {
+      lookup[fight.blueId] = {
+        opponent: fight.redCorner, opponentId: fight.redId,
+        weightClass: fight.weightClass, badge: fight.badge,
+        outcome: fight.outcome, winnerId: fight.winnerId,
+      };
+    }
+    // Keep name-keyed entries for any consumers (and as a fallback for
+    // edge cases where the roster fighter id doesn't match the card id).
+    if (fight.redCorner)  lookup[fight.redCorner.toLowerCase()]  = lookup[fight.redId];
+    if (fight.blueCorner) lookup[fight.blueCorner.toLowerCase()] = lookup[fight.blueId];
   });
   return lookup;
 }
@@ -991,7 +1035,10 @@ function renderRosterRow(fighter, ctx, slotType) {
   }
   const divLabel   = DIVISION_LABELS[fighter.primary_division] || fighter.primary_division;
   const record     = fighter.record_wins + '-' + fighter.record_losses + (fighter.record_draws ? '-' + fighter.record_draws : '');
-  const fightInfo  = ctx.fightCard[fighter.name.toLowerCase()] || null;
+  // Prefer ID-based matching (handles same-named fighters) but fall back to
+  // lowercase-name in case a roster fighter's record id differs from the
+  // fight_results id for any reason.
+  const fightInfo  = ctx.fightCard[fighter.id] || ctx.fightCard[fighter.name.toLowerCase()] || null;
   const rowClass   = (isStarted ? ' lineup-roster-row--started' : '') + (fightInfo ? ' lineup-roster-row--on-card' : '');
   const photoHtml  = fighter.photo_url
     ? '<img class="lineup-roster-row__photo" src="' + fighter.photo_url + '" alt="' + escapeHtml(fighter.name) + '" onerror="this.style.display=\'none\'">'
@@ -1506,52 +1553,71 @@ function showFightCardModal() {
   var existing = document.getElementById('fightCardModal');
   if (existing) existing.remove();
 
-  // Build name-keyed lookups so each corner can be tagged with its roster
+  // Build id-keyed lookups so each corner can be tagged with its roster
   // ownership state. Skipped in view mode — "Yours"/"Starter" pills don't
-  // make sense when looking at another manager's lineup. Once real fight
-  // card data lands (see PLACEHOLDER_FIGHTS TODO above), swap to ID matching.
-  var rosterNames  = {};
-  var starterNames = {};
+  // make sense when looking at another manager's lineup.
+  var rosterIds  = {};
+  var starterIds = {};
   if (!isViewMode) {
-    myRoster.forEach(function(f) { rosterNames[f.name.toLowerCase()] = true; });
-    selections.forEach(function(id) {
-      var f = myRoster.find(function(x) { return x.id === id; });
-      if (f) starterNames[f.name.toLowerCase()] = true;
-    });
+    myRoster.forEach(function(f) { rosterIds[f.id] = true; });
+    selections.forEach(function(id) { starterIds[id] = true; });
   }
-  function cornerClass(name, sideMod) {
-    var key = name.toLowerCase();
+  function cornerClass(fighterId, sideMod) {
     var classes = 'fight-row__fighter ' + sideMod;
-    if (starterNames[key])      classes += ' fight-row__fighter--starter';
-    else if (rosterNames[key])  classes += ' fight-row__fighter--mine';
+    if (starterIds[fighterId])      classes += ' fight-row__fighter--starter';
+    else if (rosterIds[fighterId])  classes += ' fight-row__fighter--mine';
     return classes;
   }
 
-  var sectionsHtml = PLACEHOLDER_FIGHTS.map(function(section) {
-    var fightsHtml = section.fights.map(function(fight) {
-      var badgeHtml = fight.badge
-        ? '<span class="fight-row__badge">' + escapeHtml(fight.badge) + '</span>'
-        : '';
-      return (
-        '<div class="fight-row">' +
-          '<span class="' + cornerClass(fight.redCorner,  'fight-row__fighter--red')  + '">' + escapeHtml(fight.redCorner)  + '</span>' +
-          '<div class="fight-row__center">' +
-            badgeHtml +
-            '<span class="fight-row__weight">' + escapeHtml(fight.weightClass) + '</span>' +
-            '<span class="fight-row__vs">vs</span>' +
-          '</div>' +
-          '<span class="' + cornerClass(fight.blueCorner, 'fight-row__fighter--blue') + '">' + escapeHtml(fight.blueCorner) + '</span>' +
-        '</div>'
-      );
-    }).join('');
+  // Group fights for display. Main event + co-main go in "Main Card"; rest
+  // are unlabeled (we don't currently distinguish prelims from main-card
+  // past co-main since ufcstats's per-fight index is lost on ingestion).
+  var headlineFights = selectedEventFightCard.filter(function(f) {
+    return f.cardPosition === 'main_event' || f.cardPosition === 'co_main';
+  });
+  var otherFights = selectedEventFightCard.filter(function(f) {
+    return f.cardPosition !== 'main_event' && f.cardPosition !== 'co_main';
+  });
 
+  function fightRowHtml(fight) {
+    var badgeHtml = fight.badge
+      ? '<span class="fight-row__badge">' + escapeHtml(fight.badge) + '</span>'
+      : '';
+    // Mark the winner (past events) with a small indicator
+    var redResult  = fight.outcome && fight.winnerId === fight.redId  ? ' fight-row__fighter--winner' : '';
+    var blueResult = fight.outcome && fight.winnerId === fight.blueId ? ' fight-row__fighter--winner' : '';
     return (
-      '<div class="fight-card-section">' +
-        '<p class="fight-card-section__label">' + escapeHtml(section.section) + '</p>' +
-        fightsHtml +
+      '<div class="fight-row">' +
+        '<span class="' + cornerClass(fight.redId,  'fight-row__fighter--red')  + redResult  + '">' + escapeHtml(fight.redCorner)  + '</span>' +
+        '<div class="fight-row__center">' +
+          badgeHtml +
+          '<span class="fight-row__weight">' + escapeHtml(fight.weightClass) + '</span>' +
+          '<span class="fight-row__vs">vs</span>' +
+        '</div>' +
+        '<span class="' + cornerClass(fight.blueId, 'fight-row__fighter--blue') + blueResult + '">' + escapeHtml(fight.blueCorner) + '</span>' +
       '</div>'
     );
-  }).join('');
+  }
+
+  var sectionsHtml = '';
+  if (selectedEventFightCard.length === 0) {
+    sectionsHtml = '<p class="draft-empty" style="padding:var(--space-6)">No fights yet for this event. The card hasn\'t been announced or scraped.</p>';
+  } else {
+    if (headlineFights.length > 0) {
+      sectionsHtml +=
+        '<div class="fight-card-section">' +
+          '<p class="fight-card-section__label">Main Card</p>' +
+          headlineFights.map(fightRowHtml).join('') +
+        '</div>';
+    }
+    if (otherFights.length > 0) {
+      sectionsHtml +=
+        '<div class="fight-card-section">' +
+          '<p class="fight-card-section__label">Undercard</p>' +
+          otherFights.map(fightRowHtml).join('') +
+        '</div>';
+    }
+  }
 
   var modal = document.createElement('div');
   modal.id = 'fightCardModal';

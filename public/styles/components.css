@@ -4244,6 +4244,13 @@ body {
   border: 1px solid rgba(193, 59, 46, 0.4);
 }
 
+/* Past-event indicator: winner gets a checkmark before their name */
+.fight-row__fighter--winner::before {
+  content: "✓ ";
+  color: #4ade80;
+  font-weight: 800;
+}
+
 /* Center column: badge (optional) + weight class + "vs" */
 .fight-row__center {
   display: flex;
