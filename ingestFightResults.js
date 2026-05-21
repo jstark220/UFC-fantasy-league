@@ -597,6 +597,9 @@ async function processEvent(dbEvent, lookup, pendingNameUpdates) {
       fighter_b_id:              fighterBId,
       weight_class,
       card_position:             cardPositionFromIndex(stub.fightIndex),
+      // 1-based index from the event-list page top (main event = 1).
+      // Used by the lineup page to split Main Card vs Prelims display.
+      fight_order:               stub.fightIndex + 1,
       title_type,
       is_title_defense:          false,        // commissioner sets manually
       fight_of_the_night:        stub.fightOfTheNight,

@@ -351,7 +351,7 @@ async function loadEventData() {
       .eq('event_id', selectedEvent.id),
     supabaseClient
       .from('fight_results')
-      .select('id, fighter_a_id, fighter_b_id, weight_class, card_position, title_type, outcome, winner_id, fight_of_the_night')
+      .select('id, fighter_a_id, fighter_b_id, weight_class, card_position, fight_order, title_type, outcome, winner_id, fight_of_the_night')
       .eq('event_id', selectedEvent.id),
   ]);
 
@@ -398,7 +398,10 @@ async function loadEventData() {
     };
   }
 
-  // Build the structured card. Main event first, then co-main, then the rest.
+  // Build the structured card. Sort by fight_order (1 = main event) when
+  // available, otherwise fall back to card_position ordering. Older rows
+  // ingested before the fight_order column existed will have null and be
+  // sorted to the end of their card_position bucket.
   selectedEventFightCard = rawFights.map(function(f) {
     const red  = fighterInfo(f.fighter_a_id);
     const blue = fighterInfo(f.fighter_b_id);
@@ -413,6 +416,7 @@ async function loadEventData() {
       blueCorner:   blue.name,
       weightClass:  DIVISION_LABELS[f.weight_class] || f.weight_class || '',
       cardPosition: f.card_position,
+      fightOrder:   f.fight_order,
       titleType:    f.title_type,
       outcome:      f.outcome,
       winnerId:     f.winner_id,
@@ -423,6 +427,10 @@ async function loadEventData() {
                   : null,
     };
   }).sort(function(a, b) {
+    // Prefer fight_order; fall back to card_position when null
+    if (a.fightOrder != null && b.fightOrder != null) return a.fightOrder - b.fightOrder;
+    if (a.fightOrder != null) return -1;
+    if (b.fightOrder != null) return 1;
     const orderA = CARD_POSITION_ORDER[a.cardPosition] != null ? CARD_POSITION_ORDER[a.cardPosition] : 99;
     const orderB = CARD_POSITION_ORDER[b.cardPosition] != null ? CARD_POSITION_ORDER[b.cardPosition] : 99;
     return orderA - orderB;
@@ -1638,15 +1646,19 @@ function showFightCardModal() {
     return classes;
   }
 
-  // Group fights for display. Main event + co-main go in "Main Card"; rest
-  // are unlabeled (we don't currently distinguish prelims from main-card
-  // past co-main since ufcstats's per-fight index is lost on ingestion).
-  var headlineFights = selectedEventFightCard.filter(function(f) {
-    return f.cardPosition === 'main_event' || f.cardPosition === 'co_main';
-  });
-  var otherFights = selectedEventFightCard.filter(function(f) {
-    return f.cardPosition !== 'main_event' && f.cardPosition !== 'co_main';
-  });
+  // Group fights for display. UFC main cards are conventionally the top 5
+  // fights (main event + co-main + 3 others). Fights 6+ are prelims.
+  // We use fight_order when available; fall back to splitting at index 5.
+  var hasOrder = selectedEventFightCard.some(function(f) { return f.fightOrder != null; });
+  var mainCardFights, prelimFights;
+  if (hasOrder) {
+    mainCardFights = selectedEventFightCard.filter(function(f) { return f.fightOrder != null && f.fightOrder <= 5; });
+    prelimFights   = selectedEventFightCard.filter(function(f) { return f.fightOrder == null || f.fightOrder > 5; });
+  } else {
+    // Legacy data without fight_order — keep the old main_event/co_main split
+    mainCardFights = selectedEventFightCard.slice(0, 5);
+    prelimFights   = selectedEventFightCard.slice(5);
+  }
 
   // Subline for each fighter: champion / interim / BMF / rank (whichever
   // applies) — kept compact so the row stays on one line on most screens.
@@ -1707,18 +1719,18 @@ function showFightCardModal() {
   if (selectedEventFightCard.length === 0) {
     sectionsHtml = '<p class="draft-empty" style="padding:var(--space-6)">No fights yet for this event. The card hasn\'t been announced or scraped.</p>';
   } else {
-    if (headlineFights.length > 0) {
+    if (mainCardFights.length > 0) {
       sectionsHtml +=
         '<div class="fight-card-section">' +
           '<p class="fight-card-section__label">Main Card</p>' +
-          headlineFights.map(fightRowHtml).join('') +
+          mainCardFights.map(fightRowHtml).join('') +
         '</div>';
     }
-    if (otherFights.length > 0) {
+    if (prelimFights.length > 0) {
       sectionsHtml +=
         '<div class="fight-card-section">' +
-          '<p class="fight-card-section__label">Undercard</p>' +
-          otherFights.map(fightRowHtml).join('') +
+          '<p class="fight-card-section__label">Prelims</p>' +
+          prelimFights.map(fightRowHtml).join('') +
         '</div>';
     }
   }
