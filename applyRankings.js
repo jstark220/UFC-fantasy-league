@@ -78,7 +78,7 @@ const RANKINGS = {
   'umar-nurmagomedov': { rank: 2, subTitle: 'none' },
   'sean-omalley': { rank: 3, subTitle: 'none' },  // Possibly "sean-o-malley"
   'cory-sandhagen': { rank: 4, subTitle: 'none' },
-  'song-yadong': { rank: 5, subTitle: 'none' },
+  'yadong-song': { rank: 5, subTitle: 'none' },
   'aiemann-zahabi': { rank: 6, subTitle: 'none' },
   'deiveson-figueiredo': { rank: 7, subTitle: 'none' },
   'mario-bautista': { rank: 8, subTitle: 'none' },
@@ -129,7 +129,7 @@ const RANKINGS = {
   // ========== WELTERWEIGHT ==========
   'islam-makhachev': { rank: 0, isChamp: true, subTitle: 'none' },
   'jack-della-maddalena': { rank: 1, subTitle: 'none' },
-  'ian-machado-garry': { rank: 2, subTitle: 'none' },
+  'ian-garry': { rank: 2, subTitle: 'none' },
   'michael-morales': { rank: 3, subTitle: 'none' },
   'belal-muhammad': { rank: 4, subTitle: 'none' },
   'carlos-prates': { rank: 5, subTitle: 'none' },
@@ -200,10 +200,10 @@ const RANKINGS = {
   
   // ========== WOMEN'S STRAWWEIGHT ==========
   'mackenzie-dern': { rank: 0, isChamp: true, subTitle: 'none' },
-  'zhang-weili': { rank: 1, subTitle: 'none' },
+  'weili-zhang': { rank: 1, subTitle: 'none' },
   'tatiana-suarez': { rank: 2, subTitle: 'none' },
   'virna-jandiroba': { rank: 3, subTitle: 'none' },
-  'yan-xiaonan': { rank: 4, subTitle: 'none' },
+  'xiaonan-yan': { rank: 4, subTitle: 'none' },
   'amanda-lemos': { rank: 5, subTitle: 'none' },
   'loopy-godinez': { rank: 6, subTitle: 'none' },
   'tabatha-ricci': { rank: 7, subTitle: 'none' },

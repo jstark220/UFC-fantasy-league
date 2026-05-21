@@ -154,7 +154,10 @@ function transformFighter(octagonId, fighter) {
     
     // External ID for future updates (Octagon's slug like "jon-jones")
     ufc_id: octagonId,
-    
+
+    // Fighter headshot from UFC.com CDN (null if API didn't return one)
+    photo_url: fighter.imgUrl || null,
+
     // Fields we don't know yet - will be populated by applyRankings.js
     current_rank: null,
     is_champion: false,

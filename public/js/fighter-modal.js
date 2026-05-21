@@ -78,7 +78,6 @@ async function showFighterModal(fighterId) {
       .from('fight_results')
       .select('*, event:ufc_events(id, name, event_date)')
       .or('fighter_a_id.eq.' + fighterId + ',fighter_b_id.eq.' + fighterId)
-      .order('created_at', { ascending: false })
   ];
 
   if (pageLeagueId) {
@@ -127,6 +126,13 @@ async function showFighterModal(fighterId) {
 
   var fighter = fighterRes.data;
   var fights  = fightsRes.data || [];
+
+  // Sort newest first by event date (PostgREST can't easily order by a joined table column)
+  fights.sort(function(a, b) {
+    var dA = a.event && a.event.event_date ? new Date(a.event.event_date).getTime() : 0;
+    var dB = b.event && b.event.event_date ? new Date(b.event.event_date).getTime() : 0;
+    return dB - dA;
+  });
 
   // Fetch opponent names
   var opponentMap = {};
@@ -216,11 +222,12 @@ function buildFighterModalHtml(fighter, fights, fighterId, opponentMap, tradeCtx
                 : (fighter.current_rank && fighter.current_rank <= 5)  ? 'fighter-card--top5'
                 : (fighter.current_rank && fighter.current_rank <= 15) ? 'fighter-card--top15' : '';
 
-  // Career stats
-  var careerPts = fights.reduce(function(sum, f) {
+  // Career stats — exclude upcoming fights (outcome is null)
+  var completedFights = fights.filter(function(f) { return !!f.outcome; });
+  var careerPts = completedFights.reduce(function(sum, f) {
     return sum + _modalComputeScore(f, f.fighter_a_id === fighterId).total;
   }, 0);
-  var finishes = fights.filter(function(f) {
+  var finishes = completedFights.filter(function(f) {
     return f.winner_id === fighterId &&
            (f.outcome === 'ko_tko' || f.outcome === 'submission');
   }).length;
@@ -258,8 +265,13 @@ function buildFighterModalHtml(fighter, fights, fighterId, opponentMap, tradeCtx
       var oppId    = isA ? fight.fighter_b_id : fight.fighter_a_id;
       var oppName  = opponentMap[oppId] || 'Unknown';
 
+      // A fight with no outcome hasn't happened yet
+      var isUpcoming = !fight.outcome;
+
       var resultLabel, resultClass;
-      if (fight.outcome === 'no_contest') {
+      if (isUpcoming) {
+        resultLabel = 'Upcoming'; resultClass = 'fight-result--upcoming';
+      } else if (fight.outcome === 'no_contest') {
         resultLabel = 'NC'; resultClass = 'fight-result--nc';
       } else if (fight.winner_id === fighterId) {
         resultLabel = 'W'; resultClass = 'fight-result--win';
@@ -269,22 +281,37 @@ function buildFighterModalHtml(fighter, fights, fighterId, opponentMap, tradeCtx
         resultLabel = 'L'; resultClass = 'fight-result--loss';
       }
 
-      var method    = FIGHTER_MODAL_OUTCOME_LABELS[fight.outcome] || fight.outcome || '-';
-      var round     = fight.end_round ? 'R' + fight.end_round : '-';
+      var method    = isUpcoming ? '-' : (FIGHTER_MODAL_OUTCOME_LABELS[fight.outcome] || fight.outcome || '-');
+      var round     = (!isUpcoming && fight.end_round) ? 'R' + fight.end_round : '-';
       var eventName = fight.event ? _mEsc(fight.event.name) : '-';
       var eventDate = fight.event && fight.event.event_date
         ? _modalFormatDate(fight.event.event_date) : '';
-      var ptsClass  = score.total >= 25 ? ' fight-history-pts--high'
-                    : score.total >= 10 ? ' fight-history-pts--mid' : '';
-
-      // Per-fight score breakdown HTML — rendered into a hidden detail row
-      // beneath the fight, surfaced when the user clicks the Pts cell.
-      // Shared with the standalone fighter page via score-breakdown.js.
-      var breakdownHtml = ScoreBreakdown.buildHtml(score, fight, _modalScoringConfig);
 
       // Modal IDs are scoped with "m" prefix to avoid collisions with any
       // breakdown table the host page might also render.
       var key = 'm' + idx;
+
+      // Upcoming fights have no stats yet — show "-" in the pts cell instead
+      // of 0.0 so it's clear no score has been calculated.
+      var ptsCellHtml;
+      var ptsCellHtml, detailRow;
+      if (isUpcoming) {
+        ptsCellHtml = '<td class="fight-history-pts" style="color:var(--text-tertiary)">-</td>';
+        detailRow   = '';
+      } else {
+        var ptsClass      = score.total >= 25 ? ' fight-history-pts--high'
+                          : score.total >= 10 ? ' fight-history-pts--mid' : '';
+        var breakdownHtml = ScoreBreakdown.buildHtml(score, fight, _modalScoringConfig);
+        ptsCellHtml =
+          '<td class="fight-history-pts' + ptsClass + '" data-breakdown-toggle="' + key + '" tabindex="0" role="button" aria-expanded="false">' +
+            '<span class="fight-history-pts__val">' + score.total.toFixed(1) + '</span>' +
+            '<span class="fight-history-pts__chevron" aria-hidden="true">&#9656;</span>' +
+          '</td>';
+        detailRow =
+          '<tr class="fight-history-detail" data-breakdown-target="' + key + '" hidden>' +
+            '<td colspan="6">' + breakdownHtml + '</td>' +
+          '</tr>';
+      }
 
       return (
         '<tr class="fight-history-row">' +
@@ -296,14 +323,9 @@ function buildFighterModalHtml(fighter, fights, fighterId, opponentMap, tradeCtx
           '<td><span class="fight-result ' + resultClass + '">' + resultLabel + '</span></td>' +
           '<td class="fight-history-method">' + _mEsc(method) + '</td>' +
           '<td class="fight-history-round">' + round + '</td>' +
-          '<td class="fight-history-pts' + ptsClass + '" data-breakdown-toggle="' + key + '" tabindex="0" role="button" aria-expanded="false">' +
-            '<span class="fight-history-pts__val">' + score.total.toFixed(1) + '</span>' +
-            '<span class="fight-history-pts__chevron" aria-hidden="true">&#9656;</span>' +
-          '</td>' +
+          ptsCellHtml +
         '</tr>' +
-        '<tr class="fight-history-detail" data-breakdown-target="' + key + '" hidden>' +
-          '<td colspan="6">' + breakdownHtml + '</td>' +
-        '</tr>'
+        detailRow
       );
     }).join('');
 
@@ -380,8 +402,9 @@ function buildFighterModalHtml(fighter, fights, fighterId, opponentMap, tradeCtx
       '<div class="fighter-modal__stats">' +
         _statTile(record, 'Record') +
         _statTile(String(finishes), 'Finishes') +
-        _statTile(String(fights.length), 'UFC Fights') +
+        _statTile(String(completedFights.length), 'UFC Fights') +
         _statTile(careerPts.toFixed(1), 'Career Pts') +
+        _statTile(completedFights.length > 0 ? (careerPts / completedFights.length).toFixed(1) : '—', 'Avg Pts') +
       '</div>' +
 
       // Fight history

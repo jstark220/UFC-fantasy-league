@@ -60,10 +60,11 @@
         <div class="waiver-controls">
           <input  type="text"   id="fighterSearch"   class="waiver-search" placeholder="Search fighters...">
           <select id="sortBy" class="waiver-filter">
+            <option value="fantasy_value">Sort: Fantasy Value</option>
+            <option value="avg_pts">Sort: Avg Points</option>
+            <option value="total_pts">Sort: Total Points</option>
+            <option value="recent_pts">Sort: Points (Last Year)</option>
             <option value="rank">Sort: Rank</option>
-            <option value="record">Sort: Record</option>
-            <option value="points_year">Sort: Points (Year)</option>
-            <option value="points_proj">Sort: Projected Pts</option>
           </select>
           <select id="divisionFilter" class="waiver-filter">
             <option value="all">All Divisions</option>
@@ -86,6 +87,10 @@
             <option value="top10">Top 10</option>
             <option value="unranked">Unranked</option>
           </select>
+          <label class="waiver-toggle">
+            <input type="checkbox" id="showAllToggle">
+            Show rostered
+          </label>
         </div>
         <div id="availableContent"></div>
       </div>

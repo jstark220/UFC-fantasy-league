@@ -25,6 +25,8 @@ const DIVISION_LABELS = {
 var user, leagueId, league, members, myMember, myMemberId, isCommissioner;
 var allFighters       = [];
 var availableFighters = [];
+var ownedByMap        = {}; // fighter_id -> team_name for rostered fighters
+var fighterPointsMap  = {}; // fighter_id -> { totalPts, recentPts, avgPts, fightCount }
 var myRoster          = [];
 var myClaims          = [];
 var pendingAllClaims  = [];
@@ -52,7 +54,7 @@ async function initWaivers() {
   var results = await Promise.all([
     supabaseClient
       .from('leagues')
-      .select('id, name, commissioner_id, draft_started, draft_completed')
+      .select('id, name, commissioner_id, draft_started, draft_completed, scoring_config')
       .eq('id', leagueId)
       .single(),
     supabaseClient
@@ -62,6 +64,7 @@ async function initWaivers() {
     supabaseClient
       .from('fighters')
       .select('id, name, primary_division, current_rank, is_champion, record_wins, record_losses, record_draws, photo_url, date_of_birth')
+      .eq('is_active', true)
       .order('name'),
     supabaseClient
       .from('rosters')
@@ -85,16 +88,16 @@ async function initWaivers() {
       .from('roster_drops')
       .select('id, fighter_id, league_member_id, dropped_at, source')
       .eq('league_id', leagueId)
-      .order('dropped_at', { ascending: false })
+      .order('dropped_at', { ascending: false }),
   ]);
 
-  var leagueRes  = results[0];
-  var membersRes = results[1];
+  var leagueRes   = results[0];
+  var membersRes  = results[1];
   var fightersRes = results[2];
-  var rostersRes = results[3];
-  var claimsRes  = results[4];
-  var eventsRes  = results[5];
-  var dropsRes   = results[6];
+  var rostersRes  = results[3];
+  var claimsRes   = results[4];
+  var eventsRes   = results[5];
+  var dropsRes    = results[6];
 
   if (leagueRes.error || !leagueRes.data) {
     window.location.href = 'dashboard.html';
@@ -113,9 +116,16 @@ async function initWaivers() {
 
   allFighters = fightersRes.data || [];
 
+  // Fetch ALL fight results with pagination (Supabase caps at 1000 rows by
+  // default; the DB has 1800+ rows so a single query silently drops fights
+  // and skews the per-fighter point averages).
+  var allFightResults = await fetchAllFightResults();
+  fighterPointsMap = buildFighterPointsMap(allFightResults, league.scoring_config);
+
   var allRosters = rostersRes.data || [];
   var ownedIds   = new Set(allRosters.map(function(r) { return r.fighter_id; }));
   availableFighters = allFighters.filter(function(f) { return !ownedIds.has(f.id); });
+  ownedByMap = buildOwnedByMap(allRosters, membersRes.data || []);
 
   var myRosterIds = allRosters
     .filter(function(r) { return r.league_member_id === myMemberId; })
@@ -703,23 +713,276 @@ function wireUpTabs() {
 // ========================================================================
 // SEARCH / FILTER
 // ========================================================================
+// Build a map of fighter_id -> team_name so rostered fighters can show their owner.
+function buildOwnedByMap(rosters, memberList) {
+  var memberById = {};
+  memberList.forEach(function(m) { memberById[m.id] = m.team_name || 'Unknown Team'; });
+  var map = {};
+  rosters.forEach(function(r) {
+    map[r.fighter_id] = memberById[r.league_member_id] || 'Unknown Team';
+  });
+  return map;
+}
+
+// Fetch every completed fight_results row, paginating in 1000-row batches.
+// Supabase's default 1000-row cap silently truncates larger result sets, which
+// skews per-fighter averages when the DB has more rows than the cap.
+async function fetchAllFightResults() {
+  var FIGHT_COLS = 'fighter_a_id,fighter_b_id,outcome,winner_id,end_round,' +
+    'end_time_seconds,title_type,is_title_defense,fight_of_the_night,card_position,' +
+    'fighter_a_sig_strikes,fighter_a_takedowns,fighter_a_knockdowns,fighter_a_control_seconds,' +
+    'fighter_a_opponent_rank,fighter_a_potn,' +
+    'fighter_b_sig_strikes,fighter_b_takedowns,fighter_b_knockdowns,fighter_b_control_seconds,' +
+    'fighter_b_opponent_rank,fighter_b_potn,' +
+    'event:ufc_events(event_date)';
+
+  var all  = [];
+  var PAGE = 1000;
+  var from = 0;
+  while (true) {
+    var res = await supabaseClient
+      .from('fight_results')
+      .select(FIGHT_COLS)
+      .not('outcome', 'is', null)
+      .range(from, from + PAGE - 1);
+    if (res.error || !res.data) break;
+    all = all.concat(res.data);
+    if (res.data.length < PAGE) break;
+    from += PAGE;
+  }
+  return all;
+}
+
+// Build a map of fighter_id -> scoring stats by running every fight_results row
+// through the shared scoring engine. Also computes fantasy value composite scores.
+// scoringConfig is the league's custom config (or null for v1.2 defaults).
+// "Recent" means within the last 12 months of today.
+function buildFighterPointsMap(fightResults, scoringConfig) {
+  var map = {};
+  var oneYearAgo = new Date();
+  oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+
+  // Pass 1: collect raw fight scores per fighter
+  fightResults.forEach(function(fight) {
+    var eventDate = fight.event && fight.event.event_date
+      ? new Date(fight.event.event_date + 'T12:00:00') : null;
+    var isRecent = eventDate && eventDate >= oneYearAgo;
+
+    [true, false].forEach(function(isA) {
+      var fighterId = isA ? fight.fighter_a_id : fight.fighter_b_id;
+      if (!fighterId) return;
+
+      var score = Scoring.computeFighterScore(fight, isA, scoringConfig);
+
+      if (!map[fighterId]) {
+        map[fighterId] = {
+          totalPts: 0, recentPts: 0, fightCount: 0, recentFightCount: 0,
+          _fights: []  // { score, date } kept temporarily for last-3 and consistency
+        };
+      }
+      map[fighterId].totalPts   += score.total;
+      map[fighterId].fightCount += 1;
+      map[fighterId]._fights.push({ score: score.total, date: eventDate });
+      if (isRecent) {
+        map[fighterId].recentPts        += score.total;
+        map[fighterId].recentFightCount += 1;
+      }
+    });
+  });
+
+  // Pass 2: per-fighter averages and last-3 avg
+  Object.keys(map).forEach(function(id) {
+    var e = map[id];
+    e.avgPts = e.fightCount > 0 ? e.totalPts / e.fightCount : 0;
+
+    // Sort by date descending (most recent first) then take up to 3
+    e._fights.sort(function(a, b) {
+      return (b.date ? b.date.getTime() : 0) - (a.date ? a.date.getTime() : 0);
+    });
+    var last3 = e._fights.slice(0, 3);
+    e.last3Avg = last3.length > 0
+      ? last3.reduce(function(s, f) { return s + f.score; }, 0) / last3.length
+      : 0;
+  });
+
+  // Pass 3: league mean (avg of all fighters' raw averages) for Bayesian blend
+  var ids = Object.keys(map);
+  var leagueMean = ids.length > 0
+    ? ids.reduce(function(s, id) { return s + map[id].avgPts; }, 0) / ids.length
+    : 10;
+
+  // Pass 4: compute fantasy value components
+  // K=5 means a fighter needs ~5 fights before their average fully outweighs the mean.
+  var K = 5;
+  Object.keys(map).forEach(function(id) {
+    var e = map[id];
+
+    // Bayesian blended career average — pulls small samples toward league mean
+    var blendedAvg = (e.fightCount * e.avgPts + K * leagueMean) / (e.fightCount + K);
+
+    // Blend blended career (55%) with last-3 (45%), but scale last-3 weight down
+    // when we have fewer than 3 fights (so a 1-fight fighter is still mostly career)
+    var last3Weight  = 0.45 * Math.min(e.fightCount, 3) / 3;
+    var careerWeight = 1 - last3Weight;
+    var baseScore    = careerWeight * blendedAvg + last3Weight * e.last3Avg;
+
+    // Activity: penalise fighters who haven't competed recently
+    var actMult = e.recentFightCount === 0 ? 0.75
+                : e.recentFightCount === 1 ? 0.9
+                : 1.0;
+
+    // Consistency: +0.4 per fight above the league mean, capped at +2.5.
+    // Rewards fighters with a long track record of solid performances without
+    // penalising a recent loss (one bad fight barely moves the count).
+    var goodFights = e._fights.filter(function(f) { return f.score > leagueMean; }).length;
+    var consistencyBonus = Math.min(goodFights * 0.4, 2.5);
+
+    // Round and store — rank bonus is applied in the sort comparator because
+    // it requires the fighter object (not available inside this function)
+    e.blendedAvg       = Math.round(blendedAvg       * 10) / 10;
+    e.baseScore        = Math.round(baseScore         * 10) / 10;
+    e.activityMult     = actMult;
+    e.consistencyBonus = Math.round(consistencyBonus  * 10) / 10;
+
+    // Store good-fight count for the breakdown modal
+    e.goodFightCount = goodFights;
+
+    // Clean up the temporary per-fight array
+    delete e._fights;
+
+    // Round the plain stats too
+    e.totalPts  = Math.round(e.totalPts  * 10) / 10;
+    e.recentPts = Math.round(e.recentPts * 10) / 10;
+    e.avgPts    = Math.round(e.avgPts    * 10) / 10;
+    e.last3Avg  = Math.round(e.last3Avg  * 10) / 10;
+  });
+
+  return map;
+}
+
+// Compute the fantasy value composite score for one fighter.
+// Called during sort so we have the fighter object (for rank/champion data).
+// baseScore and bonuses come from buildFighterPointsMap; rank bonus is applied here.
+function computeFantasyValue(fighter) {
+  var pts = fighterPointsMap[fighter.id];
+  if (!pts || !pts.baseScore) return 0;
+
+  // Small bonus for elite fighters: champion +4, top-5 +2, top-10 +1
+  var rankBonus = fighter.is_champion                                    ? 4
+                : (fighter.current_rank && fighter.current_rank <= 5)   ? 2
+                : (fighter.current_rank && fighter.current_rank <= 10)  ? 1
+                : 0;
+
+  return pts.baseScore * pts.activityMult + rankBonus + pts.consistencyBonus;
+}
+
+// Open a modal showing the breakdown of one fighter's fantasy value score.
+function showFvBreakdown(fighterId) {
+  var fighter = allFighters.find(function(f) { return f.id === fighterId; });
+  var pts     = fighterPointsMap[fighterId];
+  if (!fighter || !pts) return;
+
+  var existing = document.getElementById('fvBreakdownModal');
+  if (existing) existing.remove();
+
+  // Rank bonus and label
+  var rankBonus, rankLabel;
+  if (fighter.is_champion) {
+    rankBonus = 4; rankLabel = 'Champion';
+  } else if (fighter.current_rank && fighter.current_rank <= 5) {
+    rankBonus = 2; rankLabel = 'Top 5 (#' + fighter.current_rank + ')';
+  } else if (fighter.current_rank && fighter.current_rank <= 10) {
+    rankBonus = 1; rankLabel = 'Top 10 (#' + fighter.current_rank + ')';
+  } else {
+    rankBonus = 0; rankLabel = fighter.current_rank ? '#' + fighter.current_rank : 'Unranked';
+  }
+
+  var actLabel = pts.recentFightCount === 0 ? '0 fights last 12 months'
+               : pts.recentFightCount === 1 ? '1 fight last 12 months'
+               : pts.recentFightCount + ' fights last 12 months';
+  var actMult  = pts.activityMult === 1.0 ? '1.00' : pts.activityMult.toFixed(2);
+
+  var last3Count = Math.min(pts.fightCount, 3);
+  var last3Label = last3Count < 3 ? 'Last ' + last3Count + ' fight' + (last3Count === 1 ? '' : 's') + ' avg'
+                                  : 'Last 3 fights avg';
+
+  var fv = computeFantasyValue(fighter);
+
+  // A helper to build one row of the breakdown table
+  function row(label, value, note, highlight) {
+    var valueStr = typeof value === 'number' ? value.toFixed(1) : String(value);
+    return '<div class="fv-breakdown-row' + (highlight ? ' fv-breakdown-row--total' : '') + '">' +
+      '<span class="fv-breakdown-row__label">' + escapeHtml(label) + '</span>' +
+      (note ? '<span class="fv-breakdown-row__note">' + escapeHtml(note) + '</span>' : '<span></span>') +
+      '<span class="fv-breakdown-row__value">' + escapeHtml(valueStr) + '</span>' +
+    '</div>';
+  }
+
+  var overlay = document.createElement('div');
+  overlay.id = 'fvBreakdownModal';
+  overlay.className = 'move-flex-modal-overlay';
+  overlay.innerHTML =
+    '<div class="move-flex-modal" role="dialog" aria-modal="true" style="max-width:420px">' +
+      '<div class="move-flex-modal__header">' +
+        '<p class="move-flex-modal__title">Fantasy Value Score</p>' +
+        '<button class="move-flex-modal__close" id="closeFvBtn" aria-label="Close">&times;</button>' +
+      '</div>' +
+      '<div class="move-flex-modal__body">' +
+        '<p class="move-flex-fighter-name" style="margin-bottom:var(--space-4)">' +
+          escapeHtml(fighter.name) +
+        '</p>' +
+
+        '<p class="fv-breakdown-section">Base score</p>' +
+        '<div class="fv-breakdown-table">' +
+          row('Career avg', pts.avgPts, pts.fightCount + ' fight' + (pts.fightCount === 1 ? '' : 's')) +
+          row('Adjusted avg', pts.blendedAvg, 'Sample-size correction') +
+          row(last3Label, pts.last3Avg, 'Recent form') +
+          row('Base score', pts.baseScore, '55% adjusted avg + 45% recent') +
+        '</div>' +
+
+        '<p class="fv-breakdown-section" style="margin-top:var(--space-4)">Multipliers &amp; bonuses</p>' +
+        '<div class="fv-breakdown-table">' +
+          row('Activity', pts.baseScore * pts.activityMult, actLabel + '  ×' + actMult) +
+          row('Consistency', '+' + pts.consistencyBonus.toFixed(1), pts.goodFightCount + ' above-avg fight' + (pts.goodFightCount === 1 ? '' : 's')) +
+          row('Rank bonus', '+' + rankBonus, rankLabel) +
+        '</div>' +
+
+        '<div class="fv-breakdown-table" style="margin-top:var(--space-4)">' +
+          row('Fantasy Value', fv, '', true) +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+  document.body.appendChild(overlay);
+  document.getElementById('closeFvBtn').addEventListener('click', function() { overlay.remove(); });
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+  document.addEventListener('keydown', function esc(e) {
+    if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', esc); }
+  });
+}
+
 function wireUpSearch() {
   document.getElementById('fighterSearch').addEventListener('input', renderAvailableFighters);
   document.getElementById('divisionFilter').addEventListener('change', renderAvailableFighters);
   document.getElementById('statusFilter').addEventListener('change', renderAvailableFighters);
   document.getElementById('sortBy').addEventListener('change', renderAvailableFighters);
+  document.getElementById('showAllToggle').addEventListener('change', renderAvailableFighters);
 }
 
 // ========================================================================
 // RENDER AVAILABLE FIGHTERS
 // ========================================================================
 function renderAvailableFighters() {
-  var query    = document.getElementById('fighterSearch').value.trim().toLowerCase();
-  var division = document.getElementById('divisionFilter').value;
-  var status   = document.getElementById('statusFilter').value;
-  var sortBy   = document.getElementById('sortBy').value;
+  var query      = document.getElementById('fighterSearch').value.trim().toLowerCase();
+  var division   = document.getElementById('divisionFilter').value;
+  var status     = document.getElementById('statusFilter').value;
+  var sortBy     = document.getElementById('sortBy').value;
+  var showAll    = document.getElementById('showAllToggle').checked;
 
-  var filtered = availableFighters.filter(function(f) {
+  // When showAll is on, search the full fighter list; otherwise only free agents.
+  var sourceList = showAll ? allFighters : availableFighters;
+
+  var filtered = sourceList.filter(function(f) {
     var matchesName = !query || f.name.toLowerCase().includes(query);
     var matchesDiv  = division === 'all' || f.primary_division === division;
 
@@ -739,23 +1002,34 @@ function renderAvailableFighters() {
     return matchesName && matchesDiv && matchesStatus;
   });
 
-  // Sort a copy so the original array order is preserved for future renders
+  // Sort a copy so the original array order is preserved for future renders.
+  // Rank is used as a tiebreaker for all points-based sorts: champions first,
+  // then ranked fighters, then unranked (rank 999).
   filtered = filtered.slice().sort(function(a, b) {
+    var rankA = a.is_champion ? 0 : (a.current_rank || 999);
+    var rankB = b.is_champion ? 0 : (b.current_rank || 999);
+
     if (sortBy === 'rank') {
-      // Champions first (rank 0), then ranked 1-15, then unranked (rank 999)
-      var ra = a.is_champion ? 0 : (a.current_rank || 999);
-      var rb = b.is_champion ? 0 : (b.current_rank || 999);
-      return ra - rb;
+      return rankA - rankB;
     }
-    if (sortBy === 'record') {
-      // Most wins first, fewest losses as tiebreaker
-      if (b.record_wins !== a.record_wins) return b.record_wins - a.record_wins;
-      return a.record_losses - b.record_losses;
+
+    if (sortBy === 'fantasy_value') {
+      var fva = computeFantasyValue(a);
+      var fvb = computeFantasyValue(b);
+      if (fvb !== fva) return fvb - fva;
+      return rankA - rankB;
     }
-    // 'points_year' and 'points_proj': data not yet available, fall back to rank order
-    var ra2 = a.is_champion ? 0 : (a.current_rank || 999);
-    var rb2 = b.is_champion ? 0 : (b.current_rank || 999);
-    return ra2 - rb2;
+
+    var ptsKey = sortBy === 'total_pts'  ? 'totalPts'
+               : sortBy === 'recent_pts' ? 'recentPts'
+               : 'avgPts'; // avg_pts
+
+    var pa = fighterPointsMap[a.id] ? fighterPointsMap[a.id][ptsKey] : 0;
+    var pb = fighterPointsMap[b.id] ? fighterPointsMap[b.id][ptsKey] : 0;
+
+    // Higher points first; rank as tiebreaker
+    if (pb !== pa) return pb - pa;
+    return rankA - rankB;
   });
 
   var myPendingIds = new Set(
@@ -772,15 +1046,42 @@ function renderAvailableFighters() {
   }
 
   var html = '';
-  filtered.forEach(function(f) {
+  filtered.forEach(function(f, idx) {
     var rankLabel = f.is_champion ? 'C' : (f.current_rank ? '#' + f.current_rank : 'NR');
     var rankClass = f.is_champion ? 'rank-champion' : (f.current_rank ? 'rank-ranked' : 'rank-unranked');
     var divLabel  = DIVISION_LABELS[f.primary_division] || f.primary_division;
     var record    = f.record_wins + '-' + f.record_losses + (f.record_draws ? '-' + f.record_draws : '');
-    var age       = ageFromDob(f.date_of_birth);
-    var ageLabel  = age != null ? 'Age ' + age : 'Age [age]';
-    var divLine   = divLabel + ' · ' + ageLabel;
+    var age     = ageFromDob(f.date_of_birth);
+    var divLine = age != null ? divLabel + ' · Age ' + age : divLabel;
     var addMode   = decideAddMode(f.id);
+
+    // Right-side stat: show the sort-relevant metric inline on each row
+    var pts      = fighterPointsMap[f.id];
+    var statVal, statLabel, statFvId;
+    if (sortBy === 'fantasy_value') {
+      statVal   = pts ? computeFantasyValue(f).toFixed(1) : '—';
+      statLabel = 'FV score';
+      statFvId  = f.id;  // flag so we wrap in a clickable button
+    } else if (sortBy === 'avg_pts') {
+      statVal   = pts ? pts.avgPts.toFixed(1) : '—';
+      statLabel = 'avg';
+    } else if (sortBy === 'total_pts') {
+      statVal   = pts ? pts.totalPts.toFixed(1) : '—';
+      statLabel = 'total';
+    } else if (sortBy === 'recent_pts') {
+      statVal   = pts ? pts.recentPts.toFixed(1) : '—';
+      statLabel = 'yr';
+    } else {
+      statVal   = record;
+      statLabel = null;
+    }
+    var statInner = statLabel
+      ? '<span style="font-size:var(--text-body);font-weight:700">' + escapeHtml(statVal) + '</span>' +
+        '<span style="font-size:var(--text-caption);opacity:.55;margin-left:3px">' + escapeHtml(statLabel) + '</span>'
+      : escapeHtml(statVal);
+    var statHtml = statFvId
+      ? '<button class="fv-score-btn" data-fv-fighter="' + escapeHtml(statFvId) + '" title="Click for score breakdown">' + statInner + '</button>'
+      : statInner;
 
     // Rolling-waiver badge: shows above the row when this fighter is on
     // a 48hr hold, with the time it clears.
@@ -795,12 +1096,13 @@ function renderAvailableFighters() {
       ? '<img class="lineup-roster-row__photo" src="' + escapeHtml(f.photo_url) + '" alt="' + escapeHtml(f.name) + '" onerror="this.style.display=\'none\'">'
       : '';
 
-    // Button label depends on mode:
-    //   * predraft → "Add" but disabled, with a tooltip explaining why
-    //   * instant  → "+ Add" (only possible post-draft, post-window, no rolling waiver)
-    //   * claim    → "+ Claim"
+    // Button / ownership label
     var btn;
-    if (addMode.mode === 'predraft') {
+    var ownerName = ownedByMap[f.id];
+    if (ownerName) {
+      // Fighter is rostered — show who owns them (no add button)
+      btn = '<span class="lineup-roster-row__record" style="color: var(--text-tertiary); font-size: var(--text-caption);">On ' + escapeHtml(ownerName) + '</span>';
+    } else if (addMode.mode === 'predraft') {
       btn = '<button class="btn-secondary lineup-row-btn" disabled ' +
               'title="Available after the draft completes">+ Add</button>';
     } else if (myPendingIds.has(f.id)) {
@@ -814,6 +1116,7 @@ function renderAvailableFighters() {
 
     html +=
       '<div class="lineup-roster-row">' +
+        '<span class="lineup-roster-row__pos">' + (idx + 1) + '</span>' +
         '<div class="lineup-roster-row__photo-wrap">' + photoHtml + '</div>' +
         '<span class="lineup-roster-row__rank ' + rankClass + '">' + rankLabel + '</span>' +
         '<div class="lineup-roster-row__info">' +
@@ -821,7 +1124,7 @@ function renderAvailableFighters() {
           '<span class="lineup-roster-row__division">' + escapeHtml(divLine) + '</span>' +
           rollingNote +
         '</div>' +
-        '<span class="lineup-roster-row__record">' + record + '</span>' +
+        '<span class="lineup-roster-row__record">' + statHtml + '</span>' +
         btn +
       '</div>';
   });
@@ -837,6 +1140,13 @@ function renderAvailableFighters() {
   el.querySelectorAll('[data-open-fighter]').forEach(function(btn) {
     btn.addEventListener('click', function() {
       showFighterModal(btn.getAttribute('data-open-fighter'));
+    });
+  });
+
+  el.querySelectorAll('.fv-score-btn').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      showFvBreakdown(btn.getAttribute('data-fv-fighter'));
     });
   });
 }
@@ -1600,6 +1910,7 @@ async function refreshData() {
   var allRosters = results[0].data || [];
   var ownedIds   = new Set(allRosters.map(function(r) { return r.fighter_id; }));
   availableFighters = allFighters.filter(function(f) { return !ownedIds.has(f.id); });
+  ownedByMap = buildOwnedByMap(allRosters, members);
 
   var myRosterIds = allRosters
     .filter(function(r) { return r.league_member_id === myMemberId; })
