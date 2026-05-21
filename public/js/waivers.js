@@ -793,11 +793,21 @@ function buildFighterPointsMap(fightResults, scoringConfig) {
       var isDraw = fight.outcome === 'draw';
       var isLoss = !isWin && !isDraw && fight.winner_id != null;
 
+      // Opponent rank at fight time (for strength-of-schedule). Champion /
+      // interim / BMF holders have stored rank=null, but they ARE elite —
+      // treat them as #1 for SoS purposes when the fight was a title fight.
+      var oppRankPrefix = isA ? 'fighter_a_' : 'fighter_b_';
+      var oppRank = fight[oppRankPrefix + 'opponent_rank'];
+      if (oppRank == null && fight.title_type && fight.title_type !== 'none') {
+        oppRank = 1;
+      }
+
       map[fighterId].totalPts   += score.total;
       map[fighterId].fightCount += 1;
       map[fighterId]._fights.push({
         score: score.total, date: eventDate,
         isWin: isWin, isDraw: isDraw, isLoss: isLoss,
+        oppRank: oppRank,
       });
       if (isRecent) {
         map[fighterId].recentPts        += score.total;
@@ -878,6 +888,33 @@ function buildFighterPointsMap(fightResults, scoringConfig) {
     else if (lossStreak >= 2) streakBonus = -3;
     else if (lossStreak >= 1) streakBonus = -1;
 
+    // Strength of schedule (SoS): opponent quality across the last 5 fights.
+    // Validates the fighter's level — beating a top-5 fighter is more
+    // meaningful than beating a #20, even if both produce similar per-fight
+    // scores. Counts opponents regardless of win/loss (you still faced them).
+    //
+    // Per-opponent quality:
+    //   Champion / #1: 1.0
+    //   #2-5:          0.7
+    //   #6-10:         0.4
+    //   #11-15:        0.2
+    //   Unranked:      0
+    // SoS = average across last 5 fights; bonus = SoS * 4 (range 0 to +4).
+    var sosFights = e._fights.slice(0, 5);
+    var sosTotal  = 0;
+    for (var k = 0; k < sosFights.length; k++) {
+      var r = sosFights[k].oppRank;
+      var q = r == null     ? 0
+            : r <= 1        ? 1.0
+            : r <= 5        ? 0.7
+            : r <= 10       ? 0.4
+            : r <= 15       ? 0.2
+            :                 0;
+      sosTotal += q;
+    }
+    var sosAvg = sosFights.length > 0 ? sosTotal / sosFights.length : 0;
+    var sosBonus = Math.round(sosAvg * 4 * 10) / 10;
+
     // Round and store — rank bonus is applied in the sort comparator because
     // it requires the fighter object (not available inside this function)
     e.blendedAvg       = Math.round(blendedAvg       * 10) / 10;
@@ -887,6 +924,9 @@ function buildFighterPointsMap(fightResults, scoringConfig) {
     e.streakBonus      = streakBonus;
     e.winStreak        = winStreak;
     e.lossStreak       = lossStreak;
+    e.sosBonus         = sosBonus;
+    e.sosAvg           = Math.round(sosAvg * 100) / 100;
+    e.sosFightCount    = sosFights.length;
 
     // Store good-fight count for the breakdown modal
     e.goodFightCount = goodFights;
@@ -923,7 +963,8 @@ function computeFantasyValue(fighter) {
   return pts.baseScore * pts.activityMult
        + rankBonus
        + pts.consistencyBonus
-       + (pts.streakBonus || 0);
+       + (pts.streakBonus || 0)
+       + (pts.sosBonus || 0);
 }
 
 // Open a modal showing the breakdown of one fighter's fantasy value score.
@@ -1006,6 +1047,7 @@ function showFvBreakdown(fighterId) {
           row('Activity', pts.baseScore * pts.activityMult, actLabel + '  ×' + actMult) +
           row('Consistency', '+' + pts.consistencyBonus.toFixed(1), pts.goodFightCount + ' above-avg fight' + (pts.goodFightCount === 1 ? '' : 's')) +
           row('Streak', (streakBonus >= 0 ? '+' : '') + streakBonus.toFixed(1), streakLabel) +
+          row('SoS', '+' + (pts.sosBonus || 0).toFixed(1), 'Opp quality, last ' + pts.sosFightCount + ' fight' + (pts.sosFightCount === 1 ? '' : 's')) +
           row('Rank bonus', '+' + rankBonus, rankLabel) +
         '</div>' +
 
