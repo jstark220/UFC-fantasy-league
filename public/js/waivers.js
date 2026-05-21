@@ -787,9 +787,18 @@ function buildFighterPointsMap(fightResults, scoringConfig) {
           _fights: []  // { score, date } kept temporarily for last-3 and consistency
         };
       }
+      // Record outcome for streak detection later. Draws are treated as a
+      // neutral event that resets both win and loss streaks.
+      var isWin  = fight.winner_id === fighterId;
+      var isDraw = fight.outcome === 'draw';
+      var isLoss = !isWin && !isDraw && fight.winner_id != null;
+
       map[fighterId].totalPts   += score.total;
       map[fighterId].fightCount += 1;
-      map[fighterId]._fights.push({ score: score.total, date: eventDate });
+      map[fighterId]._fights.push({
+        score: score.total, date: eventDate,
+        isWin: isWin, isDraw: isDraw, isLoss: isLoss,
+      });
       if (isRecent) {
         map[fighterId].recentPts        += score.total;
         map[fighterId].recentFightCount += 1;
@@ -833,9 +842,11 @@ function buildFighterPointsMap(fightResults, scoringConfig) {
     var careerWeight = 1 - last3Weight;
     var baseScore    = careerWeight * blendedAvg + last3Weight * e.last3Avg;
 
-    // Activity: penalise fighters who haven't competed recently
-    var actMult = e.recentFightCount === 0 ? 0.75
-                : e.recentFightCount === 1 ? 0.9
+    // Activity: penalise fighters who haven't competed recently. Increased
+    // the penalty from the original 0.75/0.9/1.0 because a fighter who hasn't
+    // fought in over a year is barely a real fantasy asset.
+    var actMult = e.recentFightCount === 0 ? 0.6
+                : e.recentFightCount === 1 ? 0.85
                 : 1.0;
 
     // Consistency: +0.4 per fight above the league mean, capped at +2.5.
@@ -844,12 +855,38 @@ function buildFighterPointsMap(fightResults, scoringConfig) {
     var goodFights = e._fights.filter(function(f) { return f.score > leagueMean; }).length;
     var consistencyBonus = Math.min(goodFights * 0.4, 2.5);
 
+    // Streak detection. _fights is sorted newest-first from Pass 2. Walk from
+    // the most recent fight: count consecutive wins or consecutive losses.
+    // Draws and missing data break the streak.
+    var winStreak  = 0;
+    var lossStreak = 0;
+    for (var i = 0; i < e._fights.length; i++) {
+      var f = e._fights[i];
+      if (f.isWin) {
+        if (lossStreak > 0) break;
+        winStreak++;
+      } else if (f.isLoss) {
+        if (winStreak > 0) break;
+        lossStreak++;
+      } else {
+        break;  // draw or missing — stop counting
+      }
+    }
+    var streakBonus = 0;
+    if      (winStreak  >= 3) streakBonus =  3;
+    else if (winStreak  >= 2) streakBonus =  1.5;
+    else if (lossStreak >= 2) streakBonus = -3;
+    else if (lossStreak >= 1) streakBonus = -1;
+
     // Round and store — rank bonus is applied in the sort comparator because
     // it requires the fighter object (not available inside this function)
     e.blendedAvg       = Math.round(blendedAvg       * 10) / 10;
     e.baseScore        = Math.round(baseScore         * 10) / 10;
     e.activityMult     = actMult;
     e.consistencyBonus = Math.round(consistencyBonus  * 10) / 10;
+    e.streakBonus      = streakBonus;
+    e.winStreak        = winStreak;
+    e.lossStreak       = lossStreak;
 
     // Store good-fight count for the breakdown modal
     e.goodFightCount = goodFights;
@@ -874,13 +911,19 @@ function computeFantasyValue(fighter) {
   var pts = fighterPointsMap[fighter.id];
   if (!pts || !pts.baseScore) return 0;
 
-  // Small bonus for elite fighters: champion +4, top-5 +2, top-10 +1
-  var rankBonus = fighter.is_champion                                    ? 4
-                : (fighter.current_rank && fighter.current_rank <= 5)   ? 2
-                : (fighter.current_rank && fighter.current_rank <= 10)  ? 1
+  // Elite-status bonus. Champions and top-ranked fighters get a meaningful
+  // bump on top of their statistical baseScore so the FV ordering actually
+  // reflects who's elite vs who's mid-pack.
+  var rankBonus = fighter.is_champion                                     ? 10
+                : (fighter.current_rank && fighter.current_rank <= 5)    ? 6
+                : (fighter.current_rank && fighter.current_rank <= 10)   ? 3
+                : (fighter.current_rank && fighter.current_rank <= 15)   ? 1
                 : 0;
 
-  return pts.baseScore * pts.activityMult + rankBonus + pts.consistencyBonus;
+  return pts.baseScore * pts.activityMult
+       + rankBonus
+       + pts.consistencyBonus
+       + (pts.streakBonus || 0);
 }
 
 // Open a modal showing the breakdown of one fighter's fantasy value score.
@@ -892,17 +935,28 @@ function showFvBreakdown(fighterId) {
   var existing = document.getElementById('fvBreakdownModal');
   if (existing) existing.remove();
 
-  // Rank bonus and label
+  // Rank bonus and label — keep in sync with computeFantasyValue()
   var rankBonus, rankLabel;
   if (fighter.is_champion) {
-    rankBonus = 4; rankLabel = 'Champion';
+    rankBonus = 10; rankLabel = 'Champion';
   } else if (fighter.current_rank && fighter.current_rank <= 5) {
-    rankBonus = 2; rankLabel = 'Top 5 (#' + fighter.current_rank + ')';
+    rankBonus = 6;  rankLabel = 'Top 5 (#' + fighter.current_rank + ')';
   } else if (fighter.current_rank && fighter.current_rank <= 10) {
-    rankBonus = 1; rankLabel = 'Top 10 (#' + fighter.current_rank + ')';
+    rankBonus = 3;  rankLabel = 'Top 10 (#' + fighter.current_rank + ')';
+  } else if (fighter.current_rank && fighter.current_rank <= 15) {
+    rankBonus = 1;  rankLabel = 'Top 15 (#' + fighter.current_rank + ')';
   } else {
-    rankBonus = 0; rankLabel = fighter.current_rank ? '#' + fighter.current_rank : 'Unranked';
+    rankBonus = 0;  rankLabel = fighter.current_rank ? '#' + fighter.current_rank : 'Unranked';
   }
+
+  // Streak label
+  var streakBonus = pts.streakBonus || 0;
+  var streakLabel;
+  if      (pts.winStreak  >= 3) streakLabel = pts.winStreak  + '-fight win streak';
+  else if (pts.winStreak  >= 2) streakLabel = pts.winStreak  + '-fight win streak';
+  else if (pts.lossStreak >= 2) streakLabel = pts.lossStreak + '-fight losing skid';
+  else if (pts.lossStreak >= 1) streakLabel = 'Coming off a loss';
+  else                          streakLabel = 'No streak';
 
   var actLabel = pts.recentFightCount === 0 ? '0 fights last 12 months'
                : pts.recentFightCount === 1 ? '1 fight last 12 months'
@@ -951,6 +1005,7 @@ function showFvBreakdown(fighterId) {
         '<div class="fv-breakdown-table">' +
           row('Activity', pts.baseScore * pts.activityMult, actLabel + '  ×' + actMult) +
           row('Consistency', '+' + pts.consistencyBonus.toFixed(1), pts.goodFightCount + ' above-avg fight' + (pts.goodFightCount === 1 ? '' : 's')) +
+          row('Streak', (streakBonus >= 0 ? '+' : '') + streakBonus.toFixed(1), streakLabel) +
           row('Rank bonus', '+' + rankBonus, rankLabel) +
         '</div>' +
 
