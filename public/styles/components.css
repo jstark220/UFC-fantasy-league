@@ -4530,9 +4530,36 @@ body {
 .lineup-roster-row__rank {
   font-size: var(--text-caption);
   font-weight: 700;
-  width: 28px;
+  min-width: 28px;
   text-align: center;
   flex-shrink: 0;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  line-height: 1;
+}
+
+/* Tiny interim / BMF badge that stacks below the main rank number for
+   fighters who hold a secondary title. Used alongside .lineup-roster-row__rank
+   and on other rank-display surfaces. */
+.subrank-badge {
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 1px 3px;
+  border-radius: 2px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.subrank-interim {
+  background: rgba(212, 175, 55, 0.18);
+  color: var(--accent-gold);
+}
+.subrank-bmf {
+  background: rgba(193, 59, 46, 0.18);
+  color: var(--accent-crimson);
 }
 
 .lineup-roster-row__info {

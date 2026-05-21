@@ -52,7 +52,7 @@ async function initTrades() {
   const [leagueRes, membersRes, fightersRes, rostersRes, tradesRes] = await Promise.all([
     supabaseClient.from('leagues').select('id, name, commissioner_id').eq('id', leagueId).single(),
     supabaseClient.from('league_members').select('id, user_id, team_name, is_commissioner').eq('league_id', leagueId),
-    supabaseClient.from('fighters').select('id, name, primary_division, current_rank, is_champion, record_wins, record_losses, record_draws, photo_url').order('name'),
+    supabaseClient.from('fighters').select('id, name, primary_division, current_rank, is_champion, is_sub_champion, sub_title_type, record_wins, record_losses, record_draws, photo_url').order('name'),
     supabaseClient.from('rosters').select('fighter_id, league_member_id').eq('league_id', leagueId),
     supabaseClient.from('trades').select('*').eq('league_id', leagueId).order('proposed_at', { ascending: false })
   ]);
@@ -268,6 +268,12 @@ function buildPickerList(fighters, side) {
   fighters.forEach(function(f) {
     var rankLabel = f.is_champion ? 'C' : (f.current_rank ? '#' + f.current_rank : 'NR');
     var rankClass = f.is_champion ? 'rank-champion' : (f.current_rank ? 'rank-ranked' : 'rank-unranked');
+    var subBadge = '';
+    if (f.is_sub_champion && f.sub_title_type === 'interim') {
+      subBadge = '<span class="subrank-badge subrank-interim">INT</span>';
+    } else if (f.is_sub_champion && f.sub_title_type === 'bmf') {
+      subBadge = '<span class="subrank-badge subrank-bmf">BMF</span>';
+    }
     var divLabel  = TRADE_DIVISION_LABELS[f.primary_division] || f.primary_division;
     var record    = f.record_wins + '-' + f.record_losses + (f.record_draws ? '-' + f.record_draws : '');
     var photoHtml = f.photo_url
@@ -277,7 +283,7 @@ function buildPickerList(fighters, side) {
     html +=
       '<div class="lineup-roster-row trade-pick-row" data-fighter-id="' + f.id + '" data-side="' + side + '">' +
         '<div class="lineup-roster-row__photo-wrap">' + photoHtml + '</div>' +
-        '<span class="lineup-roster-row__rank ' + rankClass + '">' + rankLabel + '</span>' +
+        '<span class="lineup-roster-row__rank ' + rankClass + '">' + rankLabel + subBadge + '</span>' +
         '<div class="lineup-roster-row__info">' +
           '<button class="lineup-roster-row__name" data-open-fighter="' + f.id + '">' + escapeHtml(f.name) + '</button>' +
           '<span class="lineup-roster-row__division">' + escapeHtml(divLabel) + '</span>' +

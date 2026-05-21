@@ -232,7 +232,7 @@ async function initLineup() {
   // Fetch this user's roster ONCE — it's not event-specific.
   const rostersRes = await supabaseClient
     .from('rosters')
-    .select('id, draft_pick, slot_override, acquired_at, fighters(id, name, primary_division, current_rank, is_champion, record_wins, record_losses, record_draws, photo_url)')
+    .select('id, draft_pick, slot_override, acquired_at, fighters(id, name, primary_division, current_rank, is_champion, is_sub_champion, sub_title_type, record_wins, record_losses, record_draws, photo_url)')
     .eq('league_id', leagueId)
     .eq('league_member_id', myMemberId)
     .order('draft_pick');
@@ -983,6 +983,12 @@ function renderRosterRow(fighter, ctx, slotType) {
   const isStarted  = selections.has(fighter.id);
   const rankLabel  = fighter.is_champion ? 'C' : (fighter.current_rank ? '#' + fighter.current_rank : 'NR');
   const rankClass  = fighter.is_champion ? 'rank-champion' : (fighter.current_rank ? 'rank-ranked' : 'rank-unranked');
+  let subBadge = '';
+  if (fighter.is_sub_champion && fighter.sub_title_type === 'interim') {
+    subBadge = '<span class="subrank-badge subrank-interim">INT</span>';
+  } else if (fighter.is_sub_champion && fighter.sub_title_type === 'bmf') {
+    subBadge = '<span class="subrank-badge subrank-bmf">BMF</span>';
+  }
   const divLabel   = DIVISION_LABELS[fighter.primary_division] || fighter.primary_division;
   const record     = fighter.record_wins + '-' + fighter.record_losses + (fighter.record_draws ? '-' + fighter.record_draws : '');
   const fightInfo  = ctx.fightCard[fighter.name.toLowerCase()] || null;
@@ -1033,7 +1039,7 @@ function renderRosterRow(fighter, ctx, slotType) {
   return (
     '<div class="lineup-roster-row' + rowClass + '" id="roster-row-' + fighter.id + '">' +
       '<div class="lineup-roster-row__photo-wrap">' + photoHtml + '</div>' +
-      '<span class="lineup-roster-row__rank ' + rankClass + '">' + rankLabel + '</span>' +
+      '<span class="lineup-roster-row__rank ' + rankClass + '">' + rankLabel + subBadge + '</span>' +
       '<div class="lineup-roster-row__info">' +
         '<button class="lineup-roster-row__name" data-open-fighter="' + fighter.id + '">' + escapeHtml(fighter.name) + '</button>' +
         (fightInfo

@@ -50,8 +50,8 @@
     // logic and the champion-as-top-5 treatment.
     divisional_title_win:     12,
     divisional_title_defense: 8,
-    bmf_interim_win:          5,
-    bmf_interim_defense:      3,
+    bmf_interim_win:          8,
+    bmf_interim_defense:      5,
     top5_win:                 8,
     top10_win:                5,
     top15_win:                3,

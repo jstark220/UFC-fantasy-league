@@ -63,7 +63,7 @@ async function initWaivers() {
       .eq('league_id', leagueId),
     supabaseClient
       .from('fighters')
-      .select('id, name, primary_division, current_rank, is_champion, record_wins, record_losses, record_draws, photo_url, date_of_birth')
+      .select('id, name, primary_division, current_rank, is_champion, is_sub_champion, sub_title_type, record_wins, record_losses, record_draws, photo_url, date_of_birth')
       .eq('is_active', true)
       .order('name'),
     supabaseClient
@@ -1111,6 +1111,13 @@ function renderAvailableFighters() {
   filtered.forEach(function(f, idx) {
     var rankLabel = f.is_champion ? 'C' : (f.current_rank ? '#' + f.current_rank : 'NR');
     var rankClass = f.is_champion ? 'rank-champion' : (f.current_rank ? 'rank-ranked' : 'rank-unranked');
+    // Interim / BMF badge stacks below the main rank for sub-title holders
+    var subBadge = '';
+    if (f.is_sub_champion && f.sub_title_type === 'interim') {
+      subBadge = '<span class="subrank-badge subrank-interim">INT</span>';
+    } else if (f.is_sub_champion && f.sub_title_type === 'bmf') {
+      subBadge = '<span class="subrank-badge subrank-bmf">BMF</span>';
+    }
     var divLabel  = DIVISION_LABELS[f.primary_division] || f.primary_division;
     var record    = f.record_wins + '-' + f.record_losses + (f.record_draws ? '-' + f.record_draws : '');
     var age     = ageFromDob(f.date_of_birth);
@@ -1180,7 +1187,7 @@ function renderAvailableFighters() {
       '<div class="lineup-roster-row">' +
         '<span class="lineup-roster-row__pos">' + (idx + 1) + '</span>' +
         '<div class="lineup-roster-row__photo-wrap">' + photoHtml + '</div>' +
-        '<span class="lineup-roster-row__rank ' + rankClass + '">' + rankLabel + '</span>' +
+        '<span class="lineup-roster-row__rank ' + rankClass + '">' + rankLabel + subBadge + '</span>' +
         '<div class="lineup-roster-row__info">' +
           '<button class="lineup-roster-row__name" data-open-fighter="' + f.id + '">' + escapeHtml(f.name) + '</button>' +
           '<span class="lineup-roster-row__division">' + escapeHtml(divLine) + '</span>' +

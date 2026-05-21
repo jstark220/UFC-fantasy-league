@@ -70,7 +70,7 @@ async function showFighterModal(fighterId) {
   var fetchPromises = [
     supabaseClient
       .from('fighters')
-      .select('id, name, nickname, primary_division, current_rank, is_champion, record_wins, record_losses, record_draws, photo_url, country, date_of_birth')
+      .select('id, name, nickname, primary_division, current_rank, is_champion, is_sub_champion, sub_title_type, record_wins, record_losses, record_draws, photo_url, country, date_of_birth')
       .eq('id', fighterId)
       .single(),
 
@@ -217,7 +217,12 @@ function buildFighterModalHtml(fighter, fights, fighterId, opponentMap, tradeCtx
                   (fighter.record_draws ? '-' + fighter.record_draws : '');
   var rankLabel = fighter.is_champion ? 'C'
                 : (fighter.current_rank ? '#' + fighter.current_rank : 'NR');
-  var rankSub   = fighter.is_champion ? 'CHAMP' : 'RANK';
+  // Sub-label: prefer interim/BMF status over the generic "RANK" label for
+  // fighters who hold a secondary title (e.g. Gaethje as interim LW).
+  var rankSub   = fighter.is_champion                                       ? 'CHAMP'
+                : (fighter.is_sub_champion && fighter.sub_title_type === 'interim') ? 'INTERIM'
+                : (fighter.is_sub_champion && fighter.sub_title_type === 'bmf')     ? 'BMF'
+                : 'RANK';
   var tierClass = fighter.is_champion                                  ? 'fighter-card--champion'
                 : (fighter.current_rank && fighter.current_rank <= 5)  ? 'fighter-card--top5'
                 : (fighter.current_rank && fighter.current_rank <= 15) ? 'fighter-card--top15' : '';

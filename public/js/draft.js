@@ -136,7 +136,7 @@ async function initDraft() {
       .eq('league_id', leagueId),
     supabaseClient
       .from('fighters')
-      .select('id, name, primary_division, current_rank, is_champion, record_wins, record_losses, record_draws, photo_url')
+      .select('id, name, primary_division, current_rank, is_champion, is_sub_champion, sub_title_type, record_wins, record_losses, record_draws, photo_url')
       .order('is_champion', { ascending: false })
       .order('current_rank', { nullsFirst: false }),
     supabaseClient
@@ -845,6 +845,11 @@ function renderFighterPool() {
     const valid       = myTurn && canPick(f, myPickFighters);
     const rankLabel   = f.is_champion ? 'C' : (f.current_rank ? '#' + f.current_rank : 'NR');
     const rankClass   = f.is_champion ? 'rank-champion' : (f.current_rank ? 'rank-ranked' : 'rank-unranked');
+    const subBadge    = f.is_sub_champion && f.sub_title_type === 'interim'
+                          ? '<span class="subrank-badge subrank-interim">INT</span>'
+                        : f.is_sub_champion && f.sub_title_type === 'bmf'
+                          ? '<span class="subrank-badge subrank-bmf">BMF</span>'
+                          : '';
     const divLabel    = DIVISION_LABELS[f.primary_division] || f.primary_division;
     const record      = f.record_wins + '-' + f.record_losses + (f.record_draws ? '-' + f.record_draws : '');
     const photoHtml   = f.photo_url
@@ -883,7 +888,7 @@ function renderFighterPool() {
     html +=
       '<div class="lineup-roster-row draft-pool-row--divcolor' + rowMods + '" style="--div-accent: ' + divAccent + '"' + titleAttr + '>' +
         '<div class="lineup-roster-row__photo-wrap">' + photoHtml + '</div>' +
-        '<span class="lineup-roster-row__rank ' + rankClass + '">' + escapeHtml(rankLabel) + '</span>' +
+        '<span class="lineup-roster-row__rank ' + rankClass + '">' + escapeHtml(rankLabel) + (typeof subBadge === 'string' ? subBadge : '') + '</span>' +
         '<div class="lineup-roster-row__info">' +
           '<button class="lineup-roster-row__name" data-open-fighter="' + f.id + '">' +
             escapeHtml(f.name) +
@@ -1071,6 +1076,11 @@ function renderViewAllList() {
     var valid     = myTurn && canPick(f, myPickFighters);
     var rankLabel = f.is_champion ? 'C' : (f.current_rank ? '#' + f.current_rank : 'NR');
     var rankClass = f.is_champion ? 'rank-champion' : (f.current_rank ? 'rank-ranked' : 'rank-unranked');
+    var subBadge  = f.is_sub_champion && f.sub_title_type === 'interim'
+                      ? '<span class="subrank-badge subrank-interim">INT</span>'
+                    : f.is_sub_champion && f.sub_title_type === 'bmf'
+                      ? '<span class="subrank-badge subrank-bmf">BMF</span>'
+                      : '';
     var divLabel  = DIVISION_LABELS[f.primary_division] || f.primary_division;
     var record    = f.record_wins + '-' + f.record_losses + (f.record_draws ? '-' + f.record_draws : '');
     var photoHtml = f.photo_url
@@ -1087,7 +1097,7 @@ function renderViewAllList() {
     html +=
       '<div class="lineup-roster-row">' +
         '<div class="lineup-roster-row__photo-wrap">' + photoHtml + '</div>' +
-        '<span class="lineup-roster-row__rank ' + rankClass + '">' + rankLabel + '</span>' +
+        '<span class="lineup-roster-row__rank ' + rankClass + '">' + rankLabel + (typeof subBadge === 'string' ? subBadge : '') + '</span>' +
         '<div class="lineup-roster-row__info">' +
           '<button class="lineup-roster-row__name" data-open-fighter="' + f.id + '">' + escapeHtml(f.name) + '</button>' +
           '<span class="lineup-roster-row__division">' + escapeHtml(divLabel) + '</span>' +
@@ -1333,6 +1343,11 @@ function renderMyRoster() {
     myPickFighters.forEach(function(f, idx) {
       const rankLabel = f.is_champion ? 'C' : (f.current_rank ? '#' + f.current_rank : 'NR');
       const rankClass = f.is_champion ? 'rank-champion' : (f.current_rank ? 'rank-ranked' : 'rank-unranked');
+      const subBadge  = f.is_sub_champion && f.sub_title_type === 'interim'
+                          ? '<span class="subrank-badge subrank-interim">INT</span>'
+                        : f.is_sub_champion && f.sub_title_type === 'bmf'
+                          ? '<span class="subrank-badge subrank-bmf">BMF</span>'
+                          : '';
       const divLabel  = DIVISION_LABELS[f.primary_division] || f.primary_division;
       const photoHtml = f.photo_url
         ? '<img class="lineup-roster-row__photo" src="' + escapeHtml(f.photo_url) + '" alt="' + escapeHtml(f.name) + '" onerror="this.style.display=\'none\'">'
@@ -1341,7 +1356,7 @@ function renderMyRoster() {
         '<div class="lineup-roster-row draft-my-pick">' +
           '<span class="draft-my-pick__num">' + (idx + 1) + '</span>' +
           '<div class="lineup-roster-row__photo-wrap">' + photoHtml + '</div>' +
-          '<span class="lineup-roster-row__rank ' + rankClass + '">' + rankLabel + '</span>' +
+          '<span class="lineup-roster-row__rank ' + rankClass + '">' + rankLabel + (typeof subBadge === 'string' ? subBadge : '') + '</span>' +
           '<div class="lineup-roster-row__info">' +
             '<button class="lineup-roster-row__name" data-open-fighter="' + f.id + '">' +
               escapeHtml(f.name) +
@@ -1706,6 +1721,11 @@ function renderQueue() {
 
     const rankLabel = f.is_champion ? 'C' : (f.current_rank ? '#' + f.current_rank : 'NR');
     const rankClass = f.is_champion ? 'rank-champion' : (f.current_rank ? 'rank-ranked' : 'rank-unranked');
+    const subBadge  = f.is_sub_champion && f.sub_title_type === 'interim'
+                        ? '<span class="subrank-badge subrank-interim">INT</span>'
+                      : f.is_sub_champion && f.sub_title_type === 'bmf'
+                        ? '<span class="subrank-badge subrank-bmf">BMF</span>'
+                        : '';
     const divLabel  = DIVISION_LABELS[f.primary_division] || f.primary_division;
 
     // When it's my turn AND the fighter is a legal pick, the queue row
@@ -1722,7 +1742,7 @@ function renderQueue() {
     html +=
       '<div class="lineup-roster-row draft-queue-row">' +
         '<span class="draft-queue-row__pos">' + (idx + 1) + '</span>' +
-        '<span class="lineup-roster-row__rank ' + rankClass + '">' + escapeHtml(rankLabel) + '</span>' +
+        '<span class="lineup-roster-row__rank ' + rankClass + '">' + escapeHtml(rankLabel) + (typeof subBadge === 'string' ? subBadge : '') + '</span>' +
         '<div class="lineup-roster-row__info">' +
           '<button class="lineup-roster-row__name" data-open-fighter="' + f.id + '">' +
             escapeHtml(f.name) +

@@ -68,7 +68,7 @@ async function initFighter() {
   const fetchPromises = [
     supabaseClient
       .from('fighters')
-      .select('id, name, nickname, primary_division, current_rank, is_champion, record_wins, record_losses, record_draws, photo_url, country')
+      .select('id, name, nickname, primary_division, current_rank, is_champion, is_sub_champion, sub_title_type, record_wins, record_losses, record_draws, photo_url, country')
       .eq('id', fighterId)
       .single(),
 
@@ -143,7 +143,10 @@ function renderFighterHero(fighter, fights, fighterId) {
 
   const rankLabel = fighter.is_champion ? 'C'
     : (fighter.current_rank ? '#' + fighter.current_rank : 'NR');
-  const rankSub   = fighter.is_champion ? 'CHAMP' : 'RANK';
+  const rankSub   = fighter.is_champion                                              ? 'CHAMP'
+                  : (fighter.is_sub_champion && fighter.sub_title_type === 'interim') ? 'INTERIM'
+                  : (fighter.is_sub_champion && fighter.sub_title_type === 'bmf')     ? 'BMF'
+                  : 'RANK';
 
   const tierClass = fighter.is_champion ? 'fighter-card--champion'
     : (fighter.current_rank && fighter.current_rank <= 5  ? 'fighter-card--top5'
