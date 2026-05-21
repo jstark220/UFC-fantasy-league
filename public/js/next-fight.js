@@ -23,33 +23,37 @@
 
     const todayISO = new Date().toISOString().split('T')[0];
 
-    // PostgREST `.or` with array values is fragile, so run two parallel
-    // queries — one for each side of the matchup — and merge them.
-    const sel = 'fighter_a_id, fighter_b_id, event:ufc_events(id, name, event_date)';
-    const [resA, resB] = await Promise.all([
-      supabaseClient.from('fight_results')
-        .select(sel).in('fighter_a_id', fighterIds).is('outcome', null),
-      supabaseClient.from('fight_results')
-        .select(sel).in('fighter_b_id', fighterIds).is('outcome', null),
-    ]);
-    const allFights = (resA.data || []).concat(resB.data || []);
+    // Strategy: pull every upcoming fight in the DB first (a few dozen
+    // rows at most), then filter to the fighters the caller asked about.
+    // Querying with .in() on 6000+ fighter IDs blows past PostgREST's URL
+    // length limit and fails silently, so this flip is essential.
+    const { data: rawFights, error } = await supabaseClient
+      .from('fight_results')
+      .select('fighter_a_id, fighter_b_id, event:ufc_events!inner(id, name, event_date)')
+      .is('outcome', null)
+      .gte('event.event_date', todayISO);
 
-    // Keep only fights at events that are today or later. (Outcome can be
-    // null on cancelled / future events; we filter the past-dated ones.)
-    const upcoming = allFights.filter(function (f) {
+    if (error) {
+      console.warn('NextFight.loadNextFights query failed:', error.message);
+      return {};
+    }
+
+    const upcoming = (rawFights || []).filter(function (f) {
+      // The !inner join can still surface rows where event resolves to null
+      // (orphaned fight_results). Defend against it.
       return f.event && f.event.event_date && f.event.event_date >= todayISO;
     });
 
-    // Resolve opponent names — they may not be in fighterIds.
-    const opponentIds = new Set();
+    // Resolve opponent names. Opponent ids may not be in the caller's list.
+    const allParticipantIds = new Set();
     upcoming.forEach(function (f) {
-      if (f.fighter_a_id) opponentIds.add(f.fighter_a_id);
-      if (f.fighter_b_id) opponentIds.add(f.fighter_b_id);
+      if (f.fighter_a_id) allParticipantIds.add(f.fighter_a_id);
+      if (f.fighter_b_id) allParticipantIds.add(f.fighter_b_id);
     });
     let nameMap = {};
-    if (opponentIds.size > 0) {
+    if (allParticipantIds.size > 0) {
       const fres = await supabaseClient.from('fighters')
-        .select('id, name').in('id', Array.from(opponentIds));
+        .select('id, name').in('id', Array.from(allParticipantIds));
       (fres.data || []).forEach(function (f) { nameMap[f.id] = f.name; });
     }
 
