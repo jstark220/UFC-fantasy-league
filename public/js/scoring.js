@@ -44,14 +44,17 @@
     quick_win_bonus:          5,    // extra +5 if R1 finish under 60s
     draw_points:              3,
 
-    // Title & ranked-opponent wins
-    divisional_title_win:     10,
-    divisional_title_defense: 5,
+    // Title & ranked-opponent wins.
+    // Title bonus and ranked-opponent bonus do NOT stack — a winner gets
+    // whichever is higher, not both. See computeFighterScore for the max-of
+    // logic and the champion-as-top-5 treatment.
+    divisional_title_win:     12,
+    divisional_title_defense: 8,
     bmf_interim_win:          5,
     bmf_interim_defense:      3,
-    top5_win:                 4,
-    top10_win:                2,
-    top15_win:                1,
+    top5_win:                 8,
+    top10_win:                5,
+    top15_win:                3,
 
     // Performance bonuses
     potn:                     6,
@@ -160,11 +163,38 @@
     }
 
     // ---- Ranked-opponent bonus (winner only) ----
+    // Champions have current_rank=null in our DB, so their opponent_rank
+    // also comes through as null. But champions ARE top-5 talent — beating
+    // the champion should give the same opponent-quality bonus as beating
+    // the #1 contender. Infer this from the fight context: if it's a
+    // divisional title fight and the opponent had null rank, the opponent
+    // was the defending champion.
     var rankedOppBonus = 0;
-    if (isWinner && opponentRank != null) {
-      if      (opponentRank <= 5)  rankedOppBonus = get(cfg, 'top5_win');
-      else if (opponentRank <= 10) rankedOppBonus = get(cfg, 'top10_win');
-      else if (opponentRank <= 15) rankedOppBonus = get(cfg, 'top15_win');
+    if (isWinner) {
+      var effectiveRank = opponentRank;
+      if (effectiveRank == null
+          && fight.title_type
+          && fight.title_type !== 'none'
+          && !fight.is_title_defense) {
+        // We're the challenger who just won the belt (divisional / interim /
+        // BMF). The opponent was the title holder, so their stored
+        // opponent_rank is null. Treat them as top-5 talent for this bonus.
+        effectiveRank = 1;
+      }
+      if (effectiveRank != null) {
+        if      (effectiveRank <= 5)  rankedOppBonus = get(cfg, 'top5_win');
+        else if (effectiveRank <= 10) rankedOppBonus = get(cfg, 'top10_win');
+        else if (effectiveRank <= 15) rankedOppBonus = get(cfg, 'top15_win');
+      }
+    }
+
+    // Matchup bonus is the larger of title vs ranked-opponent — they do NOT
+    // stack. Zero out the smaller one so the breakdown UI only shows the one
+    // that actually counted toward the score.
+    if (titleBonus >= rankedOppBonus) {
+      rankedOppBonus = 0;
+    } else {
+      titleBonus = 0;
     }
 
     // ---- Performance bonuses ----
