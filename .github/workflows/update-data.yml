@@ -58,9 +58,11 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
-      # ---- Step 3: Apply live rankings (fetches from Octagon API) ----
-      # Automatically picks up title changes — no manual edits needed.
-      - name: Apply live rankings
+      # ---- Step 3: Apply live rankings (scrapes ufc.com/rankings) ----
+      # UFC.com is the authoritative source for rankings and champions.
+      # It's updated immediately after every event by UFC staff, so this
+      # picks up title changes and ranking shuffles automatically.
+      - name: Apply live rankings from UFC.com
         run: node applyRankings.js
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -95,12 +97,11 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
-      # ---- Step 7: Recalculate champions from actual fight history ----
-      # The Octagon API rankings can lag months behind on title changes; this
-      # script uses our own fight_results data (scraped from ufcstats.com
-      # which posts within minutes of each event) as the source of truth.
-      - name: Recalculate champions from fight history
-        run: node recalculateChampions.js
+      # ---- Step 7: Re-apply UFC.com rankings ----
+      # After ingestion may have created new fighter records, re-run rankings
+      # so any newly-ingested fighters who are ranked on UFC.com get picked up.
+      - name: Re-apply rankings after ingestion
+        run: node applyRankings.js
         continue-on-error: true
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
