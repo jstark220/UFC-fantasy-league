@@ -4311,6 +4311,12 @@ body {
   margin-right: 4px;
 }
 
+.fight-row__flag {
+  margin-right: 4px;
+  font-size: 0.95em;
+  vertical-align: middle;
+}
+
 .fight-row__sub {
   font-size: var(--text-caption);
   display: inline-flex;

@@ -70,7 +70,7 @@ async function showFighterModal(fighterId) {
   var fetchPromises = [
     supabaseClient
       .from('fighters')
-      .select('id, name, nickname, primary_division, current_rank, is_champion, is_sub_champion, sub_title_type, record_wins, record_losses, record_draws, photo_url, country, date_of_birth')
+      .select('id, name, nickname, primary_division, current_rank, is_champion, is_sub_champion, sub_title_type, record_wins, record_losses, record_draws, photo_url, country, age, date_of_birth')
       .eq('id', fighterId)
       .single(),
 
@@ -253,7 +253,11 @@ function buildFighterModalHtml(fighter, fights, fighterId, opponentMap, tradeCtx
       '</div>' +
       champBadge +
       '<div class="fighter-card__info">' +
-        '<p class="fighter-card__division">' + _mEsc(divLabel) + '</p>' +
+        '<p class="fighter-card__division">' +
+          ((typeof countryFlag === 'function' && countryFlag(fighter.country)) ? countryFlag(fighter.country) + ' ' : '') +
+          _mEsc(divLabel) +
+          (fighter.age != null ? ' · Age ' + fighter.age : '') +
+        '</p>' +
         '<p class="fighter-card__name">' + _mEsc(fighter.name) + '</p>' +
         '<p class="fighter-card__record">' + record + '</p>' +
       '</div>' +

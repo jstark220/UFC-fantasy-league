@@ -68,7 +68,7 @@ async function initFighter() {
   const fetchPromises = [
     supabaseClient
       .from('fighters')
-      .select('id, name, nickname, primary_division, current_rank, is_champion, is_sub_champion, sub_title_type, record_wins, record_losses, record_draws, photo_url, country')
+      .select('id, name, nickname, primary_division, current_rank, is_champion, is_sub_champion, sub_title_type, record_wins, record_losses, record_draws, photo_url, country, age')
       .eq('id', fighterId)
       .single(),
 
@@ -185,7 +185,11 @@ function renderFighterHero(fighter, fights, fighterId) {
             '</div>' +
             champBadge +
             '<div class="fighter-card__info">' +
-              '<p class="fighter-card__division">' + escapeHtml(divLabel) + '</p>' +
+              '<p class="fighter-card__division">' +
+                ((typeof countryFlag === 'function' && countryFlag(fighter.country)) ? countryFlag(fighter.country) + ' ' : '') +
+                escapeHtml(divLabel) +
+                (fighter.age != null ? ' · Age ' + fighter.age : '') +
+              '</p>' +
               '<p class="fighter-card__name">' + escapeHtml(fighter.name) + '</p>' +
               '<p class="fighter-card__record">' + record + '</p>' +
             '</div>' +

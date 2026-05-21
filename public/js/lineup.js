@@ -209,7 +209,7 @@ async function initLineup() {
   // Fetch this user's roster ONCE — it's not event-specific.
   const rostersRes = await supabaseClient
     .from('rosters')
-    .select('id, draft_pick, slot_override, acquired_at, fighters(id, name, primary_division, current_rank, is_champion, is_sub_champion, sub_title_type, record_wins, record_losses, record_draws, photo_url)')
+    .select('id, draft_pick, slot_override, acquired_at, fighters(id, name, primary_division, current_rank, is_champion, is_sub_champion, sub_title_type, record_wins, record_losses, record_draws, photo_url, age, country)')
     .eq('league_id', leagueId)
     .eq('league_member_id', myMemberId)
     .order('draft_pick');
@@ -379,7 +379,7 @@ async function loadEventData() {
   if (idArr.length > 0) {
     const fighterRes = await supabaseClient
       .from('fighters')
-      .select('id, name, photo_url, current_rank, is_champion, is_sub_champion, sub_title_type')
+      .select('id, name, photo_url, current_rank, is_champion, is_sub_champion, sub_title_type, country')
       .in('id', idArr);
     (fighterRes.data || []).forEach(function(f) { fighterMap[f.id] = f; });
   }
@@ -395,6 +395,7 @@ async function loadEventData() {
       isChampion:   !!f.is_champion,
       isSubChamp:   !!f.is_sub_champion,
       subTitleType: f.sub_title_type,
+      country:      f.country || null,
     };
   }
 
@@ -1112,6 +1113,13 @@ function renderRosterRow(fighter, ctx, slotType) {
   }
   const divLabel   = DIVISION_LABELS[fighter.primary_division] || fighter.primary_division;
   const record     = fighter.record_wins + '-' + fighter.record_losses + (fighter.record_draws ? '-' + fighter.record_draws : '');
+  // Compose flag · division · age into a single sub-line. Each piece optional.
+  const flag = (typeof countryFlag === 'function') ? countryFlag(fighter.country) : '';
+  let subParts = [];
+  if (flag)              subParts.push(flag);
+  if (divLabel)          subParts.push(divLabel);
+  if (fighter.age != null) subParts.push('Age ' + fighter.age);
+  const divLine = subParts.join(' · ');
   // Prefer ID-based matching (handles same-named fighters) but fall back to
   // lowercase-name in case a roster fighter's record id differs from the
   // fight_results id for any reason.
@@ -1172,7 +1180,7 @@ function renderRosterRow(fighter, ctx, slotType) {
               (fightInfo.badge ? ' <span class="lineup-roster-row__matchup-badge">' + escapeHtml(fightInfo.badge) + '</span>' : '') +
             '</span>'
           : '') +
-        '<span class="lineup-roster-row__division">' + escapeHtml(divLabel) + '</span>' +
+        '<span class="lineup-roster-row__division">' + escapeHtml(divLine) + '</span>' +
       '</div>' +
       '<span class="lineup-roster-row__record">' + record + '</span>' +
       btnHtml +
@@ -1685,11 +1693,13 @@ function showFightCardModal() {
       ? '<img class="fight-row__photo" src="' + escapeHtml(fighter.photoUrl) + '" alt="' + escapeHtml(fighter.name) + '" onerror="this.style.display=\'none\'">'
       : '<div class="fight-row__photo fight-row__photo--placeholder"></div>';
     const winnerMark = isWinner ? '<span class="fight-row__winner-mark" title="Winner">✓</span>' : '';
+    const flag = (typeof countryFlag === 'function') ? countryFlag(fighter.country) : '';
+    const flagHtml = flag ? '<span class="fight-row__flag">' + flag + '</span>' : '';
     return (
       '<button class="fight-row__side ' + sideMod + '" data-open-fighter="' + fighter.id + '" type="button">' +
         photoHtml +
         '<div class="fight-row__text">' +
-          '<span class="fight-row__name">' + winnerMark + escapeHtml(fighter.name) + '</span>' +
+          '<span class="fight-row__name">' + winnerMark + flagHtml + escapeHtml(fighter.name) + '</span>' +
           '<span class="fight-row__sub">' + rankSubline(fighter) + ownershipPill(fighter.id) + '</span>' +
         '</div>' +
       '</button>'

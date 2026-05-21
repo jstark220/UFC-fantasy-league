@@ -148,7 +148,11 @@ function transformFighter(octagonId, fighter) {
     
     // Geographic info
     country: parseCountry(fighter.placeOfBirth),
-    
+
+    // Age (Octagon returns this as a string, e.g. "32"). Refreshed weekly so
+    // staleness is at most ~7 days. Null when API doesn't report it.
+    age: parseIntSafe(fighter.age, null),
+
     // Active status - Octagon uses "Active" or "Retired"
     is_active: fighter.status === 'Active' || !fighter.status,
     

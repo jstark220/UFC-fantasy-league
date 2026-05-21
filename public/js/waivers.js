@@ -63,7 +63,7 @@ async function initWaivers() {
       .eq('league_id', leagueId),
     supabaseClient
       .from('fighters')
-      .select('id, name, primary_division, current_rank, is_champion, is_sub_champion, sub_title_type, record_wins, record_losses, record_draws, photo_url, date_of_birth')
+      .select('id, name, primary_division, current_rank, is_champion, is_sub_champion, sub_title_type, record_wins, record_losses, record_draws, photo_url, age, country')
       .eq('is_active', true)
       .order('name'),
     supabaseClient
@@ -1162,8 +1162,15 @@ function renderAvailableFighters() {
     }
     var divLabel  = DIVISION_LABELS[f.primary_division] || f.primary_division;
     var record    = f.record_wins + '-' + f.record_losses + (f.record_draws ? '-' + f.record_draws : '');
-    var age     = ageFromDob(f.date_of_birth);
-    var divLine = age != null ? divLabel + ' · Age ' + age : divLabel;
+    // Compose the sub-line under the fighter name: flag · division · age.
+    // Each piece is optional — falls through cleanly if missing. The
+    // consumer escapes the result, so we just build raw strings here.
+    var flag = (typeof countryFlag === 'function') ? countryFlag(f.country) : '';
+    var divParts = [];
+    if (flag)          divParts.push(flag);
+    if (divLabel)      divParts.push(divLabel);
+    if (f.age != null) divParts.push('Age ' + f.age);
+    var divLine = divParts.join(' · ');
     var addMode   = decideAddMode(f.id);
 
     // Right-side stat: show the sort-relevant metric inline on each row
