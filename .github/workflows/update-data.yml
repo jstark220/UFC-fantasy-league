@@ -1,0 +1,93 @@
+# ============================================================================
+# update-data.yml
+# Runs the full data pipeline on a weekly schedule and on manual trigger.
+#
+# Schedule: every Tuesday at 6am UTC (day after most UFC events, which are
+# Saturday nights US time = Sunday UTC). This ensures fresh results and
+# rankings are in the DB before managers check their lineups mid-week.
+#
+# Manual trigger: go to GitHub → Actions → "Update UFC Data" → Run workflow.
+# Use this after a major event if you don't want to wait for the Tuesday run.
+#
+# Required GitHub Secrets (Settings → Secrets → Actions):
+#   SUPABASE_URL              — your Supabase project URL
+#   SUPABASE_SERVICE_ROLE_KEY — service role key (NOT the anon key)
+# ============================================================================
+
+name: Update UFC Data
+
+on:
+  schedule:
+    - cron: '0 6 * * 2'   # Every Tuesday at 6am UTC
+  workflow_dispatch:        # Allow manual trigger from the GitHub Actions UI
+
+jobs:
+  update:
+    name: Run data pipeline
+    runs-on: ubuntu-latest
+    timeout-minutes: 60     # Kill the job if it runs over an hour
+
+    steps:
+      # ---- Setup ----
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # ---- Step 1: Seed any new UFC events from ufcstats ----
+      # Must run before ingestFightResults so new events have ufcstats_id set.
+      - name: Ingest events (ufcstats)
+        run: node ingestEvents.js
+        continue-on-error: true   # Don't block the pipeline if ufcstats is down
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      # ---- Step 2: Refresh fighter roster and records from Octagon API ----
+      - name: Update fighter roster (Octagon API)
+        run: node fetchFighters.js
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      # ---- Step 3: Apply live rankings (fetches from Octagon API) ----
+      # Automatically picks up title changes — no manual edits needed.
+      - name: Apply live rankings
+        run: node applyRankings.js
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      # ---- Step 4: Activate fighters appearing on upcoming/recent cards ----
+      # Catches newly signed fighters before their first fight scrape.
+      - name: Activate fighters from event cards
+        run: node scrapeActiveFromEvents.js
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      # ---- Step 5: Ingest fight results for all events since 2023 ----
+      # Safe to re-run — uses ufcstats_fight_id as the upsert key.
+      - name: Ingest fight results
+        run: node ingestFightResults.js --all
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      # ---- Step 6: Fetch headshot photos for any new fighters ----
+      - name: Fetch fighter photos
+        run: node scrapePhotos.js
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
