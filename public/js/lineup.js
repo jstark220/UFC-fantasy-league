@@ -149,6 +149,12 @@ let leagueScoringConfig = null;
 // fought at the event, regardless of whether they were a starter.
 let selectedEventComputedScores = {};
 
+// Interval id for the live-update refresh. Fires every 60s while an event
+// is happening today, re-fetching fight results so newly-finished fights
+// surface without the user refreshing.
+let liveUpdateTimer = null;
+const LIVE_REFRESH_MS = 60 * 1000;
+
 // ========================================================================
 // INIT
 // ========================================================================
@@ -246,6 +252,7 @@ async function initLineup() {
   renderEventBanner();
   renderStarterSlots();
   renderRosterList();
+  startLiveUpdate();
 }
 
 // ========================================================================
@@ -485,6 +492,7 @@ async function onSelectEvent(eventId) {
   renderEventBanner();
   renderStarterSlots();
   renderRosterList();
+  startLiveUpdate();
 }
 
 // ========================================================================
@@ -495,11 +503,17 @@ function renderEventBanner() {
   const el = document.getElementById('eventBanner');
   const started = selections.size;
 
-  // Three possible status labels — past events are "Final", future events
-  // toggle between "Open" and "Locked" based on lineup_lock_time.
+  // Status label — past events are "Final", future events toggle between
+  // "Open" and "Locked", and an event happening RIGHT NOW (today + lock
+  // passed + not yet completed) shows a "Live" indicator. The auto-refresh
+  // interval kicks in for the live state so scores update without manual
+  // page reloads.
   var statusLabel;
   if (isPastEvent) {
     statusLabel = '<span style="color: var(--accent-gold);">&#127942; Event final</span>';
+  } else if (isEventLiveNow()) {
+    statusLabel = '<span class="lineup-live-dot"></span>' +
+                  '<span style="color: var(--accent-crimson); font-weight:700;">Live</span>';
   } else if (isLocked) {
     statusLabel = '<span style="color: var(--text-tertiary);">&#128274; Lineup locked</span>';
   } else {
@@ -681,6 +695,49 @@ function startLockCountdown() {
 
   tick(); // paint immediately so the user never sees the "--" placeholder
   lockCountdownTimer = setInterval(tick, 1000);
+}
+
+// ========================================================================
+// LIVE UPDATES
+// During an active UFC event the live-updates workflow ingests new fight
+// results to the DB every 5 minutes. Mirror that on the client by polling
+// the per-event data every 60s and re-rendering, so the user sees newly-
+// finished fights and updated scores without refreshing the page.
+//
+// Active = event_date is today and the lock time has passed (event has
+// started). For future events and past events, we don't poll.
+// ========================================================================
+function clearLiveUpdate() {
+  if (liveUpdateTimer != null) {
+    clearInterval(liveUpdateTimer);
+    liveUpdateTimer = null;
+  }
+}
+
+function isEventLiveNow() {
+  if (!selectedEvent) return false;
+  if (selectedEvent.is_completed) return false;
+  // Event is today?
+  const todayISO = new Date().toISOString().split('T')[0];
+  if (selectedEvent.event_date !== todayISO) return false;
+  // Lock has passed (event started)?
+  const lockTime = getEffectiveLockTime(selectedEvent);
+  return lockTime != null && new Date() >= lockTime;
+}
+
+function startLiveUpdate() {
+  clearLiveUpdate();
+  if (!isEventLiveNow()) return;
+  liveUpdateTimer = setInterval(async function() {
+    // Stop polling if the user has navigated to a non-live event in the
+    // meantime (the picker calls onSelectEvent which clears this anyway,
+    // but this is a safety net for tab-hidden states).
+    if (!isEventLiveNow()) { clearLiveUpdate(); return; }
+    await loadEventData();
+    renderEventBanner();
+    renderStarterSlots();
+    renderRosterList();
+  }, LIVE_REFRESH_MS);
 }
 
 // ========================================================================

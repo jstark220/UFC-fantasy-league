@@ -4535,6 +4535,24 @@ body {
   margin: 0;
 }
 
+/* Pulsing red dot used in the 'Live' status label during an active event */
+.lineup-live-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  background: var(--accent-crimson);
+  border-radius: 50%;
+  margin-right: 8px;
+  vertical-align: middle;
+  box-shadow: 0 0 0 0 var(--accent-crimson);
+  animation: lineup-live-pulse 1.8s ease-out infinite;
+}
+@keyframes lineup-live-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(193, 59, 46, 0.55); }
+  70%  { box-shadow: 0 0 0 10px rgba(193, 59, 46, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(193, 59, 46, 0); }
+}
+
 /* Live countdown digits inside the deadline subtext. Tabular numerals
    stop the line from reflowing every second as digit widths change. */
 .lock-countdown {
