@@ -17,8 +17,11 @@ const MENS_DIVISIONS = [
   'flyweight', 'bantamweight', 'featherweight', 'lightweight',
   'welterweight', 'middleweight', 'light_heavyweight', 'heavyweight'
 ];
-// Women's divisions treated as a shared flex pool after the first 2 picks
+// Women's divisions in weight order
 const WOMENS_DIVISIONS = ['strawweight', 'flyweight_w', 'bantamweight_w'];
+// All 11 weight classes in display order — every one gets its own slot
+// under the current construction rules (1 per weight class + 6 flex).
+const ALL_DIVISIONS = MENS_DIVISIONS.concat(WOMENS_DIVISIONS);
 
 const DIVISION_LABELS = {
   strawweight:       "Women's Strawweight",
@@ -961,9 +964,8 @@ function renderRosterList() {
 
   // Build a map of slot type -> array of fighters (in roster order)
   const groups = {};
-  MENS_DIVISIONS.forEach(function(d) { groups[d] = []; });
-  groups['women_flex'] = [];
-  groups['any_flex']   = [];
+  ALL_DIVISIONS.forEach(function(d) { groups[d] = []; });
+  groups['any_flex'] = [];
 
   assigned.forEach(function(item) {
     if (groups[item.slotType] !== undefined) {
@@ -983,20 +985,17 @@ function renderRosterList() {
 
   let html = '';
 
-  // Men's divisions — only render sections that have at least one fighter
-  MENS_DIVISIONS.forEach(function(div) {
+  // One section per weight class (men's first, then women's), each with
+  // ROSTER_SLOTS_PER_DIVISION pip total. Only render sections that have
+  // at least one fighter — empty divisions just don't appear.
+  ALL_DIVISIONS.forEach(function(div) {
     if (groups[div].length === 0) return;
-    html += renderSlotSection(DIVISION_LABELS[div], groups[div], 2, ctx, div);
+    html += renderSlotSection(DIVISION_LABELS[div], groups[div], ROSTER_SLOTS_PER_DIVISION, ctx, div);
   });
 
-  // Women's flex section
-  if (groups['women_flex'].length > 0) {
-    html += renderSlotSection("Women's Flex", groups['women_flex'], 2, ctx, 'women_flex');
-  }
-
-  // Any-division flex section
+  // Any-division flex section — the big spillover bucket
   if (groups['any_flex'].length > 0) {
-    html += renderSlotSection('Any-Division Flex', groups['any_flex'], 2, ctx, 'any_flex');
+    html += renderSlotSection('Any-Division Flex', groups['any_flex'], ROSTER_FLEX_SLOTS, ctx, 'any_flex');
   }
 
   // Temporary Extended Roster Flex — visible only while the +3 expansion is
@@ -1052,59 +1051,47 @@ function renderRosterList() {
 // the cap but distributed wrong — e.g. you traded away a welterweight and
 // now have an empty Welterweight slot.
 //
-// Slot layout: 2 per men's division, 2 women's flex, 2 any-flex (20 total).
-// Fighters above the per-division/women caps spill into the any-flex slots,
-// which is allowed up to the 2 any-flex slot count. The two failure modes:
+// Current layout: 1 per weight class (8 men + 3 women = 11 divisions) + 6
+// any-flex = 17 total. Fighters above the per-division cap spill into the
+// any-flex bucket, allowed up to ROSTER_FLEX_SLOTS. Two failure modes:
 //
-//   * Shortage — a men's division has < 2, or women count < 2. Means an
-//     empty slot the manager can't fill from their current roster.
-//   * Excess  — total any-flex demand exceeds the 2 available any-flex
-//     slots, i.e. fighters can't all be assigned to slots.
+//   * Shortage — a weight class has 0 fighters. Means an empty slot the
+//     manager can't fill from their current roster.
+//   * Excess  — total any-flex demand exceeds ROSTER_FLEX_SLOTS, i.e.
+//     fighters can't all be assigned to slots.
 //
 // Returns null when balanced; otherwise { shortages, excesses }.
 function detectRosterImbalance(roster) {
   const counts = {};
-  MENS_DIVISIONS.forEach(function(d) { counts[d] = 0; });
-  let womenTotal = 0;
+  ALL_DIVISIONS.forEach(function(d) { counts[d] = 0; });
 
   roster.forEach(function(f) {
-    if (WOMENS_DIVISIONS.includes(f.primary_division)) {
-      womenTotal++;
-    } else if (counts[f.primary_division] !== undefined) {
+    if (counts[f.primary_division] !== undefined) {
       counts[f.primary_division]++;
     }
   });
 
-  // How many fighters would need an any-flex slot? Each men's division above
-  // 2 contributes its surplus; women's count above 2 does the same.
   let anyFlexDemand = 0;
   const sources = [];
-  MENS_DIVISIONS.forEach(function(d) {
-    if (counts[d] > 2) {
-      anyFlexDemand += counts[d] - 2;
+  ALL_DIVISIONS.forEach(function(d) {
+    if (counts[d] > ROSTER_SLOTS_PER_DIVISION) {
+      anyFlexDemand += counts[d] - ROSTER_SLOTS_PER_DIVISION;
       sources.push(DIVISION_LABELS[d] + ' (' + counts[d] + ')');
     }
   });
-  if (womenTotal > 2) {
-    anyFlexDemand += womenTotal - 2;
-    sources.push("women's fighters (" + womenTotal + ')');
-  }
 
   const shortages = [];
   const excesses  = [];
 
-  // Shortages: unfillable slots
-  MENS_DIVISIONS.forEach(function(d) {
-    if (counts[d] < 2) {
-      shortages.push(DIVISION_LABELS[d] + ' (' + counts[d] + ' of 2)');
+  ALL_DIVISIONS.forEach(function(d) {
+    if (counts[d] < ROSTER_SLOTS_PER_DIVISION) {
+      shortages.push(DIVISION_LABELS[d] + ' (' + counts[d] + ' of ' + ROSTER_SLOTS_PER_DIVISION + ')');
     }
   });
-  if (womenTotal < 2) shortages.push("Women's Flex (" + womenTotal + ' of 2)');
 
-  // Excess: only flag when total spillover actually exceeds the 2 any-flex slots
-  if (anyFlexDemand > 2) {
+  if (anyFlexDemand > ROSTER_FLEX_SLOTS) {
     excesses.push(
-      'Any-Division Flex needs ' + anyFlexDemand + ' slots but only has 2 — ' +
+      'Any-Division Flex needs ' + anyFlexDemand + ' slots but only has ' + ROSTER_FLEX_SLOTS + ' — ' +
       'too many fighters in ' + sources.join(', ')
     );
   }
@@ -1252,17 +1239,13 @@ function renderRosterRow(fighter, ctx, slotType) {
   }
 
   // "→ Flex": only when not already in any_flex, AND either a flex slot is
-  // open OR a valid swap partner exists in flex.
-  // Men: swap partner must share division (so they can return to that slot).
-  // Women: any woman in flex can swap back to women_flex, regardless of specific division.
-  // Roster slot moves are independent of event state (they change slot_override
-  // on the rosters row, not anything event-scoped), so we don't gate on isLocked.
-  var fighterIsWoman = WOMENS_DIVISIONS.indexOf(fighter.primary_division) !== -1;
-  var flexSwapExists = fighterIsWoman
-    ? ctx.flexDivisions.some(function(d) { return WOMENS_DIVISIONS.indexOf(d) !== -1; })
-    : ctx.flexDivisions.indexOf(fighter.primary_division) !== -1;
+  // open OR a valid swap partner exists in flex (a flex fighter of the same
+  // weight class who can take the mover's slot). Roster slot moves are
+  // independent of event state — they change slot_override on the rosters
+  // row, not anything event-scoped — so we don't gate on isLocked.
+  var flexSwapExists = ctx.flexDivisions.indexOf(fighter.primary_division) !== -1;
   var flexEligible = slotType !== 'any_flex' &&
-    (ctx.flexCount < 2 || flexSwapExists);
+    (ctx.flexCount < ROSTER_FLEX_SLOTS || flexSwapExists);
   var flexBtn = (!isViewMode && flexEligible)
     ? '<button class="lineup-flex-btn" data-flex-id="' + fighter.id + '" title="Move to Any-Division Flex">&rarr; Flex</button>'
     : '';
@@ -1492,14 +1475,11 @@ function showMoveToFlexModal(fighterId) {
     .filter(function(item) { return item.slotType === 'any_flex'; })
     .map(function(item) { return item.fighter; });
 
-  const flexOpen = allFlexFighters.length < 2;
+  const flexOpen = allFlexFighters.length < ROSTER_FLEX_SLOTS;
 
-  // When flex is full, valid swap partners are fighters who can cleanly return to a
-  // non-flex slot once the mover takes their place.
-  // Men: must share the mover's division. Women: any woman can return to women_flex.
-  var moverIsWoman = WOMENS_DIVISIONS.indexOf(mover.primary_division) !== -1;
+  // When flex is full, valid swap partners are fighters in the mover's
+  // own weight class — only those can cleanly take the mover's vacated slot.
   const swappableFlex = allFlexFighters.filter(function(f) {
-    if (moverIsWoman) return WOMENS_DIVISIONS.indexOf(f.primary_division) !== -1;
     return f.primary_division === mover.primary_division;
   });
 
@@ -1510,9 +1490,8 @@ function showMoveToFlexModal(fighterId) {
 
   let swapOptionsHtml = '';
   if (!flexOpen) {
-    var swapDesc = moverIsWoman
-      ? 'Both flex slots are taken. Choose which woman to swap out (she will return to Women\'s Flex):'
-      : 'Both flex slots are taken. Choose who to swap out (must share your division so they can take your slot):';
+    var swapDesc = 'All ' + ROSTER_FLEX_SLOTS + ' flex slots are taken. ' +
+                   'Choose who to swap out (must share your weight class so they can take your slot):';
     swapOptionsHtml =
       '<p class="move-flex-body-text">' + swapDesc + '</p>' +
       '<div class="flex-swap-options" id="flexSwapOptions">' +
@@ -1650,26 +1629,20 @@ function showMoveOutOfFlexModal(fighterId) {
   const mover = myRoster.find(function(f) { return f.id === fighterId; });
   if (!mover) return;
 
-  // Find fighters currently occupying the target slot.
-  // Women in any_flex return to women_flex, not a division-specific slot.
+  // Find fighters currently occupying the target weight-class slot. Each
+  // weight class has its own dedicated slot now, so the lookup is uniform.
   const assigned = assignSlots(myRoster);
-  var moverIsWoman = WOMENS_DIVISIONS.indexOf(mover.primary_division) !== -1;
   const divFighters = assigned
-    .filter(function(item) {
-      return moverIsWoman
-        ? item.slotType === 'women_flex'
-        : item.slotType === mover.primary_division;
-    })
+    .filter(function(item) { return item.slotType === mover.primary_division; })
     .map(function(item) { return item.fighter; });
 
-  const divHasRoom = divFighters.length < 2;
+  const divHasRoom = divFighters.length < ROSTER_SLOTS_PER_DIVISION;
 
   var existing = document.getElementById('moveFlexModal');
   if (existing) existing.remove();
 
   const divLabel  = DIVISION_LABELS[mover.primary_division] || mover.primary_division;
-  // Label for the target slot shown in the modal
-  const targetSlotLabel = moverIsWoman ? "Women's Flex" : divLabel;
+  const targetSlotLabel = divLabel;
 
   let swapOptionsHtml = '';
   if (divHasRoom) {
@@ -1961,29 +1934,25 @@ function showWholeTeamModal() {
 
   // Group fighters by slot type using the same assignment the main roster
   // list uses, so the modal mirrors how the user already thinks about
-  // their team (men's divisions, women's flex, any-division flex).
+  // their team (one section per weight class, plus the any-flex bucket).
   var assigned = assignSlots(myRoster);
   var groups = {};
-  MENS_DIVISIONS.forEach(function(d) { groups[d] = []; });
-  groups['women_flex'] = [];
-  groups['any_flex']   = [];
+  ALL_DIVISIONS.forEach(function(d) { groups[d] = []; });
+  groups['any_flex'] = [];
   assigned.forEach(function(item) {
     if (groups[item.slotType]) groups[item.slotType].push(item.fighter);
   });
 
   // Section options:
   //   showDivision — print the fighter's actual division on the tile.
-  //                  Useful in flex sections (where it's not implied by
-  //                  the section header), redundant in everywhere else.
+  //                  Useful in the flex section (where it's not implied
+  //                  by the section header), redundant elsewhere.
   var sectionsHtml = '';
-  MENS_DIVISIONS.forEach(function(div) {
+  ALL_DIVISIONS.forEach(function(div) {
     if (groups[div].length > 0) {
       sectionsHtml += renderTeamSection(DIVISION_LABELS[div], groups[div], {});
     }
   });
-  if (groups['women_flex'].length > 0) {
-    sectionsHtml += renderTeamSection("Women's Flex", groups['women_flex'], { showDivision: true });
-  }
   if (groups['any_flex'].length > 0) {
     sectionsHtml += renderTeamSection('Any-Division Flex', groups['any_flex'], { showDivision: true });
   }
@@ -2277,42 +2246,30 @@ async function saveEditEvent() {
 // greedily assigns each to its slot category.
 // ========================================================================
 function assignSlots(fighters) {
-  const menCounts = {};
-  MENS_DIVISIONS.forEach(function(d) { menCounts[d] = 0; });
-  let womenCount = 0;
-  let flexCount  = 0;
-  const result   = [];
+  // Greedy slot assignment: each weight class gets up to
+  // ROSTER_SLOTS_PER_DIVISION slots; everything else falls into the
+  // Any-Division Flex pool (up to ROSTER_FLEX_SLOTS). Pinned fighters
+  // (slot_override = 'any_flex') claim their flex slot first so the
+  // algorithm doesn't hand those slots to ordinary overflow fighters.
+  const divCounts = {};
+  ALL_DIVISIONS.forEach(function(d) { divCounts[d] = 0; });
+  const result = [];
 
-  // Pinned fighters (slot_override = 'any_flex') are processed first so they claim
-  // their flex slot before the greedy algorithm hands those slots to overflow fighters.
   const pinned   = fighters.filter(function(f) { return f.slot_override === 'any_flex'; });
   const unpinned = fighters.filter(function(f) { return f.slot_override !== 'any_flex'; });
 
   pinned.forEach(function(f) {
-    flexCount++;
     result.push({ fighter: f, slotType: 'any_flex' });
   });
 
   unpinned.forEach(function(f) {
-    const isWoman = WOMENS_DIVISIONS.includes(f.primary_division);
-
-    if (isWoman) {
-      if (womenCount < 2) {
-        womenCount++;
-        result.push({ fighter: f, slotType: 'women_flex' });
-      } else {
-        flexCount++;
-        result.push({ fighter: f, slotType: 'any_flex' });
-      }
+    const div = f.primary_division;
+    const cap = ROSTER_SLOTS_PER_DIVISION;
+    if (divCounts[div] !== undefined && divCounts[div] < cap) {
+      divCounts[div]++;
+      result.push({ fighter: f, slotType: div });
     } else {
-      const divCount = menCounts[f.primary_division] || 0;
-      if (divCount < 2) {
-        menCounts[f.primary_division] = divCount + 1;
-        result.push({ fighter: f, slotType: f.primary_division });
-      } else {
-        flexCount++;
-        result.push({ fighter: f, slotType: 'any_flex' });
-      }
+      result.push({ fighter: f, slotType: 'any_flex' });
     }
   });
 

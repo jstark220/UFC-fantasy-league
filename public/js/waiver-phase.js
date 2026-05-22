@@ -17,6 +17,19 @@
 // league until 3am ET on (drop_date_ET + 2 calendar days).
 // ========================================================================
 
+// ----- Roster construction constants -------------------------------------
+// Single source of truth for roster sizing, exposed on window so the other
+// scripts (waivers.js, lineup.js) can read them without duplication.
+//
+// Current rules:
+//   * 1 slot per weight class (11 total — 8 men's + 3 women's)
+//   * 6 Any-Division Flex slots (any fighter, regardless of weight class)
+//   * Base size: 17.  Event-week expansion adds +3 to 20.
+var ROSTER_SLOTS_PER_DIVISION = 1;
+var ROSTER_FLEX_SLOTS         = 6;
+var ROSTER_SIZE_BASE          = 17;   // 11 division + 6 flex
+var ROSTER_SIZE_EXPANDED      = 20;   // event-week +3 cap
+
 // ----- Time-zone helpers -------------------------------------------------
 // Browsers don't expose "what wall-clock day is it in New York" directly,
 // so we use Intl + a fixed-format parse to derive ET components from any
@@ -150,9 +163,10 @@ function isCapExpanded(now, nextEventDateStr) {
   return t >= c.capExpand.getTime() && t < c.capRevert.getTime();
 }
 
-// The roster cap that applies right now (20 normal, 23 during expansion).
+// The roster cap that applies right now (base size normally, base + 3
+// during the event-week expansion window).
 function getRosterCap(now, nextEventDateStr) {
-  return isCapExpanded(now, nextEventDateStr) ? 23 : 20;
+  return isCapExpanded(now, nextEventDateStr) ? ROSTER_SIZE_EXPANDED : ROSTER_SIZE_BASE;
 }
 
 // Given a drop timestamp, returns when that fighter clears waivers and

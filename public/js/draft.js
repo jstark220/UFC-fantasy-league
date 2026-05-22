@@ -15,6 +15,9 @@ const MENS_DIVISIONS = [
   'welterweight', 'middleweight', 'light_heavyweight', 'heavyweight'
 ];
 const WOMENS_DIVISIONS = ['strawweight', 'flyweight_w', 'bantamweight_w'];
+// All 11 weight classes in display order — every one gets its own slot
+// under the current construction rules.
+const ALL_DRAFT_DIVISIONS = MENS_DIVISIONS.concat(WOMENS_DIVISIONS);
 
 // Human-readable labels for display in the fighter pool and roster panel
 const DIVISION_LABELS = {
@@ -317,37 +320,26 @@ function isMyTurn() {
 // ROSTER SLOT VALIDATION
 // Returns true if the fighter can legally be added to the manager's roster
 // given the current picks. Enforces the v1.2 roster construction rules:
-//   - 2 slots per men's weight class (8 divisions = 16 slots)
-//   - 2 women's flex slots (any women's division)
-//   - 2 any-division flex slots (for overflow from any category)
+//   - ROSTER_SLOTS_PER_DIVISION slot(s) per weight class (8 men + 3 women)
+//   - ROSTER_FLEX_SLOTS any-division flex slots (overflow from any class)
+//   - Defaults today: 1 per class + 6 flex = 17 fighters per roster
 // ========================================================================
 function canPick(fighter, currentPickFighters) {
-  const isWoman = WOMENS_DIVISIONS.includes(fighter.primary_division);
-
-  const menCounts = {};
-  let womenCount = 0;
-
+  const divCounts = {};
   currentPickFighters.forEach(function(f) {
-    if (WOMENS_DIVISIONS.includes(f.primary_division)) {
-      womenCount++;
-    } else {
-      menCounts[f.primary_division] = (menCounts[f.primary_division] || 0) + 1;
-    }
+    divCounts[f.primary_division] = (divCounts[f.primary_division] || 0) + 1;
   });
 
-  // Tally how many fighters have already overflowed into any-division flex slots
-  let flexUsed = Math.max(0, womenCount - 2); // women beyond the 2 women's flex slots
-  MENS_DIVISIONS.forEach(function(div) {
-    flexUsed += Math.max(0, (menCounts[div] || 0) - 2); // men beyond 2 per division
+  // Tally how many fighters have already overflowed into any-flex slots
+  let flexUsed = 0;
+  Object.keys(divCounts).forEach(function(div) {
+    flexUsed += Math.max(0, divCounts[div] - ROSTER_SLOTS_PER_DIVISION);
   });
 
-  if (isWoman) {
-    // Women go into women's flex (up to 2) or any-division flex (up to 2)
-    return womenCount < 2 || flexUsed < 2;
-  } else {
-    // Men go into their division slot (up to 2) or any-division flex (up to 2)
-    return (menCounts[fighter.primary_division] || 0) < 2 || flexUsed < 2;
-  }
+  // Pickable if either this division still has room OR the flex bucket does
+  const divHasRoom  = (divCounts[fighter.primary_division] || 0) < ROSTER_SLOTS_PER_DIVISION;
+  const flexHasRoom = flexUsed < ROSTER_FLEX_SLOTS;
+  return divHasRoom || flexHasRoom;
 }
 
 // ========================================================================
@@ -1295,20 +1287,17 @@ function renderMyRoster() {
   const myPickFighters = getMyPickFighters();
 
   // Group fighters into the slot category they'd actually occupy. Each
-  // division holds up to 2; women's flex holds up to 2; everything past
-  // that overflows into Any-Division Flex.
-  const menInDiv  = {};
-  MENS_DIVISIONS.forEach(function(d) { menInDiv[d] = []; });
-  const womenFlex = [];
-  const anyFlex   = [];
+  // weight class holds up to ROSTER_SLOTS_PER_DIVISION; overflow goes to
+  // the Any-Division Flex bucket (up to ROSTER_FLEX_SLOTS).
+  const inDiv = {};
+  ALL_DRAFT_DIVISIONS.forEach(function(d) { inDiv[d] = []; });
+  const anyFlex = [];
 
   myPickFighters.forEach(function(f) {
-    if (WOMENS_DIVISIONS.includes(f.primary_division)) {
-      if (womenFlex.length < 2) womenFlex.push(f);
-      else                       anyFlex.push(f);
-    } else if (MENS_DIVISIONS.includes(f.primary_division)) {
-      if (menInDiv[f.primary_division].length < 2) menInDiv[f.primary_division].push(f);
-      else                                          anyFlex.push(f);
+    if (inDiv[f.primary_division] && inDiv[f.primary_division].length < ROSTER_SLOTS_PER_DIVISION) {
+      inDiv[f.primary_division].push(f);
+    } else if (inDiv[f.primary_division] !== undefined) {
+      anyFlex.push(f);
     }
   });
 
@@ -1316,21 +1305,16 @@ function renderMyRoster() {
 
   let html = '<div class="draft-slots">';
 
-  MENS_DIVISIONS.forEach(function(div) {
+  ALL_DRAFT_DIVISIONS.forEach(function(div) {
     html += '<div class="draft-slots__row">';
     html += '<span class="draft-slots__label">' + escapeHtml(DIVISION_LABELS[div]) + '</span>';
-    html += '<span class="draft-slots__pips">' + renderPips(menInDiv[div], 2) + '</span>';
+    html += '<span class="draft-slots__pips">' + renderPips(inDiv[div], ROSTER_SLOTS_PER_DIVISION) + '</span>';
     html += '</div>';
   });
 
   html += '<div class="draft-slots__row">';
-  html += '<span class="draft-slots__label">Women\'s Flex</span>';
-  html += '<span class="draft-slots__pips">' + renderPips(womenFlex, 2) + '</span>';
-  html += '</div>';
-
-  html += '<div class="draft-slots__row">';
   html += '<span class="draft-slots__label">Any-Division Flex</span>';
-  html += '<span class="draft-slots__pips">' + renderPips(anyFlex.slice(0, 2), 2) + '</span>';
+  html += '<span class="draft-slots__pips">' + renderPips(anyFlex.slice(0, ROSTER_FLEX_SLOTS), ROSTER_FLEX_SLOTS) + '</span>';
   html += '</div>';
 
   html += '</div>';
@@ -1393,37 +1377,32 @@ function showWholeRosterModal(memberId) {
     .map(function(p) { return fighterMap[p.fighter_id]; })
     .filter(Boolean);
 
-  // Group by slot (same logic as renderMyRoster). Each men's division
-  // holds up to 2; women's flex up to 2; everything past those overflows
-  // into Any-Division Flex.
-  var menInDiv  = {};
-  MENS_DIVISIONS.forEach(function(d) { menInDiv[d] = []; });
-  var womenFlex = [];
-  var anyFlex   = [];
+  // Group by slot (same logic as renderMyRoster). Each weight class holds
+  // up to ROSTER_SLOTS_PER_DIVISION; overflow goes to Any-Division Flex.
+  var inDiv   = {};
+  ALL_DRAFT_DIVISIONS.forEach(function(d) { inDiv[d] = []; });
+  var anyFlex = [];
 
   fighters.forEach(function(f) {
-    if (WOMENS_DIVISIONS.includes(f.primary_division)) {
-      if (womenFlex.length < 2) womenFlex.push(f);
-      else                       anyFlex.push(f);
-    } else if (MENS_DIVISIONS.includes(f.primary_division)) {
-      if (menInDiv[f.primary_division].length < 2) menInDiv[f.primary_division].push(f);
-      else                                          anyFlex.push(f);
+    if (inDiv[f.primary_division] && inDiv[f.primary_division].length < ROSTER_SLOTS_PER_DIVISION) {
+      inDiv[f.primary_division].push(f);
+    } else if (inDiv[f.primary_division] !== undefined) {
+      anyFlex.push(f);
     }
   });
 
-  // Always render every men's division section + the two flex sections,
-  // even when empty — empty placeholders communicate which slots still
-  // need to be filled during the draft.
+  // Always render every weight-class section + the flex section, even when
+  // empty — empty placeholders communicate which slots still need to be
+  // filled during the draft.
   var sectionsHtml = '';
-  MENS_DIVISIONS.forEach(function(div) {
-    sectionsHtml += renderWholeRosterSection(DIVISION_LABELS[div], menInDiv[div], {});
+  ALL_DRAFT_DIVISIONS.forEach(function(div) {
+    sectionsHtml += renderWholeRosterSection(DIVISION_LABELS[div], inDiv[div], {});
   });
-  sectionsHtml += renderWholeRosterSection("Women's Flex",       womenFlex,             { showDivision: true });
-  sectionsHtml += renderWholeRosterSection('Any-Division Flex',  anyFlex.slice(0, 2),   { showDivision: true });
+  sectionsHtml += renderWholeRosterSection('Any-Division Flex', anyFlex.slice(0, ROSTER_FLEX_SLOTS), { showDivision: true });
 
   var eyebrowText = isMyRoster ? 'Whole Roster' : 'Team Roster';
   var titleText   = (isMyRoster ? 'My Picks' : escapeHtml(targetMember.team_name)) +
-                    ' &middot; ' + fighters.length + ' / 20';
+                    ' &middot; ' + fighters.length + ' / ' + ROSTER_SIZE_BASE;
 
   var modal = document.createElement('div');
   modal.id = 'wholeRosterModal';

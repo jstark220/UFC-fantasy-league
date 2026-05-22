@@ -38,7 +38,7 @@ var claimingFighter   = null;
 // Waiver-phase state — recomputed at every page load and refresh
 var nextEvent       = null;          // ufc_events row used as the schedule anchor
 var phaseInfo       = { phase: 'FA', closesAt: null, opensAt: null };
-var rosterCap       = 20;            // 20 normal, 23 during +3 expansion (Thu→Sun event week)
+var rosterCap       = ROSTER_SIZE_BASE; // grows to ROSTER_SIZE_EXPANDED during the +3 event-week window
 var fighterDropMap  = {};            // { fighter_id: { dropped_at, league_member_id, source } } — most recent drop per fighter
 
 // ========================================================================
@@ -659,7 +659,7 @@ async function rejectClaim(claim, reason) {
 // AUTO-DROP — runs on/after Wed 3am ET. For each manager: if they've made
 // fewer than 3 manual drops since the most recent cap-expansion (Thu 3am
 // ET event week), drop their most-recently-added fighters until roster
-// size <= 20. Each forced drop is logged with source='auto'.
+// size is back to ROSTER_SIZE_BASE. Each forced drop is logged with source='auto'.
 //
 // Idempotent: skipped for any manager who already has source='auto' drops
 // recorded since this cycle's autoDrop time.
@@ -691,13 +691,13 @@ async function runAutoDropIfNeeded(cutoffs) {
     if (autoSince[m.id]) continue;                      // already auto-dropped this cycle
     if ((manualSince[m.id] || 0) >= 3) continue;        // dropped enough manually
     var roster = rosterMap[m.id] || [];
-    if (roster.length <= 20) continue;                  // already compliant
+    if (roster.length <= ROSTER_SIZE_BASE) continue;    // already compliant
 
-    // Drop most recently added until size = 20
+    // Drop most recently added until size = ROSTER_SIZE_BASE
     roster.sort(function(a, b) {
       return new Date(b.acquired_at || 0).getTime() - new Date(a.acquired_at || 0).getTime();
     });
-    var toDrop = roster.slice(0, roster.length - 20);
+    var toDrop = roster.slice(0, roster.length - ROSTER_SIZE_BASE);
     for (var j = 0; j < toDrop.length; j++) {
       await supabaseClient.from('rosters').delete()
         .eq('league_id', leagueId)
@@ -1968,10 +1968,10 @@ async function processWaivers() {
       return r.league_member_id === claim.league_member_id;
     }).length;
 
-    if (memberRosterSize >= 20 && !claim.fighter_to_drop_id) {
+    if (memberRosterSize >= ROSTER_SIZE_BASE && !claim.fighter_to_drop_id) {
       await supabaseClient.from('waiver_claims').update({
         status: 'rejected',
-        rejection_reason: 'At the 20-fighter cap. Must specify a fighter to drop.',
+        rejection_reason: 'At the ' + ROSTER_SIZE_BASE + '-fighter cap. Must specify a fighter to drop.',
         processed_at: new Date().toISOString()
       }).eq('id', claim.id);
       continue;
@@ -2112,52 +2112,42 @@ async function refreshData() {
 // ========================================================================
 // ROSTER CONSTRUCTION VALIDATION
 // ========================================================================
-// Roster construction (per league rules):
-//   * Up to 2 fighters per men's division
-//   * Up to 2 women in the "women's flex" bucket (any women's division)
-//   * Up to 2 in the "any-division flex" bucket (any fighter, used for overflow)
-// Returns null if `fighters` fits, otherwise a user-facing error message.
-var WAIVER_WOMENS_DIVISIONS = ['strawweight', 'flyweight_w', 'bantamweight_w'];
+// Current roster rules (single source of truth: ROSTER_* constants in
+// waiver-phase.js):
+//   * 1 fighter per weight class — 11 weight classes (8 men + 3 women)
+//   * 6 fighters in the Any-Division Flex bucket (any weight class)
+//   * Total cap = 17 (base) or 20 (during the +3 event-week expansion)
+//
+// Construction works by spillover: a division can hold up to
+// ROSTER_SLOTS_PER_DIVISION; anything beyond that pushes into Any-Flex.
+// If total Any-Flex demand exceeds ROSTER_FLEX_SLOTS, the roster won't fit.
+// Returns null when fighters fit, otherwise a user-facing error message.
 
 function checkRosterConstruction(fighters) {
-  if (fighters.length > 20) return 'Roster cannot exceed 20 fighters.';
+  if (fighters.length > ROSTER_SIZE_EXPANDED) {
+    return 'Roster cannot exceed ' + ROSTER_SIZE_EXPANDED + ' fighters even during the event-week expansion.';
+  }
 
-  // Tally fighters per division
   var counts = {};
   fighters.forEach(function(f) {
     counts[f.primary_division] = (counts[f.primary_division] || 0) + 1;
   });
 
-  // Each men's division above 2 spills into the any-flex bucket;
-  // women above 2 (across all women's divisions) also spill into any-flex.
   var anyFlexNeeded = 0;
-  var womenTotal    = 0;
-  var overFullMens  = []; // collect division labels that already have 2
-
+  var overFullDivisions = [];
   Object.keys(counts).forEach(function(div) {
-    if (WAIVER_WOMENS_DIVISIONS.indexOf(div) !== -1) {
-      womenTotal += counts[div];
-    } else {
-      var overflow = Math.max(0, counts[div] - 2);
+    var overflow = Math.max(0, counts[div] - ROSTER_SLOTS_PER_DIVISION);
+    if (overflow > 0) {
       anyFlexNeeded += overflow;
-      if (overflow > 0) overFullMens.push(DIVISION_LABELS[div] || div);
+      overFullDivisions.push(DIVISION_LABELS[div] || div);
     }
   });
 
-  var womenOverflow = Math.max(0, womenTotal - 2);
-  anyFlexNeeded += womenOverflow;
-
-  if (anyFlexNeeded > 2) {
-    var why;
-    if (overFullMens.length > 0 && womenOverflow > 0) {
-      why = 'too many ' + overFullMens.join(', ') + ' fighters and too many women';
-    } else if (overFullMens.length > 0) {
-      why = 'too many fighters in ' + overFullMens.join(', ');
-    } else {
-      why = 'too many women (limit is 2 in the women\'s flex slot)';
-    }
+  if (anyFlexNeeded > ROSTER_FLEX_SLOTS) {
+    var why = 'too many fighters in ' + overFullDivisions.join(', ');
     return 'This claim won\'t fit your roster — ' + why +
-           '. The any-division flex bucket only holds 2. Pick a different fighter to drop.';
+           '. The Any-Division Flex bucket only holds ' + ROSTER_FLEX_SLOTS +
+           '. Pick a different fighter to drop.';
   }
   return null;
 }
