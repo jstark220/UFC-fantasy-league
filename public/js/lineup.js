@@ -935,21 +935,22 @@ function renderRosterList() {
 
   const isFull = selections.size >= MAX_STARTERS;
 
-  // Determine whether the +3 cap expansion is currently in effect. Only when
-  // expanded do we split out a "Temporary Extended Roster Flex" (TERF) section
-  // for the most recently acquired fighters above the normal base cap.
+  // Determine whether the +3 cap expansion is currently in effect. When
+  // expanded, render the TERF section unconditionally so managers can see
+  // they have extra slots available — even when those slots are empty.
   const eventDate    = selectedEvent ? selectedEvent.event_date : null;
   const capExpanded  = typeof isCapExpanded === 'function' ? isCapExpanded(new Date(), eventDate) : false;
   const overflow     = Math.max(0, myRoster.length - ROSTER_SIZE_BASE);
-  const showTerf     = capExpanded && overflow > 0;
+  const showTerf     = capExpanded;  // visible during the whole event-week window
 
-  // If TERF is active, peel the most-recently-acquired N fighters off the
-  // bottom and run slot assignment on the rest. They don't compete for slot
-  // construction limits while they're "extended". Auto-drop on Wed 3am ET
-  // will hit these same fighters first.
+  // Peel the most-recently-acquired N fighters off the bottom and run slot
+  // assignment on the rest. They don't compete for slot construction limits
+  // while they're "extended". Auto-drop on Wed 3am ET will hit these same
+  // fighters first. When overflow is 0, terfRoster stays empty and the
+  // TERF section just shows empty pip slots.
   let coreRoster = myRoster;
   let terfRoster = [];
-  if (showTerf) {
+  if (showTerf && overflow > 0) {
     const sortedByAcquired = myRoster.slice().sort(function(a, b) {
       const ta = a.acquired_at ? new Date(a.acquired_at).getTime() : 0;
       const tb = b.acquired_at ? new Date(b.acquired_at).getTime() : 0;
@@ -1147,34 +1148,49 @@ function renderImbalanceBanner(roster, capExpanded) {
 // make it explicit these slots are temporary and will be auto-dropped if
 // the roster isn't trimmed back to ROSTER_SIZE_BASE by Wed 3am ET.
 function renderTerfSection(fighters, ctx) {
-  if (!fighters || fighters.length === 0) return '';
+  fighters = fighters || [];
   const expansionSlots = ROSTER_SIZE_EXPANDED - ROSTER_SIZE_BASE;
   const pipsHtml = renderPips(fighters.length, expansionSlots);
 
   // Wrap the whole section so we can tint the rows inside via CSS — distinct
   // teal accent so the temporary slots read clearly as "not part of the
-  // regular roster construction".
+  // regular roster construction". Section renders even when empty so the
+  // manager can see they have extra slots available during the expansion.
   let html = '<div class="lineup-terf-section">';
   html += '<div class="lineup-slot-header lineup-slot-header--terf">';
   html += '<span class="lineup-slot-header__title">Temporary Flex &mdash; Event Week</span>';
   html += '<span class="lineup-slot-header__pips">' + pipsHtml + '</span>';
   html += '</div>';
-  html += '<p class="lineup-terf-note">' +
-            'These extra slots are open while waivers are active for the upcoming event. ' +
-            'Drop your roster back to ' + ROSTER_SIZE_BASE + ' by Wed 3am ET, ' +
-            'or the most recently added fighters here will be auto-dropped.' +
-          '</p>';
 
-  // Sort started fighters to the top (mirrors renderSlotSection)
-  const sorted = fighters.slice().sort(function(a, b) {
-    const aStarted = selections.has(a.id);
-    const bStarted = selections.has(b.id);
-    if (aStarted !== bStarted) return aStarted ? -1 : 1;
-    return 0;
-  });
-  sorted.forEach(function(fighter) {
-    html += renderRosterRow(fighter, ctx, 'any_flex');
-  });
+  const noteText = fighters.length > 0
+    ? 'These extra slots are open while waivers are active for the upcoming event. ' +
+      'Drop your roster back to ' + ROSTER_SIZE_BASE + ' by Wed 3am ET, ' +
+      'or the most recently added fighters here will be auto-dropped.'
+    : 'You have ' + expansionSlots + ' extra roster spots available through Sunday. ' +
+      'Pick up free agents or submit waiver claims to fill them — anyone still here at ' +
+      'Wed 3am ET (after the drop-down deadline) will be auto-dropped.';
+  html += '<p class="lineup-terf-note">' + noteText + '</p>';
+
+  if (fighters.length === 0) {
+    // Empty placeholder row so the section has visual weight even with no
+    // fighters in it yet.
+    html += '<div class="lineup-roster-row lineup-roster-row--empty">' +
+              '<span class="lineup-roster-row__division" style="opacity:.55;">' +
+                expansionSlots + ' open slots — claim free agents during the waiver window' +
+              '</span>' +
+            '</div>';
+  } else {
+    // Sort started fighters to the top (mirrors renderSlotSection)
+    const sorted = fighters.slice().sort(function(a, b) {
+      const aStarted = selections.has(a.id);
+      const bStarted = selections.has(b.id);
+      if (aStarted !== bStarted) return aStarted ? -1 : 1;
+      return 0;
+    });
+    sorted.forEach(function(fighter) {
+      html += renderRosterRow(fighter, ctx, 'any_flex');
+    });
+  }
   html += '</div>';  // close .lineup-terf-section
   return html;
 }
@@ -2153,7 +2169,13 @@ function showEditEventModal() {
         '</div>' +
         '<div class="form-group">' +
           '<label for="editEventLockTime">Lineup lock time</label>' +
-          '<input type="datetime-local" id="editEventLockTime" value="' + isoToLocalDatetime(ev.lineup_lock_time) + '">' +
+          // Default the input to either the commissioner's explicit value
+          // or the computed effective lock time (5pm ET on event_date)
+          // so empty events show a sensible suggested time instead of
+          // the browser's "today's date" placeholder.
+          '<input type="datetime-local" id="editEventLockTime" value="' +
+            isoToLocalDatetime(ev.lineup_lock_time || (getEffectiveLockTime(ev) || new Date()).toISOString()) +
+          '">' +
         '</div>' +
         '<div class="form-group">' +
           '<label for="editEventVenue">Venue</label>' +

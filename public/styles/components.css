@@ -6288,6 +6288,14 @@ body {
   background: rgba(63, 184, 176, 0.04);
 }
 
+/* Empty-state row inside an active TERF section — shown when the expansion
+   window is open but the manager hasn't claimed any extra fighters yet. */
+.lineup-roster-row--empty {
+  padding: var(--space-3) var(--space-3);
+  font-style: italic;
+  color: var(--text-tertiary);
+}
+
 /* ============================================================
    ROSTER IMBALANCE BANNER (lineup page)
    Shown above the starters when trades / FA leave the roster
