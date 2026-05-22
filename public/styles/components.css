@@ -4042,6 +4042,72 @@ body {
   max-width: 1360px;
 }
 
+/* ----- How it works modal — schedule + rules explainer ----- */
+.fight-card-modal.how-it-works-modal {
+  max-width: 640px;
+}
+.how-section {
+  margin-bottom: var(--space-6);
+}
+.how-section:last-child {
+  margin-bottom: 0;
+}
+.how-section__title {
+  font-size: var(--text-body);
+  font-weight: 700;
+  margin: 0 0 var(--space-2);
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.how-section__title-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.how-section p {
+  margin: 0 0 var(--space-2);
+  color: var(--text-secondary);
+  line-height: 1.55;
+  font-size: var(--text-body-sm);
+}
+.how-section p:last-child { margin-bottom: 0; }
+.how-section strong { color: var(--text-primary); }
+.how-section em { color: var(--text-secondary); font-style: italic; }
+.how-section__list {
+  margin: 0 0 var(--space-2);
+  padding-left: var(--space-5);
+  color: var(--text-secondary);
+  font-size: var(--text-body-sm);
+}
+.how-section__list li {
+  margin-bottom: 2px;
+  line-height: 1.5;
+}
+.how-section__schedule {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: var(--space-2);
+  font-size: var(--text-body-sm);
+}
+.how-section__schedule td {
+  padding: 6px var(--space-2) 6px 0;
+  vertical-align: top;
+  color: var(--text-secondary);
+  line-height: 1.45;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.how-section__schedule tr:last-child td { border-bottom: none; }
+.how-section__schedule td:first-child {
+  white-space: nowrap;
+  color: var(--text-primary);
+  padding-right: var(--space-3);
+  width: 110px;
+}
+
 .whole-team-modal__body {
   padding: var(--space-6) var(--space-6) var(--space-6);
 }

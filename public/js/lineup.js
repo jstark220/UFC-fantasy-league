@@ -637,6 +637,9 @@ function renderEventBanner() {
               encodeURIComponent(leagueId) +
               (selectedEvent ? '&event=' + encodeURIComponent(selectedEvent.id) : '') +
               '">View all lineups &rarr;</a>' +
+          '<button class="btn-ghost fight-card-btn" id="howItWorksBtn" title="How fantasy works">' +
+            '<span aria-hidden="true">&#9432;</span> How it works' +
+          '</button>' +
           editEventBtn +
         '</div>' +
       '</div>' +
@@ -647,6 +650,7 @@ function renderEventBanner() {
     '</div>';
 
   document.getElementById('viewFightCardBtn').addEventListener('click', showFightCardModal);
+  document.getElementById('howItWorksBtn').addEventListener('click', showHowItWorksModal);
   document.getElementById('viewWholeTeamBtn').addEventListener('click', showWholeTeamModal);
   var editBtn = document.getElementById('editEventBtn');
   if (editBtn) editBtn.addEventListener('click', showEditEventModal);
@@ -1939,6 +1943,96 @@ function closeFightCardModal() {
 
 function handleModalEscape(e) {
   if (e.key === 'Escape') closeFightCardModal();
+}
+
+// ========================================================================
+// HOW IT WORKS MODAL
+// Explains roster construction, the weekly schedule, waivers, and the
+// event-week +3 expansion to managers who know UFC but are new to fantasy.
+// All content is static — pulled from the same constants the rest of the
+// page uses (ROSTER_SIZE_BASE, ROSTER_FLEX_SLOTS, etc.) so it stays in
+// sync if those values ever change.
+// ========================================================================
+function showHowItWorksModal() {
+  var existing = document.getElementById('howItWorksModal');
+  if (existing) existing.remove();
+
+  var expansionSlots = ROSTER_SIZE_EXPANDED - ROSTER_SIZE_BASE;
+
+  var bodyHtml =
+    '<section class="how-section">' +
+      '<h3 class="how-section__title">Your roster</h3>' +
+      '<p>You own <strong>' + ROSTER_SIZE_BASE + ' fighters</strong> at a time:</p>' +
+      '<ul class="how-section__list">' +
+        '<li><strong>' + ROSTER_SLOTS_PER_DIVISION + ' fighter per weight class</strong> — 8 men\'s divisions + 3 women\'s = 11 slots</li>' +
+        '<li><strong>' + ROSTER_FLEX_SLOTS + ' flex slots</strong> for fighters in any weight class</li>' +
+      '</ul>' +
+      '<p>Before each UFC event, you pick <strong>3 starters</strong> from your roster. Only they score points for you.</p>' +
+    '</section>' +
+
+    '<section class="how-section">' +
+      '<h3 class="how-section__title">Weekly schedule</h3>' +
+      '<p>UFC events are on Saturdays. The week around each event runs like this — all cutoffs are <strong>3am ET</strong>:</p>' +
+      '<table class="how-section__schedule">' +
+        '<tr><td><strong>Thursday</strong></td><td>Pre-event waivers open. Roster cap expands by +' + expansionSlots + ' (Temporary Flex)</td></tr>' +
+        '<tr><td><strong>Friday</strong></td><td>Pre-event waiver claims process — worst standings get first pick</td></tr>' +
+        '<tr><td><strong>Saturday</strong></td><td>Event day. Lineup locks at the first prelim (about 5pm ET)</td></tr>' +
+        '<tr><td><strong>Sunday</strong></td><td>Post-event waivers open. Cap reverts to ' + ROSTER_SIZE_BASE + '</td></tr>' +
+        '<tr><td><strong>Tuesday</strong></td><td>Post-event waiver claims process</td></tr>' +
+        '<tr><td><strong>Wednesday</strong></td><td>Auto-drop — anyone still over ' + ROSTER_SIZE_BASE + ' has their newest fighters dropped automatically</td></tr>' +
+      '</table>' +
+    '</section>' +
+
+    '<section class="how-section">' +
+      '<h3 class="how-section__title">Waivers vs free agency</h3>' +
+      '<p>During the two waiver windows (Thu&ndash;Fri and Sun&ndash;Tue), every roster add is a <strong>claim</strong> — not an instant pickup. If multiple managers claim the same fighter, the one with the worst standings wins.</p>' +
+      '<p>Outside those windows, available fighters are still on waivers for 48 hours after they\'re dropped (called <em>rolling waivers</em>). After 48 hours they become free agents and you can grab them instantly.</p>' +
+    '</section>' +
+
+    '<section class="how-section">' +
+      '<h3 class="how-section__title">' +
+        '<span class="how-section__title-dot" style="background: var(--accent-temporary);"></span>' +
+        'Event-week expansion' +
+      '</h3>' +
+      '<p>From <strong>Thursday 3am ET to Sunday 3am ET</strong> of every event week, you get <strong>' + expansionSlots + ' extra roster slots</strong> — shown in teal as <em>Temporary Flex</em>. Stack up on fighters competing this weekend, even if your roster\'s already at ' + ROSTER_SIZE_BASE + '.</p>' +
+      '<p>Wednesday\'s auto-drop will trim you back to ' + ROSTER_SIZE_BASE + ', cutting your <em>most recently added</em> fighters first. <strong>Active manager perk:</strong> if you make ' + expansionSlots + '+ manual drops during the expansion window, you skip auto-drop entirely.</p>' +
+    '</section>' +
+
+    '<section class="how-section">' +
+      '<h3 class="how-section__title">Scoring</h3>' +
+      '<p>Fighters earn points from actual fight stats: significant strikes, takedowns, knockdowns, control time. Wins, finishes, and big-stage bouts get bonus multipliers. Beating a top-ranked or champion opponent earns extra credit.</p>' +
+      '<p>Click any fighter\'s name to see their full scoring breakdown, fight history, and projected fantasy value.</p>' +
+    '</section>';
+
+  var modal = document.createElement('div');
+  modal.id = 'howItWorksModal';
+  modal.className = 'fight-card-modal-overlay';
+  modal.innerHTML =
+    '<div class="fight-card-modal how-it-works-modal" role="dialog" aria-modal="true" aria-label="How fantasy works">' +
+      '<div class="fight-card-modal__header">' +
+        '<div>' +
+          '<p class="fight-card-modal__eyebrow">Welcome to Knockdown</p>' +
+          '<p class="fight-card-modal__title">How fantasy works</p>' +
+        '</div>' +
+        '<button class="fight-card-modal__close" id="closeHowItWorksBtn" aria-label="Close">&times;</button>' +
+      '</div>' +
+      '<div class="fight-card-modal__body">' + bodyHtml + '</div>' +
+    '</div>';
+
+  document.body.appendChild(modal);
+  document.getElementById('closeHowItWorksBtn').addEventListener('click', closeHowItWorksModal);
+  modal.addEventListener('click', function(e) { if (e.target === modal) closeHowItWorksModal(); });
+  document.addEventListener('keydown', handleHowItWorksEscape);
+}
+
+function closeHowItWorksModal() {
+  var modal = document.getElementById('howItWorksModal');
+  if (modal) modal.remove();
+  document.removeEventListener('keydown', handleHowItWorksEscape);
+}
+
+function handleHowItWorksEscape(e) {
+  if (e.key === 'Escape') closeHowItWorksModal();
 }
 
 // ========================================================================
