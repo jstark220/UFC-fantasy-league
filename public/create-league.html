@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="styles/components.css">
 
   <title>Create League - Knockdown Fantasy</title>
+  <script src="js/loading-screen.js"></script>
 </head>
 <body>
 
@@ -274,6 +275,23 @@
               </div>
             </div>
 
+            <p class="form-section__group-label">Starters &amp; Temporary Flex per Event</p>
+            <p class="form-section__hint" style="margin-top: -4px;">
+              Number of starters managers pick each event — also controls
+              how many extra roster slots open during the event-week
+              expansion. Fight Nights default to 2, numbered PPVs to 3.
+            </p>
+            <div class="form-grid form-grid--3">
+              <div class="form-group">
+                <label for="s_starters_numbered">Numbered Event (UFC 329, …)</label>
+                <input type="number" id="s_starters_numbered" class="input" step="1" min="1" max="5" data-default="3">
+              </div>
+              <div class="form-group">
+                <label for="s_starters_fight_night">Fight Night</label>
+                <input type="number" id="s_starters_fight_night" class="input" step="1" min="1" max="5" data-default="2">
+              </div>
+            </div>
+
             <button type="button" class="btn-ghost" id="scoringResetBtn" style="margin-top: var(--space-4)">
               Reset all scoring to defaults
             </button>
@@ -308,6 +326,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/supabase-config.js"></script>
   <script src="js/auth-guard.js"></script>
+  <script src="js/custom-dropdown.js"></script>
   <script src="js/create-league.js"></script>
 
   <script>

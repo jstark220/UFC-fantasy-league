@@ -30,7 +30,17 @@ const DIVISION_LABELS = {
   heavyweight:       "Men's Heavyweight"
 };
 
+// Max possible starter count (numbered PPV). Fight Nights only run 2 —
+// pull the real count for the selected event from waiver-phase.js.
 const MAX_STARTERS = 3;
+// League's scoring_config — populated by init() and read by
+// currentStarterCount so the count matches the commissioner's overrides.
+let leagueScoringConfig = null;
+function currentStarterCount() {
+  return (typeof getStarterCountForEvent === 'function')
+    ? getStarterCountForEvent(selectedEvent, leagueScoringConfig)
+    : MAX_STARTERS;
+}
 
 // ---- Module state — populated by init, read by every render path ----
 let leagueId       = null;
@@ -62,7 +72,7 @@ async function initLineups() {
 
   // Pull league + membership + events + roster + fighters in parallel
   const [leagueRes, membersRes, eventsRes, rostersRes, fightersRes] = await Promise.all([
-    supabaseClient.from('leagues').select('id, name').eq('id', leagueId).single(),
+    supabaseClient.from('leagues').select('id, name, scoring_config').eq('id', leagueId).single(),
     supabaseClient.from('league_members').select('id, user_id, team_name, is_commissioner').eq('league_id', leagueId),
     supabaseClient.from('ufc_events').select('id, name, full_name, event_date, venue, lineup_lock_time').order('event_date', { ascending: false }),
     supabaseClient.from('rosters').select('fighter_id, league_member_id, slot_override').eq('league_id', leagueId),
@@ -75,6 +85,7 @@ async function initLineups() {
   }
 
   const league = leagueRes.data;
+  leagueScoringConfig = league.scoring_config || null;
   members      = membersRes.data || [];
 
   myMember = members.find(function(m) { return m.user_id === user.id; });
@@ -276,9 +287,10 @@ function renderManagerCard(member, totalScore, anyScoresThisEvent) {
   const selectionIds = selectionsByMember[member.id] || [];
   const memberScores = scoresByMember[member.id]    || {};
 
-  // Build 3 slots — fill with selected fighter, or render an empty slot
+  // Build slots — count depends on event type (3 for numbered, 2 for FN)
+  const starterCount = currentStarterCount();
   let slotsHtml = '';
-  for (let i = 0; i < MAX_STARTERS; i++) {
+  for (let i = 0; i < starterCount; i++) {
     const fid = selectionIds[i];
     const fighter = fid ? fightersById[fid] : null;
     if (fighter) {

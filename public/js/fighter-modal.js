@@ -11,6 +11,17 @@
 // passed to the shared Scoring engine. Null is fine; the engine falls back
 // to v1.2 defaults.
 var _modalScoringConfig = null;
+// Polymarket odds for this fighter's next fight, when available. Loaded
+// alongside the main fetch in showFighterModal and consumed by the hero
+// 'Next fight' line via FightOdds.chipHtml.
+var _modalFightOdds = null;
+// Projected fantasy points for this fighter's next fight (if it has odds —
+// projections only exist for fights with Polymarket data).
+var _modalProjection = null;
+// Fantasy value composite score + global rank for THIS fighter. Computed
+// from every completed fight in the DB via FantasyValue.ensureLoaded.
+var _modalFvScore = null;
+var _modalFvRank  = null;
 
 var FIGHTER_MODAL_DIVISION_LABELS = {
   strawweight:       "Women's Strawweight",
@@ -117,6 +128,27 @@ async function showFighterModal(fighterId) {
   // engine's null-safe path falls back to v1.2 defaults.
   _modalScoringConfig = (leagueRes && leagueRes.data && leagueRes.data.scoring_config) || null;
 
+  // Load Polymarket odds + projected points for this fighter. Both are
+  // small lookups (single-row equiv) and quick enough to await before
+  // rendering. Fantasy Value is heavier (loads every completed fight in
+  // the DB to compute the league mean) — kicked off in parallel but its
+  // result is patched into the rendered modal *after* paint.
+  _modalFightOdds  = null;
+  _modalProjection = null;
+  _modalFvScore    = null;
+  _modalFvRank     = null;
+  var fvLoadPromise = (typeof FantasyValue !== 'undefined')
+    ? FantasyValue.ensureLoaded(pageLeagueId, _modalScoringConfig).catch(function () { return null; })
+    : Promise.resolve(null);
+  try {
+    var [oddsMap, projMap] = await Promise.all([
+      typeof FightOdds   !== 'undefined' ? FightOdds.loadFightOdds([fighterId]) : {},
+      typeof Projections !== 'undefined' ? Projections.load([fighterId])        : {}
+    ]);
+    _modalFightOdds  = oddsMap[fighterId] || null;
+    _modalProjection = projMap[fighterId] || null;
+  } catch (_e) { /* both are optional */ }
+
   if (fighterRes.error || !fighterRes.data) {
     document.querySelector('#fighterModal .fighter-modal').innerHTML =
       '<div class="fighter-modal__loading">Fighter not found.' +
@@ -193,6 +225,39 @@ async function showFighterModal(fighterId) {
   // to the fighter-modal node so it only finds toggles inside the modal.
   var modalRoot = document.querySelector('#fighterModal .fighter-modal');
   if (modalRoot) ScoreBreakdown.wireToggles(modalRoot);
+
+  // Fetch the Polymarket price-history series and render the chart into
+  // the placeholder. Async + non-blocking so the modal paints first; if
+  // the fetch fails (CORS, network, no data), the slot stays empty.
+  var chartSlot = document.getElementById('fighterModalOddsChart');
+  if (chartSlot && _modalFightOdds && _modalFightOdds.fighterTokenId && typeof FightOdds !== 'undefined') {
+    FightOdds.loadPriceHistory(_modalFightOdds.fighterTokenId).then(function (hist) {
+      // Guard: user may have closed/reopened the modal before this resolved.
+      if (!document.body.contains(chartSlot)) return;
+      if (!hist || hist.length < 2) return;
+      chartSlot.innerHTML = FightOdds.chartSvg(hist);
+    });
+  }
+
+  // Fantasy Value populates asynchronously — when the FV cache load
+  // finishes, swap the loading placeholder for the real tile and wire its
+  // click handler. If the load failed or the fighter has no FV entry
+  // (e.g., no completed fights in the DB), leave the placeholder hidden.
+  fvLoadPromise.then(function (fvCache) {
+    var slot = document.getElementById('fighterModalFvSlot');
+    if (!slot || !document.body.contains(slot)) return;  // modal closed
+    if (!fvCache || typeof FantasyValue === 'undefined') { slot.style.display = 'none'; return; }
+    _modalFvScore = FantasyValue.scoreFor(fighterId);
+    _modalFvRank  = FantasyValue.rankFor(fighterId);
+    if (_modalFvScore == null) { slot.style.display = 'none'; return; }
+    slot.outerHTML = _fvStatTile(_modalFvScore, _modalFvRank, fighter);
+    var fvBtn = document.querySelector('#fighterModal [data-fv-breakdown]');
+    if (fvBtn) {
+      fvBtn.addEventListener('click', function () {
+        FantasyValue.showBreakdownModal(fighter);
+      });
+    }
+  });
 }
 
 function closeFighterModal() {
@@ -383,10 +448,37 @@ function buildFighterModalHtml(fighter, fights, fighterId, opponentMap, tradeCtx
             var oppName = opponentMap[oppId] || 'TBD';
             var d = new Date(nf.event.event_date + 'T12:00:00');
             var dStr = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+            // Polymarket odds chip (when available) — full branded version
+            // with "POLYMARKET" wordmark since the modal has space for it.
+            var oddsChip = (typeof FightOdds !== 'undefined' && _modalFightOdds)
+              ? FightOdds.chipHtml(_modalFightOdds, { showBrand: true })
+              : '';
+            // Projection badge — clickable to show the breakdown modal.
+            // We hand the matchup context to Projections so its delegated
+            // click handler can populate the breakdown without a separate
+            // wiring step in this file.
+            var projBadge = (typeof Projections !== 'undefined' && _modalProjection)
+              ? Projections.badgeHtml(_modalProjection, {
+                  fighterId:    fighter.id,
+                  fighterName:  fighter.name,
+                  opponentName: oppName,
+                  eventName:    nf.event && nf.event.name ? nf.event.name : ''
+                })
+              : '';
+            // Chart container — populated asynchronously after render
+            // (the CLOB price-history fetch shouldn't block modal paint).
+            // Shown only when we have a token for this fighter.
+            var hasToken = !!(_modalFightOdds && _modalFightOdds.fighterTokenId);
+            var chartSlot = hasToken
+              ? '<div class="fighter-modal__odds-chart" id="fighterModalOddsChart"></div>'
+              : '';
             return '<p class="fighter-modal__next-fight">' +
                      '<span class="fighter-modal__next-fight-label">Next fight</span> ' +
                      _mEsc(dStr) + ' · ' + _mEsc(nf.event.name) + ' · vs ' + _mEsc(oppName) +
-                   '</p>';
+                     (oddsChip ? ' ' + oddsChip : '') +
+                     (projBadge ? ' ' + projBadge : '') +
+                   '</p>' +
+                   chartSlot;
           })() +
           // CTAs — multiple may show at once.
           //
@@ -439,6 +531,15 @@ function buildFighterModalHtml(fighter, fights, fighterId, opponentMap, tradeCtx
         _statTile(String(completedFights.length), 'UFC Fights') +
         _statTile(careerPts.toFixed(1), 'Career Pts') +
         _statTile(completedFights.length > 0 ? (careerPts / completedFights.length).toFixed(1) : '—', 'Avg Pts') +
+        // Fantasy Value tile — rendered as a loading placeholder, then
+        // populated asynchronously once FantasyValue.ensureLoaded resolves.
+        // The wrapping element has a stable id so the post-render handler
+        // can find and replace it.
+        '<div class="fighter-modal__stat fighter-modal__stat--fv-slot" id="fighterModalFvSlot">' +
+          '<span class="fighter-modal__stat-val" style="opacity:.4">—</span>' +
+          '<span class="fighter-modal__stat-label">Fantasy Value</span>' +
+          '<span class="fighter-modal__stat-sub" style="opacity:.4">loading…</span>' +
+        '</div>' +
       '</div>' +
 
       // Fight history
@@ -459,6 +560,24 @@ function _statTile(value, label) {
       '<span class="fighter-modal__stat-val">' + _mEsc(value) + '</span>' +
       '<span class="fighter-modal__stat-label">' + label + '</span>' +
     '</div>'
+  );
+}
+
+// Fantasy Value tile — adds a rank subline ("#14 of 624") and is clickable
+// to open the FV breakdown modal. The data-* attribute on the wrapper is
+// what the click handler downstream binds against.
+function _fvStatTile(score, rankInfo, fighter) {
+  var sub = rankInfo
+    ? '#' + rankInfo.rank + ' of ' + rankInfo.total
+    : 'Unranked';
+  return (
+    '<button class="fighter-modal__stat fighter-modal__stat--fv" ' +
+            'type="button" data-fv-breakdown="' + _mEsc(fighter.id) + '" ' +
+            'title="See the breakdown">' +
+      '<span class="fighter-modal__stat-val">' + _mEsc(score.toFixed(1)) + '</span>' +
+      '<span class="fighter-modal__stat-label">Fantasy Value</span>' +
+      '<span class="fighter-modal__stat-sub">' + _mEsc(sub) + '</span>' +
+    '</button>'
   );
 }
 

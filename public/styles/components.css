@@ -1559,11 +1559,19 @@ body {
 .this-week-card {
   position: relative;
   display: flex;
-  align-items: center;
+  /* flex-start so both the left (Next Event / title / matchup) and the
+     right (countdown / View fight card) columns share the same top edge.
+     Without this the parent was centering the left column while the
+     right column tried to align flex-start, so "Next Event" and "1"
+     landed at different vertical positions. */
+  align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-8);
   min-height: 140px;
-  padding: var(--space-6) var(--space-8);
+  /* Extra top padding so the content doesn't sit flush against the
+     crimson accent border — gives the whole block breathing room and
+     pushes "Next Event" / "1" down into the card. */
+  padding: var(--space-10, 48px) var(--space-8) var(--space-6) var(--space-8);
   margin-bottom: var(--space-8);
   background: var(--bg-secondary);
   background-image:
@@ -1643,6 +1651,10 @@ body {
   flex-direction: column;
   align-items: center;
   gap: var(--space-3);
+  /* Top-align the column so the first row of the countdown sits at the
+     same vertical position as "Next Event" on the left. Both columns
+     start flush against the card's top padding edge. */
+  align-self: flex-start;
 }
 
 .this-week-card__countdown {
@@ -3952,7 +3964,10 @@ body {
   border: 1px solid var(--border-subtle);
   border-radius: 10px;
   width: 100%;
-  max-width: 540px;
+  /* 880px gives each fighter side ~360px — comfortably fits long names,
+     rank, ownership pill, Polymarket-branded odds chip + projection pill
+     on the same sub-line without crowding. */
+  max-width: 880px;
   max-height: 85vh;
   display: flex;
   flex-direction: column;
@@ -4425,10 +4440,46 @@ body {
 .fight-row__sub {
   font-size: var(--text-caption);
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
 }
 .fight-row__side--red .fight-row__sub { justify-content: flex-end; }
+
+/* New uniform row layout: name + rank inline on line 1, chips stacked
+   vertically below (odds on top, projection on bottom). */
+.fight-row__rank-inline {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+  margin-left: 2px;
+  vertical-align: baseline;
+}
+.fight-row__rank-inline--champ    { color: var(--accent-gold); }
+.fight-row__rank-inline--interim  { color: var(--accent-gold); }
+.fight-row__rank-inline--bmf      { color: var(--accent-crimson); }
+.fight-row__rank-inline--unranked { color: var(--text-tertiary); opacity: 0.45; }
+
+/* Chip column — odds chip on top, projection pill beneath, always in
+   that order. Same vertical rhythm across every fighter side so the
+   modal reads uniformly. */
+.fight-row__chips {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+  align-items: flex-start;
+  min-width: 0;
+}
+.fight-row__side--red .fight-row__chips {
+  align-items: flex-end;
+}
+.fight-row__chip-row {
+  display: inline-flex;
+  align-items: center;
+}
 
 .fight-row__rank {
   color: var(--text-tertiary);
@@ -5301,6 +5352,14 @@ body {
   animation: fadeIn 0.15s ease;
 }
 
+/* Fantasy Value breakdown is always opened *from* another modal (fighter
+   modal at 1500, or the waivers row click). Stack it above so it lands
+   on top instead of underneath. Targeted by id so we don't disturb other
+   .move-flex-modal-overlay usages elsewhere. */
+#fvBreakdownModal {
+  z-index: 1600;
+}
+
 .fighter-modal {
   background: var(--bg-secondary);
   border: 1px solid var(--border-subtle);
@@ -5459,6 +5518,36 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--text-tertiary);
+}
+
+/* Optional sub-line under the stat label — used by the Fantasy Value
+   tile for the "#14 of 624" rank. */
+.fighter-modal__stat-sub {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+  margin-top: 1px;
+}
+
+/* Fantasy Value tile is a button — strip the default button chrome and
+   add a subtle hover so it reads as clickable. */
+.fighter-modal__stat--fv {
+  background: transparent;
+  border: none;
+  border-right: 1px solid var(--border-subtle);
+  cursor: pointer;
+  font: inherit;
+  text-align: center;
+}
+.fighter-modal__stat--fv:hover {
+  background: var(--bg-tertiary);
+}
+.fighter-modal__stat--fv:hover .fighter-modal__stat-val {
+  color: var(--accent-crimson);
+}
+.fighter-modal__stat--fv:last-child {
+  border-right: none;
 }
 
 /* ---- Scrollable body with fight history ---- */
@@ -5895,6 +5984,222 @@ body {
   white-space: nowrap;
 }
 
+/* Clickable Total Pts cell — opens the per-fighter breakdown modal.
+   Looks like the raw number but lifts to crimson on hover so it reads
+   as interactive. */
+.standings-pts-link {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--text-primary);
+  cursor: pointer;
+  border-bottom: 1px dashed var(--border-subtle);
+  transition: color 0.12s ease, border-color 0.12s ease;
+}
+.standings-pts-link:hover,
+.standings-pts-link:focus-visible {
+  color: var(--accent-crimson);
+  border-color: var(--accent-crimson);
+  outline: none;
+}
+
+/* ============================================================
+   POINTS BREAKDOWN MODAL
+   Opened from the Total Pts cell on the standings page. Lists
+   every fighter/fight a manager has scored points from, with a
+   toggle between "most points" and "most recent" sort.
+   ============================================================ */
+
+.pts-breakdown-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  z-index: 1500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  box-sizing: border-box;
+  animation: fadeIn 0.15s ease;
+}
+
+.pts-breakdown-modal {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  width: 100%;
+  max-width: 560px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideUp 0.18s ease;
+}
+
+.pts-breakdown-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-6);
+  border-top: 3px solid var(--accent-crimson);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-tertiary);
+  flex-shrink: 0;
+}
+.pts-breakdown-modal__eyebrow {
+  font-size: var(--text-overline);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--accent-crimson);
+  margin: 0 0 2px 0;
+}
+.pts-breakdown-modal__title {
+  font-family: var(--font-display);
+  font-size: var(--text-h3);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  color: var(--text-primary);
+  margin: 0;
+}
+.pts-breakdown-modal__close {
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  line-height: 1;
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color 0.15s, color 0.15s;
+}
+.pts-breakdown-modal__close:hover {
+  border-color: var(--accent-crimson);
+  color: var(--accent-crimson);
+}
+
+.pts-breakdown-modal__body {
+  overflow-y: auto;
+  padding: var(--space-4) var(--space-6) var(--space-6);
+}
+
+/* Sort toggle — two pill buttons inline, active state in crimson. */
+.pts-breakdown__sort {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+.pts-breakdown__sort-btn {
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-family: var(--font-mono, 'SF Mono', monospace);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+}
+.pts-breakdown__sort-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--text-tertiary);
+}
+.pts-breakdown__sort-btn--active {
+  background: rgba(193, 59, 46, 0.12);
+  border-color: var(--accent-crimson);
+  color: var(--accent-crimson);
+}
+
+/* Row layout — photo + name/sub + points right-aligned. */
+.pts-breakdown__list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pts-breakdown-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  transition: border-color 0.1s ease;
+}
+.pts-breakdown-row:hover {
+  border-color: var(--text-tertiary);
+}
+.pts-breakdown-row__photo {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: top center;
+  background: var(--bg-tertiary);
+  flex-shrink: 0;
+}
+.pts-breakdown-row__photo--empty {
+  background: var(--bg-tertiary);
+}
+.pts-breakdown-row__text {
+  flex: 1;
+  min-width: 0;
+}
+.pts-breakdown-row__name {
+  margin: 0;
+  font-weight: 700;
+  font-size: var(--text-body-sm);
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pts-breakdown-row__sub {
+  margin: 2px 0 0 0;
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pts-breakdown-row__result {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+.pts-breakdown-row__result--win   { background: rgba(74, 222, 128, 0.18); color: #4ade80; }
+.pts-breakdown-row__result--loss  { background: rgba(193, 59, 46, 0.18); color: var(--accent-crimson); }
+.pts-breakdown-row__result--draw  { background: var(--bg-tertiary); color: var(--text-tertiary); }
+.pts-breakdown-row__result--nc    { background: var(--bg-tertiary); color: var(--text-tertiary); }
+
+.pts-breakdown-row__points {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  letter-spacing: 0.02em;
+  color: var(--accent-crimson);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
 .standings-delta {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -6035,6 +6340,237 @@ body {
   background: var(--bg-secondary);
   color: var(--text-primary);
   font-weight: 500;
+}
+
+/* ============================================================
+   UNIFIED <select> POLISH
+   Layers on top of the class-specific rules above (.input,
+   .form-input, .waiver-filter) so every dropdown in the app gets
+   the same chevron + hover + focus treatment. Closed-state only —
+   the opened menu is OS-drawn and not stylable beyond <option>.
+   ============================================================ */
+
+select.input,
+select.form-input,
+select.waiver-filter,
+.form-group select {
+  cursor: pointer;
+  /* Custom chevron in muted gray, swapped to crimson on focus below */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23A0A0A0' stroke-width='1.75' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 38px;
+  transition:
+    border-color    0.15s ease,
+    background-color 0.15s ease,
+    box-shadow      0.18s ease;
+}
+
+select.input:hover,
+select.form-input:hover,
+select.waiver-filter:hover,
+.form-group select:hover {
+  border-color: var(--text-secondary);
+  background-color: var(--bg-tertiary);
+}
+
+select.input:focus,
+select.form-input:focus,
+select.waiver-filter:focus,
+.form-group select:focus {
+  border-color: var(--accent-crimson);
+  /* Soft crimson halo — makes the focused state feel like a primary CTA */
+  box-shadow:
+    0 0 0 3px rgba(193, 59, 46, 0.18),
+    inset 0 0 0 1px rgba(193, 59, 46, 0.22);
+  outline: none;
+  /* Crimson chevron when focused — visual confirmation the field is "live" */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23C13B2E' stroke-width='1.75' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+select.input:disabled,
+select.form-input:disabled,
+.form-group select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background-color: var(--bg-secondary);
+}
+
+/* Dark-theme <option> styling — best-effort. Chrome/Edge/Safari honor
+   background + color; Firefox needs a system pref to respect it.
+   This still makes the OS dropdown read as part of the app on most
+   platforms instead of jumping to a stark default white. */
+select.input option,
+select.form-input option,
+.form-group select option {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-weight: 500;
+  padding: 8px 12px;
+}
+
+/* ============================================================
+   CUSTOM DROPDOWN (.cd-*)
+   Replaces an enhanced <select> entirely. Trigger looks like the
+   polished select above; the *menu* is fully ours to style, so
+   each row gets real padding + hover + selected state + an
+   optional secondary line for things like event dates.
+   ============================================================ */
+
+.cd-wrap {
+  position: relative;
+  display: inline-block;
+  width: auto;
+}
+
+/* The native <select> is kept in the DOM (so form serialization /
+   change events keep working) but visually hidden. */
+.cd-native-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  margin: -1px !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  clip: rect(0 0 0 0) !important;
+  border: 0 !important;
+  pointer-events: none;
+}
+
+/* ---- Trigger ---- */
+.cd-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-width: 200px;
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 12px 16px;
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-primary);
+  cursor: pointer;
+  outline: none;
+  text-align: left;
+  transition:
+    border-color    0.15s ease,
+    background-color 0.15s ease,
+    box-shadow      0.18s ease;
+}
+.cd-trigger:hover {
+  border-color: var(--text-secondary);
+  background-color: var(--bg-tertiary);
+}
+.cd-trigger:focus-visible,
+.cd-trigger[aria-expanded="true"] {
+  border-color: var(--accent-crimson);
+  box-shadow:
+    0 0 0 3px rgba(193, 59, 46, 0.18),
+    inset 0 0 0 1px rgba(193, 59, 46, 0.22);
+}
+.cd-trigger__label {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cd-trigger__chevron {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-tertiary);
+  transition: transform 0.18s ease, color 0.15s ease;
+}
+.cd-trigger[aria-expanded="true"] .cd-trigger__chevron {
+  transform: rotate(180deg);
+  color: var(--accent-crimson);
+}
+
+/* ---- Menu (the open panel) ---- */
+.cd-menu {
+  position: fixed;
+  z-index: 10000;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow:
+    0 18px 48px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(193, 59, 46, 0.10);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 6px;
+  opacity: 0;
+  transform: translateY(-6px);
+  pointer-events: none;
+  transition: opacity 0.13s ease, transform 0.16s cubic-bezier(.3, 1.1, .4, 1);
+}
+.cd-menu--open {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+/* Subtle scrollbar styling for the option list */
+.cd-menu::-webkit-scrollbar          { width: 8px; }
+.cd-menu::-webkit-scrollbar-track    { background: transparent; }
+.cd-menu::-webkit-scrollbar-thumb    {
+  background: var(--border-strong);
+  border-radius: 4px;
+  border: 2px solid var(--bg-secondary);
+}
+.cd-menu::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
+}
+
+/* ---- Options (the rows) ---- */
+.cd-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: 10px 12px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-primary);
+  transition: background 0.1s ease, color 0.1s ease;
+}
+.cd-option__main {
+  flex: 1;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cd-option__sub {
+  font-family: var(--font-mono, 'SF Mono', 'Roboto Mono', monospace);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.cd-option__check {
+  display: inline-flex;
+  align-items: center;
+  color: var(--accent-crimson);
+  flex-shrink: 0;
+}
+.cd-option--focused {
+  background: var(--bg-tertiary);
+}
+.cd-option--selected {
+  background: rgba(193, 59, 46, 0.10);
+  color: var(--accent-crimson);
+}
+.cd-option--selected .cd-option__sub {
+  color: var(--accent-crimson);
+  opacity: 0.85;
+}
+.cd-option--selected.cd-option--focused {
+  background: rgba(193, 59, 46, 0.18);
 }
 
 /* "Show rostered" toggle — sits inline with the filter dropdowns */
@@ -6360,6 +6896,333 @@ body {
   padding: var(--space-3) var(--space-3);
   font-style: italic;
   color: var(--text-tertiary);
+}
+
+/* Temp-spot opt-in checkbox in the claim modal. Tinted teal to match the
+   TERF section accent, with a disabled state when the +3 window is closed. */
+.waiver-temp-spot {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  margin: var(--space-3) 0;
+  background: var(--accent-temporary-subtle);
+  border: 1px solid var(--accent-temporary);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.waiver-temp-spot:hover {
+  background: rgba(63, 184, 176, 0.14);
+}
+.waiver-temp-spot input[type="checkbox"] {
+  margin: 2px 0 0;
+  accent-color: var(--accent-temporary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.waiver-temp-spot__label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.35;
+}
+.waiver-temp-spot__title {
+  font-size: var(--text-body-sm);
+  font-weight: 600;
+  color: var(--accent-temporary);
+}
+.waiver-temp-spot__hint {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+}
+.waiver-temp-spot--disabled {
+  background: var(--bg-tertiary);
+  border-color: var(--border-subtle);
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+.waiver-temp-spot--disabled:hover { background: var(--bg-tertiary); }
+.waiver-temp-spot--disabled .waiver-temp-spot__title { color: var(--text-tertiary); }
+.waiver-temp-spot--disabled input[type="checkbox"] { cursor: not-allowed; }
+
+/* ========================================================================
+   FIGHT ODDS — Polymarket-branded chips and inline labels
+   ======================================================================== */
+
+/* Chip variant — used on the fighter modal and fight card. Pill-shaped
+   with the Polymarket wordmark inside it. Clickable when marketUrl
+   is provided. */
+.fight-odds {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: var(--text-caption);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  background: var(--polymarket-blue-subtle);
+  color: var(--polymarket-blue);
+  border: 1px solid rgba(45, 156, 219, 0.30);
+  transition: background 0.15s ease, transform 0.15s ease;
+  white-space: nowrap;
+  line-height: 1;
+}
+.fight-odds:hover {
+  background: rgba(45, 156, 219, 0.18);
+  text-decoration: none;
+}
+.fight-odds__pct {
+  font-size: var(--text-body-sm);
+  font-weight: 700;
+}
+.fight-odds__brand {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.7;
+  border-left: 1px solid rgba(45, 156, 219, 0.45);
+  padding-left: 6px;
+}
+
+/* Underdog styling — orange so the user can see at a glance that this
+   fighter is below 50% on Polymarket. Applies to both the compact chip
+   and the inline pill (the inline variant's blue override is scoped to
+   .fight-odds--inline:not(.fight-odds--underdog) below). */
+.fight-odds--underdog {
+  background: rgba(230, 126, 34, 0.12);
+  color: #E67E22;
+  border-color: rgba(230, 126, 34, 0.40);
+}
+.fight-odds--underdog .fight-odds__brand {
+  border-left-color: rgba(230, 126, 34, 0.45);
+}
+.fight-odds--underdog .fight-odds__dot {
+  background: #E67E22;
+}
+
+/* Inline variant — used in tight roster rows. Format:
+   "[dot] 65% to win on Polymarket". Favorite is Polymarket blue, underdog
+   flips to orange via the .fight-odds--underdog class. The :not() guards
+   ensure the underdog class wins for both colors and dot. */
+.fight-odds--inline {
+  padding: 1px 8px;
+  font-size: var(--text-caption);
+  font-weight: 600;
+}
+.fight-odds--inline:not(.fight-odds--underdog) {
+  background: var(--polymarket-blue-subtle);
+  color: var(--polymarket-blue);
+  border-color: rgba(45, 156, 219, 0.30);
+}
+.fight-odds--inline .fight-odds__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.fight-odds--inline:not(.fight-odds--underdog) .fight-odds__dot {
+  background: var(--polymarket-blue);
+}
+.fight-odds--inline .fight-odds__pct {
+  font-weight: 700;
+}
+.fight-odds__inline-suffix {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  opacity: 0.75;
+  text-transform: none;
+}
+
+/* ============================================================
+   POLYMARKET PRICE-HISTORY CHART (fighter modal)
+   Compact 7-day implied-probability line chart shown below the
+   "Next fight" line. Polymarket-blue, hand-rolled SVG.
+   ============================================================ */
+
+.fight-odds-chart {
+  margin-top: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--polymarket-blue-subtle);
+  border: 1px solid rgba(45, 156, 219, 0.20);
+  border-radius: 6px;
+  max-width: 360px;
+}
+.fight-odds-chart__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 4px;
+}
+.fight-odds-chart__title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--polymarket-blue);
+  opacity: 0.85;
+}
+.fight-odds-chart__delta {
+  font-size: var(--text-caption);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+.fight-odds-chart__delta--up   { color: #16a34a; }
+.fight-odds-chart__delta--down { color: var(--accent-crimson); }
+.fight-odds-chart__svg {
+  display: block;
+  width: 100%;
+  height: 60px;
+}
+.fight-odds-chart__mid {
+  stroke: rgba(45, 156, 219, 0.25);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+}
+.fight-odds-chart__area {
+  fill: rgba(45, 156, 219, 0.18);
+  stroke: none;
+}
+.fight-odds-chart__line {
+  fill: none;
+  stroke: var(--polymarket-blue);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+.fight-odds-chart__dot {
+  fill: var(--polymarket-blue);
+  stroke: #fff;
+  stroke-width: 1.5;
+}
+.fight-odds-chart__footer {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+  margin-top: 2px;
+}
+
+/* Hover popover wrapping the chart — fixed-position floating tooltip.
+   Triggered by hovering any inline odds chip that has a CLOB token. */
+.fight-odds-popover {
+  position: fixed;
+  z-index: 9999;
+  width: 320px;
+  background: var(--bg-elevated, #fff);
+  border: 1px solid var(--border-subtle, rgba(0,0,0,0.12));
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  padding: var(--space-3) var(--space-4);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(2px);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+.fight-odds-popover--visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+.fight-odds-popover .fight-odds-chart {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  max-width: none;
+}
+.fight-odds-popover__loading,
+.fight-odds-popover__empty {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  text-align: center;
+  padding: var(--space-2) 0;
+}
+
+/* ============================================================
+   FIGHT PROJECTION PILL — projected fantasy points pulled from
+   fighter_projections (recomputed hourly from Polymarket odds).
+   Sits next to the odds chip wherever a fighter is listed.
+   Neutral charcoal so it reads as a separate signal from the
+   blue Polymarket chip.
+   ============================================================ */
+
+.fight-projection {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 8px;
+  border-radius: 4px;
+  font-size: var(--text-caption);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-subtle);
+  white-space: nowrap;
+  line-height: 1;
+}
+.fight-projection__label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+.fight-projection__val {
+  font-weight: 700;
+}
+.fight-projection__unit {
+  font-size: 10px;
+  font-weight: 600;
+  opacity: 0.6;
+  text-transform: lowercase;
+}
+
+/* Larger badge used in the fighter modal where there's room for "Projected
+   24.7 pts" with the word spelled out. */
+.fight-projection--badge {
+  padding: 3px 10px;
+  gap: 6px;
+  font-size: var(--text-body-sm);
+}
+.fight-projection--badge .fight-projection__label {
+  font-size: 10px;
+  text-transform: uppercase;
+}
+.fight-projection--badge .fight-projection__val {
+  font-size: var(--text-body);
+}
+
+/* Clickable variant — rendered as <span role="button"> so it can sit
+   inside other clickable elements (e.g. .fight-row__side <button>)
+   without producing invalid nested-button HTML. */
+.fight-projection--clickable {
+  cursor: pointer;
+}
+.fight-projection--clickable:hover {
+  background: var(--bg-elevated, var(--bg-secondary));
+  border-color: var(--text-tertiary);
+}
+.fight-projection--clickable:focus-visible {
+  outline: 2px solid var(--accent-crimson);
+  outline-offset: 2px;
+}
+
+
+/* Projection breakdown modal — opened from the badge. Sits above the
+   fighter modal (z-index 1500), same pattern as the FV breakdown. */
+#projectionBreakdownModal {
+  z-index: 1600;
 }
 
 /* ============================================================
@@ -7450,6 +8313,46 @@ label .form-label__hint {
   align-items: baseline;
   justify-content: space-between;
   gap: var(--space-2);
+}
+
+/* "vs. Opponent Name" line on the starter card. Sits between the fighter
+   name and the forecast row. Subtle — the user already knows the matchup
+   from picking the lineup, but seeing the opponent here is faster than
+   opening the modal or scrolling the fight card. */
+.lineup-starter-card__opponent {
+  font-size: var(--text-caption);
+  color: var(--text-secondary);
+  margin: 2px 0 0 0;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+/* Pre-fight forecast row on the starter card — Polymarket odds + projection
+   pill, side by side under the fighter name. Hidden by the JS once any
+   scores arrive for the event. Slight top margin so it doesn't crowd the
+   name and so the stat-row below still reads as the "bottom" of the card. */
+.lineup-starter-card__forecast {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  margin-bottom: 2px;
+}
+/* The odds chip and projection pill default to slightly tighter sizing in
+   this context — the starter card is narrow and the components elsewhere
+   assume more room. */
+.lineup-starter-card__forecast .fight-odds,
+.lineup-starter-card__forecast .fight-projection {
+  padding: 1px 6px;
+  font-size: 10px;
+}
+.lineup-starter-card__forecast .fight-odds__pct,
+.lineup-starter-card__forecast .fight-projection__val {
+  font-size: 11px;
+}
+.lineup-starter-card__forecast .fight-projection__label {
+  font-size: 8px;
 }
 .fighter-card__pts {
   display: inline-flex;
@@ -9227,3 +10130,313 @@ label .form-label__hint {
   }
 }
 
+
+/* ========================================================================
+   LOADING SCREEN — Octagon HUD
+   Injected by js/loading-screen.js on every page. A regular octagon with
+   a "light sweep" travelling around its 8 panels, corner posts pulsing
+   in sync, and a center stat readout cycling through SIG STRIKES /
+   TAKEDOWNS / CONTROL TIME etc. Sits above everything until #pageContent
+   flips to display:block, then fades out.
+
+   Master cycle: 8s (1 second per panel × 8 panels). All animations share
+   this duration so the sweep stays locked to the lit panel.
+   ======================================================================== */
+
+.loading-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-6);
+  background:
+    radial-gradient(ellipse 90% 60% at 50% 50%, rgba(193, 59, 46, 0.14) 0%, transparent 65%),
+    var(--bg-primary, #0a0a0a);
+  background-image:
+    radial-gradient(ellipse 90% 60% at 50% 50%, rgba(193, 59, 46, 0.14) 0%, transparent 65%),
+    repeating-linear-gradient(-45deg, transparent 0px, transparent 32px, rgba(255,255,255,0.018) 32px, rgba(255,255,255,0.018) 33px),
+    repeating-linear-gradient( 45deg, transparent 0px, transparent 32px, rgba(255,255,255,0.018) 32px, rgba(255,255,255,0.018) 33px);
+  background-color: var(--bg-primary, #0a0a0a);
+  transition: opacity 0.35s ease;
+  opacity: 1;
+  pointer-events: all;
+}
+.loading-screen--hiding {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Stage: square wrapper holding the octagon SVG. Subtle "breathing" scale
+   on a slow cycle independent of the light sweep so the whole HUD feels
+   alive even when the eye isn't tracking the moving panel. */
+.oct-stage {
+  position: relative;
+  width: min(440px, 80vw);
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: oct-breathe 6s ease-in-out infinite;
+  filter: drop-shadow(0 12px 32px rgba(193, 59, 46, 0.22));
+}
+.oct-svg {
+  width: 100%;
+  height: 100%;
+}
+@keyframes oct-breathe {
+  0%, 100% { transform: scale(1);    }
+  50%      { transform: scale(1.015); }
+}
+
+/* Canvas surface inside the octagon — soft radial glow gives the inside
+   depth without competing with the kinetic outline. */
+.oct-canvas-glow { fill: url(#octCanvasGlow); }
+
+/* Concentric reference octagons — layered "radar / sonar" depth.
+   Each ring is fainter than the last; the innermost barely visible. */
+.oct-ring {
+  fill: none;
+  stroke: var(--accent-crimson, #C13B2E);
+}
+.oct-ring--1 { stroke-opacity: 0.20; stroke-width: 1;   stroke-dasharray: 2 4; }
+.oct-ring--2 { stroke-opacity: 0.12; stroke-width: 0.8; }
+.oct-ring--3 { stroke-opacity: 0.08; stroke-width: 0.7; }
+.oct-ring--4 { stroke-opacity: 0.05; stroke-width: 0.6; }
+
+/* Soft halo — heavily blurred crimson outline just outside the main
+   panels, giving the octagon atmospheric "presence" instead of looking
+   drawn-on. Blur comes from #octHaloBlur in the SVG <defs>. */
+.oct-halo {
+  fill: none;
+  stroke: rgba(193, 59, 46, 0.55);
+  stroke-width: 3;
+}
+
+/* Outer frame ring — thin dashed companion to the main octagon outline.
+   Sits a bit further out so the panels feel "framed" by it. The dash
+   pattern + low opacity reads as a refined bezel, not a second outline. */
+.oct-frame {
+  fill: none;
+  stroke: rgba(193, 59, 46, 0.22);
+  stroke-width: 0.8;
+  stroke-dasharray: 3 5;
+  stroke-linecap: round;
+}
+
+/* Radial tick marks at each vertex — short lines extending outward.
+   Tactical-readout precision feel; the brain reads "this is measured /
+   instrumented" rather than "this is just a polygon." */
+.oct-tick {
+  stroke: rgba(193, 59, 46, 0.4);
+  stroke-width: 1.2;
+  stroke-linecap: round;
+}
+
+/* The 8 outer panels. Base state is a dim crimson stroke. The shared
+   animation runs for 8s; each panel's delay is offset by 1s so exactly
+   one panel is "lit" at a time and the highlight travels the perimeter.
+   Single-hue discipline: only crimson, brightness + glow as the variable. */
+.oct-side {
+  fill: none;
+  stroke: rgba(193, 59, 46, 0.32);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  animation: oct-panel-sweep 8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+.oct-side-0 { animation-delay: 0s;  }
+.oct-side-1 { animation-delay: 1s;  }
+.oct-side-2 { animation-delay: 2s;  }
+.oct-side-3 { animation-delay: 3s;  }
+.oct-side-4 { animation-delay: 4s;  }
+.oct-side-5 { animation-delay: 5s;  }
+.oct-side-6 { animation-delay: 6s;  }
+.oct-side-7 { animation-delay: 7s;  }
+
+@keyframes oct-panel-sweep {
+  /* Baseline: dim crimson, no glow */
+  0%, 90%, 100% {
+    stroke: rgba(193, 59, 46, 0.32);
+    stroke-width: 2.5;
+    filter: none;
+  }
+  /* Peak: brighter crimson with strong glow — no white, no gold */
+  5% {
+    stroke: #F0584A;
+    stroke-width: 4;
+    filter: drop-shadow(0 0 10px rgba(240, 88, 74, 0.85))
+            drop-shadow(0 0 18px rgba(193, 59, 46, 0.5));
+  }
+  /* Decay back to baseline crimson glow */
+  12% {
+    stroke: #C13B2E;
+    stroke-width: 3.0;
+    filter: drop-shadow(0 0 4px rgba(193, 59, 46, 0.45));
+  }
+  22% {
+    stroke: rgba(193, 59, 46, 0.5);
+    stroke-width: 2.7;
+    filter: none;
+  }
+}
+
+/* Corner posts pulse half a beat ahead of their adjacent panel — gives
+   the impression that the "impact" arrives at the corner first. Same
+   single-hue discipline as the panels. */
+.oct-post {
+  fill: rgba(193, 59, 46, 0.5);
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: oct-post-pulse 8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+.oct-post-0 { animation-delay: -0.5s; }
+.oct-post-1 { animation-delay:  0.5s; }
+.oct-post-2 { animation-delay:  1.5s; }
+.oct-post-3 { animation-delay:  2.5s; }
+.oct-post-4 { animation-delay:  3.5s; }
+.oct-post-5 { animation-delay:  4.5s; }
+.oct-post-6 { animation-delay:  5.5s; }
+.oct-post-7 { animation-delay:  6.5s; }
+
+@keyframes oct-post-pulse {
+  0%, 90%, 100% {
+    fill: rgba(193, 59, 46, 0.5);
+    transform: scale(1);
+    filter: none;
+  }
+  5% {
+    fill: #F0584A;
+    transform: scale(1.7);
+    filter: drop-shadow(0 0 8px rgba(240, 88, 74, 0.95))
+            drop-shadow(0 0 14px rgba(193, 59, 46, 0.55));
+  }
+  14% {
+    fill: #C13B2E;
+    transform: scale(1.2);
+    filter: drop-shadow(0 0 4px rgba(193, 59, 46, 0.5));
+  }
+  24% {
+    fill: rgba(193, 59, 46, 0.65);
+    transform: scale(1.03);
+  }
+}
+
+/* Particle sparks ride along each panel as the sweep passes. Three per
+   panel (24 total) — placed in JS so each has its own animation-delay. */
+.oct-spark {
+  fill: rgba(193, 59, 46, 0);
+  animation: oct-spark-flash 8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+@keyframes oct-spark-flash {
+  0%, 92%, 100% { fill: rgba(193, 59, 46, 0); filter: none; }
+  4%            { fill: #F0584A; filter: drop-shadow(0 0 4px rgba(240, 88, 74, 0.9)); }
+  10%           { fill: rgba(193, 59, 46, 0.6); filter: drop-shadow(0 0 2px rgba(193, 59, 46, 0.5)); }
+  18%           { fill: rgba(193, 59, 46, 0); filter: none; }
+}
+
+/* Hairline progress bar below the octagon. Fills 0 → ~95% per 8s cycle,
+   then resets. Even though it's not measuring real progress, the visual
+   cue of *something filling* makes the wait feel intentional. */
+.oct-progress-bg {
+  stroke: rgba(193, 59, 46, 0.15);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+.oct-progress-fill {
+  stroke: var(--accent-crimson, #C13B2E);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  /* Dash length = bar length (200), animate offset from 200 to ~10 to fill */
+  stroke-dasharray: 200;
+  stroke-dashoffset: 200;
+  animation: oct-progress 8s cubic-bezier(0.25, 0.6, 0.3, 1) infinite;
+  filter: drop-shadow(0 0 4px rgba(193, 59, 46, 0.5));
+}
+@keyframes oct-progress {
+  0%   { stroke-dashoffset: 200; opacity: 1; }
+  82%  { stroke-dashoffset: 10;  opacity: 1; }
+  92%  { stroke-dashoffset: 10;  opacity: 1; }
+  98%  { stroke-dashoffset: 10;  opacity: 0; }
+  100% { stroke-dashoffset: 200; opacity: 0; }
+}
+
+/* ---- Center stat readout ----
+   Just label + value now (unit row dropped). The number gets the room
+   it deserves — single line, generous size, settle-flash from crimson
+   into white at ~ramp end. */
+.oct-stat-label {
+  font-family: var(--font-mono, 'SF Mono', 'Roboto Mono', monospace);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  fill: rgba(255, 255, 255, 0.55);
+  animation: oct-stat-fade 2.6s ease-out infinite;
+}
+.oct-stat-value {
+  font-family: var(--font-display, 'Bebas Neue', Impact, sans-serif);
+  font-size: 76px;
+  letter-spacing: 0.015em;
+  fill: #F5F5F5;
+  /* tabular-nums keeps the number's width stable during the odometer ramp */
+  font-variant-numeric: tabular-nums;
+  animation: oct-stat-value-flash 2.6s ease-out infinite;
+}
+
+/* Label fade on stat changeover — brief lift-in, hold, lift-out. */
+@keyframes oct-stat-fade {
+  0%, 100%  { opacity: 0;   transform: translateY(2px); }
+  10%       { opacity: 1;   transform: translateY(0);   }
+  85%       { opacity: 0.95; transform: translateY(0);  }
+  95%       { opacity: 0;   transform: translateY(-2px); }
+}
+
+/* Value: starts crimson during the odometer ramp (~0-700ms = 0-27% of
+   the 2.6s slot) then settles to white as the number lands. */
+@keyframes oct-stat-value-flash {
+  0%        { fill: #F0584A; }
+  20%       { fill: #F0584A; }
+  30%       { fill: #F5F5F5; }
+  100%      { fill: #F5F5F5; }
+}
+
+/* Wordmark + tag — minor restyle so they belong with the new HUD look */
+.ld-wordmark {
+  margin: 0;
+  font-family: var(--font-display, 'Bebas Neue', Impact, sans-serif);
+  font-size: clamp(2rem, 5vw, 3rem);
+  letter-spacing: 0.06em;
+  line-height: 1;
+  color: var(--text-primary, #f5f5f5);
+  text-transform: uppercase;
+  display: flex;
+  gap: 0.3em;
+}
+.ld-wordmark span:first-child { color: var(--accent-crimson, #C13B2E); }
+
+.ld-tag {
+  margin: 0;
+  font-family: var(--font-mono, 'SF Mono', 'Roboto Mono', monospace);
+  font-size: var(--text-caption, 0.75rem);
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-tertiary, #888);
+  opacity: 0.7;
+}
+
+/* Reduced motion — kill the sweep + flashing, leave a static lit octagon. */
+@media (prefers-reduced-motion: reduce) {
+  .oct-stage, .oct-side, .oct-post, .oct-spark, .oct-progress-fill,
+  .oct-stat-label, .oct-stat-value {
+    animation: none;
+  }
+  .oct-side       { stroke: rgba(193, 59, 46, 0.6); }
+  .oct-post       { fill:   rgba(193, 59, 46, 0.8); transform: scale(1.1); }
+  .oct-spark      { fill:   rgba(193, 59, 46, 0.4); }
+  .oct-progress-fill { stroke-dashoffset: 60; }
+  .oct-stat-label { opacity: 1; transform: none; }
+  .oct-stat-value { fill: #F5F5F5; }
+}

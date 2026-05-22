@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="styles/components.css">
 
   <title>League - Knockdown Fantasy</title>
+  <script src="js/loading-screen.js"></script>
 </head>
 <body>
 
@@ -75,8 +76,13 @@
               <span class="countdown-unit__value" id="twMins">--</span>
               <span class="countdown-unit__label">Mins</span>
             </div>
+            <div class="countdown-unit">
+              <span class="countdown-unit__value" id="twSecs">--</span>
+              <span class="countdown-unit__label">Secs</span>
+            </div>
           </div>
           <p class="this-week-card__deadline">Lineup locks at first prelim</p>
+          <button class="btn-ghost this-week-card__btn" id="viewFightCardBtn" type="button">View fight card &rarr;</button>
         </div>
       </div>
 
@@ -259,6 +265,16 @@
   <script src="js/commissioner.js"></script>
   <script src="js/activity.js"></script>
   <script src="js/waiver-phase.js"></script>
+  <!-- Shared deps for the View Fight Card modal + the fighter modal it opens -->
+  <script src="js/scoring.js"></script>
+  <script src="js/score-breakdown.js"></script>
+  <script src="js/country-flags.js"></script>
+  <script src="js/next-fight.js"></script>
+  <script src="js/fight-odds.js"></script>
+  <script src="js/projections.js"></script>
+  <script src="js/fantasy-value.js"></script>
+  <script src="js/fighter-modal.js"></script>
+  <script src="js/fight-card-modal.js"></script>
   <script src="js/league.js"></script>
 
   <script>

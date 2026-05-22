@@ -29,7 +29,7 @@
     // length limit and fails silently, so this flip is essential.
     const { data: rawFights, error } = await supabaseClient
       .from('fight_results')
-      .select('fighter_a_id, fighter_b_id, event:ufc_events!inner(id, name, event_date)')
+      .select('fighter_a_id, fighter_b_id, event:ufc_events!inner(id, name, event_date, venue)')
       .is('outcome', null)
       .gte('event.event_date', todayISO);
 
@@ -72,6 +72,7 @@
           event_id:      fight.event.id,
           event_name:    fight.event.name,
           event_date:    fight.event.event_date,
+          event_venue:   fight.event.venue || null,
           opponent_id:   oppId,
           opponent_name: nameMap[oppId] || 'TBD',
         };

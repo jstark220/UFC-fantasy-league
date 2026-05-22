@@ -1,0 +1,45 @@
+# ============================================================================
+# polymarket-odds.yml
+# Refreshes Polymarket fight odds every hour. Polymarket prices move
+# throughout the week as new info shifts the betting line, so a single
+# weekly pull (in update-data.yml) would leave the displayed odds stale
+# by Friday/Saturday when they matter most.
+#
+# Cost: ~30 seconds per run × 24 runs/day × 30 days/mo ≈ 360 minutes/month.
+# Combined with the other workflows we're still well under the 2,000 min
+# GitHub Actions free tier.
+# ============================================================================
+
+name: Polymarket Odds Refresh
+
+on:
+  schedule:
+    # Hourly, on the hour. UTC. Picks up new fight markets shortly after
+    # they're posted by Polymarket and keeps prices fresh through the week.
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    name: Sync Polymarket odds
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Fetch Polymarket odds
+        run: node fetchPolymarketOdds.js
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

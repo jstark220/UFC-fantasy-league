@@ -54,7 +54,11 @@ const SCORING_FIELDS = [
   { id: 's_potn',                      key: 'potn' },
   { id: 's_fotn',                      key: 'fotn' },
   { id: 's_main_event_mult',           key: 'main_event_mult' },
-  { id: 's_co_main_mult',              key: 'co_main_mult' }
+  { id: 's_co_main_mult',              key: 'co_main_mult' },
+  // Starter count / event-week TERF expansion size. Used by waiver-phase
+  // helpers (getEventBonusSize, getStarterCountForEvent).
+  { id: 's_starters_numbered',         key: 'starters_numbered' },
+  { id: 's_starters_fight_night',      key: 'starters_fight_night' }
 ];
 
 // Pre-fill scoring inputs from a scoring_config object. Falls back to

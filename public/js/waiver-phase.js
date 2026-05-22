@@ -28,7 +28,53 @@
 var ROSTER_SLOTS_PER_DIVISION = 1;
 var ROSTER_FLEX_SLOTS         = 6;
 var ROSTER_SIZE_BASE          = 17;   // 11 division + 6 flex
-var ROSTER_SIZE_EXPANDED      = 20;   // event-week +3 cap
+// Maximum the cap can grow to during event-week expansion. Used as a
+// fallback when no event context is provided; callers that DO know the
+// upcoming event should use getEventBonusSize(event) instead.
+var ROSTER_SIZE_EXPANDED      = 20;   // event-week +3 cap (numbered events)
+
+// Defaults when a league's scoring_config doesn't override these. Numbered
+// PPVs get 3 starters / +3 TERF; Fight Nights get 2 starters / +2 TERF.
+var DEFAULT_STARTERS_NUMBERED    = 3;
+var DEFAULT_STARTERS_FIGHT_NIGHT = 2;
+
+// Detects "UFC 329", "UFC 330", etc. Everything else (Fight Night, UFC on
+// ABC, sponsor-named one-offs like "UFC Freedom 250") falls to the Fight
+// Night side.
+function isNumberedEvent(event) {
+  if (!event) return false;
+  var name = String(event.name || event.full_name || '').trim();
+  return /^UFC\s+\d+\b/i.test(name);
+}
+
+// Returns the number of extra roster spots / starters for the given event.
+// Reads overrides from scoringConfig.starters_numbered /
+// .starters_fight_night when provided; otherwise falls back to the
+// league defaults.
+function getEventBonusSize(event, scoringConfig) {
+  var cfg = scoringConfig || {};
+  if (isNumberedEvent(event)) {
+    return cfg.starters_numbered != null
+      ? Number(cfg.starters_numbered)
+      : DEFAULT_STARTERS_NUMBERED;
+  }
+  return cfg.starters_fight_night != null
+    ? Number(cfg.starters_fight_night)
+    : DEFAULT_STARTERS_FIGHT_NIGHT;
+}
+
+// Starter count uses the same rule as TERF expansion — they're naturally
+// coupled. Same scoringConfig keys.
+function getStarterCountForEvent(event, scoringConfig) {
+  return getEventBonusSize(event, scoringConfig);
+}
+
+// The roster cap that applies during the expansion window for THIS event.
+// Bigger numbered events get +3, smaller Fight Night cards get +2 — both
+// configurable per-league.
+function getRosterCapExpandedForEvent(event, scoringConfig) {
+  return ROSTER_SIZE_BASE + getEventBonusSize(event, scoringConfig);
+}
 
 // ----- Time-zone helpers -------------------------------------------------
 // Browsers don't expose "what wall-clock day is it in New York" directly,
@@ -163,10 +209,15 @@ function isCapExpanded(now, nextEventDateStr) {
   return t >= c.capExpand.getTime() && t < c.capRevert.getTime();
 }
 
-// The roster cap that applies right now (base size normally, base + 3
-// during the event-week expansion window).
-function getRosterCap(now, nextEventDateStr) {
-  return isCapExpanded(now, nextEventDateStr) ? ROSTER_SIZE_EXPANDED : ROSTER_SIZE_BASE;
+// The roster cap that applies right now. Base size normally; during the
+// event-week expansion window, base + 2 (Fight Night) or base + 3
+// (numbered). Pass the upcoming event when you want the correct expanded
+// size — without it we fall back to +3 (the old default).
+function getRosterCap(now, nextEventDateStr, nextEvent) {
+  if (!isCapExpanded(now, nextEventDateStr)) return ROSTER_SIZE_BASE;
+  return nextEvent
+    ? getRosterCapExpandedForEvent(nextEvent)
+    : ROSTER_SIZE_EXPANDED;
 }
 
 // Given a drop timestamp, returns when that fighter clears waivers and

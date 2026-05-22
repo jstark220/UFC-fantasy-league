@@ -132,6 +132,11 @@ async function initLeague() {
     );
   }
 
+  // ---- Wire the "Next Event" banner ----
+  // Fire-and-forget: replaces the hardcoded placeholder card with the
+  // soonest upcoming event from ufc_events and starts a live countdown.
+  wireNextEventBanner();
+
   // ---- Render nav links in the page header ----
   // Standings is always visible. Lineup/Waivers/Trades appear once the draft starts.
   // Chat lives in the popup widget (top nav + floating bubble) on every page,
@@ -715,6 +720,172 @@ function formatCountdown(iso) {
 function roundUpToNext5Minutes(d) {
   const ms = 5 * 60 * 1000;
   return new Date(Math.ceil(d.getTime() / ms) * ms);
+}
+
+// ========================================================================
+// NEXT-EVENT BANNER
+// Replaces the hardcoded placeholder card on league.html with the soonest
+// upcoming UFC event from ufc_events, including a live d/h/m countdown to
+// the lineup-lock time (defaults to 5pm ET on the event day when the
+// commissioner hasn't set lineup_lock_time).
+// ========================================================================
+
+// Display name for the upcoming-event banner. Numbered PPVs ("UFC 329")
+// show as-is; non-numbered Vegas cards are at the UFC Apex facility, so
+// they label as "UFC APEX"; everything else gets re-labelled as
+// "UFC <City>" using the first chunk of ufc_events.venue. Matches the
+// helper of the same name in lineup.js.
+function displayEventName(ev) {
+  if (!ev) return '';
+  if (/^UFC\s+\d+\b/i.test(ev.name || '')) return ev.name;
+  if (ev.venue) {
+    var venue = String(ev.venue);
+    if (/las vegas/i.test(venue))  return 'UFC APEX';
+    // One-off override: the Washington card is sponsor-named "Freedom 250".
+    if (/washington/i.test(venue)) return 'UFC Freedom 250';
+    var city = venue.split(',')[0].trim();
+    if (city) return 'UFC ' + city;
+  }
+  return ev.name || '';
+}
+
+// Compute "5pm ET on event_date" with DST awareness. Matches
+// getEffectiveLockTime in lineup.js so both pages count down to the same
+// moment.
+function nextEventLockTime(event) {
+  if (!event || !event.event_date) return null;
+  if (event.lineup_lock_time) return new Date(event.lineup_lock_time);
+  const parts = event.event_date.split('-').map(Number);
+  const y = parts[0], m = parts[1], d = parts[2];
+  const tentative = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+  let offsetHours = -5;  // EST default
+  try {
+    const fmt = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York', timeZoneName: 'short'
+    });
+    const tzPart = fmt.formatToParts(tentative).find(function (p) { return p.type === 'timeZoneName'; });
+    if (tzPart && tzPart.value === 'EDT') offsetHours = -4;
+  } catch (e) { /* stick with EST */ }
+  return new Date(Date.UTC(y, m - 1, d, 17 - offsetHours, 0, 0));
+}
+
+// "Max Holloway" -> "Holloway" for the compact "Vs." matchup line.
+function _lastNameOf(fullName) {
+  if (!fullName) return '';
+  var parts = fullName.trim().split(/\s+/);
+  return parts[parts.length - 1];
+}
+
+var _nextEventInterval = null;
+
+async function wireNextEventBanner() {
+  const todayISO = new Date().toISOString().split('T')[0];
+
+  // Fetch the soonest upcoming event
+  const { data: event, error } = await supabaseClient
+    .from('ufc_events')
+    .select('id, name, full_name, event_date, venue, lineup_lock_time')
+    .gte('event_date', todayISO)
+    .order('event_date', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !event) return;  // leave placeholder; nothing to render
+
+  // Headline name — Fight Nights show as "UFC <City>" instead of the
+  // generic "UFC Fight Night".
+  const nameEl = document.querySelector('.this-week-card__name');
+  if (nameEl) nameEl.textContent = displayEventName(event);
+
+  // Date + venue line
+  const dateEl = document.querySelector('.this-week-card__date');
+  if (dateEl) {
+    const d = new Date(event.event_date + 'T12:00:00');
+    let dateStr = d.toLocaleDateString('en-US', {
+      weekday: 'long', month: 'long', day: 'numeric'
+    });
+    if (event.venue) dateStr += ' · ' + event.venue;
+    dateEl.textContent = dateStr;
+  }
+
+  // Matchup line. Try the actual main-event fight first, then fall back
+  // to the colon suffix in full_name ("UFC 329: McGregor vs. Holloway 2").
+  const matchupEl = document.querySelector('.this-week-card__matchup');
+  if (matchupEl) {
+    let matchup = '';
+    try {
+      const { data: mainFight } = await supabaseClient
+        .from('fight_results')
+        .select('fighter_a_id, fighter_b_id')
+        .eq('event_id', event.id)
+        .eq('card_position', 'main_event')
+        .maybeSingle();
+      if (mainFight) {
+        const { data: pair } = await supabaseClient
+          .from('fighters')
+          .select('id, name')
+          .in('id', [mainFight.fighter_a_id, mainFight.fighter_b_id]);
+        if (pair && pair.length === 2) {
+          const a = pair.find(function (p) { return p.id === mainFight.fighter_a_id; });
+          const b = pair.find(function (p) { return p.id === mainFight.fighter_b_id; });
+          if (a && b) matchup = _lastNameOf(a.name) + ' vs. ' + _lastNameOf(b.name);
+        }
+      }
+    } catch (_e) { /* fall through to full_name parse */ }
+
+    if (!matchup && event.full_name && event.full_name.indexOf(':') !== -1) {
+      matchup = event.full_name.split(':').slice(1).join(':').trim();
+    }
+    if (matchup) {
+      matchupEl.textContent = matchup;
+      matchupEl.style.display = '';
+    } else {
+      matchupEl.style.display = 'none';
+    }
+  }
+
+  // Kick off the d/h/m/s countdown
+  const target = nextEventLockTime(event);
+  if (target) startNextEventCountdown(target);
+
+  // Wire the "View fight card" button to the shared modal. Uses the
+  // event id we already fetched, so no extra query at click time.
+  const fcBtn = document.getElementById('viewFightCardBtn');
+  if (fcBtn && typeof FightCardModal !== 'undefined') {
+    fcBtn.addEventListener('click', function () {
+      FightCardModal.show(event.id);
+    });
+  } else if (fcBtn) {
+    // FightCardModal failed to load — hide the button so it doesn't
+    // sit there as a dead control.
+    fcBtn.style.display = 'none';
+  }
+}
+
+function startNextEventCountdown(target) {
+  if (_nextEventInterval) clearInterval(_nextEventInterval);
+  const daysEl  = document.getElementById('twDays');
+  const hoursEl = document.getElementById('twHours');
+  const minsEl  = document.getElementById('twMins');
+  const secsEl  = document.getElementById('twSecs');
+  if (!daysEl || !hoursEl || !minsEl) return;
+
+  function tick() {
+    const now = new Date();
+    let diff = target.getTime() - now.getTime();
+    if (diff < 0) diff = 0;
+    const days  = Math.floor(diff / 86400000); diff -= days  * 86400000;
+    const hours = Math.floor(diff / 3600000);  diff -= hours * 3600000;
+    const mins  = Math.floor(diff / 60000);    diff -= mins  * 60000;
+    const secs  = Math.floor(diff / 1000);
+    daysEl.textContent  = String(days);
+    hoursEl.textContent = String(hours);
+    minsEl.textContent  = String(mins);
+    if (secsEl) secsEl.textContent = String(secs);
+  }
+  tick();
+  // 1-second cadence drives the seconds digit.
+  _nextEventInterval = setInterval(tick, 1000);
 }
 
 // Converts a Date into the value format <input type="datetime-local">

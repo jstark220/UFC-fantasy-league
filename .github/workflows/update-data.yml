@@ -119,7 +119,20 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
-      # ---- Step 9: Fetch headshot photos for any new fighters ----
+      # ---- Step 9: Sync Polymarket fight odds ----
+      # Pulls implied win probabilities from Polymarket's public Gamma API
+      # for every active UFC fight market and stores them in fight_odds.
+      # Frontend displays the odds on roster rows, fighter modal, and the
+      # fight card. The dedicated polymarket-odds.yml workflow refreshes
+      # this hourly during event weeks for tighter freshness.
+      - name: Sync Polymarket odds
+        run: node fetchPolymarketOdds.js
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      # ---- Step 10: Fetch headshot photos for any new fighters ----
       - name: Fetch fighter photos
         run: node scrapePhotos.js
         continue-on-error: true

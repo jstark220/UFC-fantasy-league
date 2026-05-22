@@ -28,6 +28,8 @@ var availableFighters = [];
 var ownedByMap        = {}; // fighter_id -> team_name for rostered fighters
 var fighterPointsMap  = {}; // fighter_id -> { totalPts, recentPts, avgPts, fightCount }
 var fighterNextFight  = {}; // fighter_id -> next-fight info from NextFight.loadNextFights
+var fighterFightOdds  = {}; // fighter_id -> Polymarket odds info from FightOdds.loadFightOdds
+var fighterProjections = {}; // fighter_id -> { projectedPoints, ... } from Projections.load
 var upcomingEvents    = []; // list of upcoming UFC events used to populate the event filter
 var myRoster          = [];
 var myClaims          = [];
@@ -131,6 +133,17 @@ async function initWaivers() {
   if (typeof NextFight !== 'undefined') {
     fighterNextFight = await NextFight.loadNextFights(allFighterIds);
   }
+  // Load Polymarket odds + projected points — same pattern. Lightweight
+  // even for ~6000 fighters because the helpers filter to upcoming fights
+  // server-side.
+  if (typeof FightOdds !== 'undefined' || typeof Projections !== 'undefined') {
+    var [odds, projections] = await Promise.all([
+      typeof FightOdds   !== 'undefined' ? FightOdds.loadFightOdds(allFighterIds) : {},
+      typeof Projections !== 'undefined' ? Projections.load(allFighterIds)        : {}
+    ]);
+    fighterFightOdds   = odds;
+    fighterProjections = projections;
+  }
 
   // Distinct upcoming events derived from the next-fight map. Sorted
   // soonest-first so the picker reads naturally.
@@ -140,7 +153,12 @@ async function initWaivers() {
     if (!nf || !nf.event_id) return;
     if (seenEventIds.has(nf.event_id)) return;
     seenEventIds.add(nf.event_id);
-    upcomingEvents.push({ id: nf.event_id, name: nf.event_name, date: nf.event_date });
+    upcomingEvents.push({
+      id:    nf.event_id,
+      name:  nf.event_name,
+      date:  nf.event_date,
+      venue: nf.event_venue || null
+    });
   });
   upcomingEvents.sort(function(a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
 
@@ -323,8 +341,11 @@ function fighterRollingClearTime(fighterId) {
 
 // Decides whether claiming this specific fighter requires going through
 // the waiver flow vs. instant FA add. Returns a reason for display.
-//   { mode: 'instant' }
-//   { mode: 'claim', reason: 'window_pre' | 'window_post' | 'rolling', closesAt }
+//   { mode: 'predraft' }                          — draft hasn't completed yet
+//   { mode: 'claim', reason: 'window_pre',  closesAt } — Thu 3am → Fri 3am
+//   { mode: 'claim', reason: 'window_post', closesAt } — Sun 3am → Tue 3am
+//   { mode: 'claim', reason: 'rolling',     closesAt } — fighter just dropped, 48h hold
+//   { mode: 'instant' }                           — open FA between windows
 function decideAddMode(fighterId) {
   // Pre-draft: nothing can be added. The Add button stays disabled in the
   // UI; this case lets us short-circuit the rest of the logic and gives
@@ -338,20 +359,14 @@ function decideAddMode(fighterId) {
   if (phaseInfo.phase === 'WINDOW_POST') {
     return { mode: 'claim', reason: 'window_post', closesAt: phaseInfo.closesAt };
   }
-  // FA phase — only fighters on rolling waiver require a claim
+  // FA phase — instant add for everyone EXCEPT fighters on the 48-hour
+  // rolling waiver hold from a recent drop. This matches the standard
+  // fantasy waiver pattern: claims during the Thu→Fri and Sun→Tue windows,
+  // first-come-first-served free agency in between.
   if (fighterOnRollingWaiver(fighterId)) {
     return { mode: 'claim', reason: 'rolling', closesAt: fighterRollingClearTime(fighterId) };
   }
-  // Post-draft "everyone on waivers" rule: even in FA phase, the first
-  // pickup after the draft should be a claim, not an instant add. We force
-  // claim mode whenever the draft is complete and we're between event
-  // windows — claims pile up until the next WINDOW_PRE opens (or, if no
-  // upcoming event, can be processed manually by the commissioner).
-  return {
-    mode:     'claim',
-    reason:   'post_draft',
-    closesAt: phaseInfo.opensAt
-  };
+  return { mode: 'instant' };
 }
 
 // ========================================================================
@@ -387,17 +402,18 @@ function renderPhaseBanner() {
               'Claims process ' + formatEtDateTime(phaseInfo.closesAt) +
               ' (' + formatRelativeShort(phaseInfo.closesAt, now) + ').';
   } else {
-    // Post-draft FA phase: per the post-draft waivers rule, every pickup
-    // is still a claim until the next regular waiver window. We surface
-    // this in the banner instead of the old "instant adds" copy.
-    variant = 'phase-banner--window';
-    title   = 'Post-draft waivers';
+    // FA phase between the two waiver windows. Adds are instant, first-come
+    // first-served. Fighters who were just dropped are still on a 48-hour
+    // rolling hold (handled per-fighter by decideAddMode), but otherwise
+    // anyone is fair game.
+    variant = 'phase-banner--fa';
+    title   = 'Free agency open';
     var nextOpen = phaseInfo.opensAt
-      ? 'Next regular waiver window opens ' + formatEtDateTime(phaseInfo.opensAt) +
+      ? 'Next waiver window opens ' + formatEtDateTime(phaseInfo.opensAt) +
         ' (' + formatRelativeShort(phaseInfo.opensAt, now) + ')'
       : 'No upcoming waiver window scheduled';
-    body = 'All free-agent pickups go through waivers as claims. ' +
-           'Claims are resolved in inverse-standings priority. ' +
+    body = 'Adds are instant — first come, first served. ' +
+           'Recently dropped fighters stay on a 48-hour waiver hold. ' +
            nextOpen + '. Roster cap is ' + rosterCap + '.';
   }
 
@@ -1095,7 +1111,9 @@ function wireUpSearch() {
   document.getElementById('showAllToggle').addEventListener('change', renderAvailableFighters);
 
   // Populate the event filter from the upcomingEvents list we collected
-  // during init, then wire it up just like the other filters.
+  // during init, then wire it up just like the other filters. The date
+  // goes on data-sub so the custom dropdown renders it as a muted second
+  // column instead of inlined in the label.
   var eventSel = document.getElementById('eventFilter');
   if (eventSel) {
     upcomingEvents.forEach(function(ev) {
@@ -1103,11 +1121,34 @@ function wireUpSearch() {
       opt.value = ev.id;
       var d = new Date(ev.date + 'T12:00:00');
       var dStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      opt.textContent = ev.name + ' (' + dStr + ')';
+      opt.textContent = displayEventName(ev);
+      opt.setAttribute('data-sub', dStr);
       eventSel.appendChild(opt);
     });
+    // Now that the options exist, the custom dropdown's MutationObserver
+    // won't re-fire (the <select> already in DOM). Call refresh() to
+    // rebuild the menu against the new option list.
+    if (typeof CustomDropdown !== 'undefined') CustomDropdown.refresh(eventSel);
     eventSel.addEventListener('change', renderAvailableFighters);
   }
+}
+
+// Display name for the event filter rows. Numbered PPVs ("UFC 329")
+// show as-is; non-numbered Vegas cards label as "UFC APEX"; Washington
+// is the one-off "UFC Freedom 250"; everything else becomes
+// "UFC <City>" from the first chunk of venue. Matches the helpers of
+// the same name in lineup.js and league.js.
+function displayEventName(ev) {
+  if (!ev) return '';
+  if (/^UFC\s+\d+\b/i.test(ev.name || '')) return ev.name;
+  if (ev.venue) {
+    var venue = String(ev.venue);
+    if (/las vegas/i.test(venue))  return 'UFC APEX';
+    if (/washington/i.test(venue)) return 'UFC Freedom 250';
+    var city = venue.split(',')[0].trim();
+    if (city) return 'UFC ' + city;
+  }
+  return ev.name || '';
 }
 
 // ========================================================================
@@ -1260,13 +1301,27 @@ function renderAvailableFighters() {
 
     // Next-fight note: small line showing this fighter's next booked bout.
     // Only rendered when the data is available (NextFight helper loaded
-    // and the fighter has an upcoming fight).
+    // and the fighter has an upcoming fight). The Polymarket odds chip
+    // sits inline at the end of the same line.
     var nextFightNote = '';
     var nf = fighterNextFight[f.id];
     if (nf && typeof NextFight !== 'undefined') {
+      var oddsHtml = (typeof FightOdds !== 'undefined' && fighterFightOdds[f.id])
+        ? FightOdds.inlineHtml(fighterFightOdds[f.id])
+        : '';
+      var projHtml = (typeof Projections !== 'undefined' && fighterProjections[f.id])
+        ? Projections.pillHtml(fighterProjections[f.id], {
+            fighterId:    f.id,
+            fighterName:  f.name,
+            opponentName: nf.opponent_name || '',
+            eventName:    nf.event_name    || ''
+          })
+        : '';
       nextFightNote =
         '<span class="lineup-roster-row__matchup waiver-next-fight">' +
           'Fights ' + escapeHtml(NextFight.formatShort(nf)) +
+          (oddsHtml ? ' ' + oddsHtml : '') +
+          (projHtml ? ' ' + projHtml : '') +
         '</span>';
     }
     var photoHtml = f.photo_url
@@ -1617,6 +1672,41 @@ function openClaimModal(fighterId) {
     ? 'Drop (required — you are at the ' + rosterCap + '-fighter cap)'
     : 'Drop (optional)';
 
+  // Temp-spot opt-in: during the Thu→Sun event-week expansion, the user can
+  // choose to place this fighter in one of the +3 temporary slots. Always
+  // rendered for clarity — disabled (with a hint) when the window's closed
+  // or all temp spots are already filled.
+  // Numbered events get +3 expansion slots, Fight Nights get +2. Always
+  // derive from the upcoming event so the checkbox copy and limits match
+  // whatever's actually coming up.
+  var expansionSlotsTotal = (typeof getEventBonusSize === 'function')
+    ? getEventBonusSize(nextEvent, league && league.scoring_config)
+    : (ROSTER_SIZE_EXPANDED - ROSTER_SIZE_BASE);
+  var expansionSlotsUsed  = Math.max(0, myRoster.length - ROSTER_SIZE_BASE);
+  var expansionSlotsOpen  = Math.max(0, expansionSlotsTotal - expansionSlotsUsed);
+  var capExpandedNow      = typeof isCapExpanded === 'function'
+    ? isCapExpanded(new Date(), nextEvent ? nextEvent.event_date : null)
+    : false;
+  var tempCheckboxEnabled = capExpandedNow && expansionSlotsOpen > 0;
+  var tempCheckboxHint;
+  if (!capExpandedNow) {
+    tempCheckboxHint = 'Available Thu&ndash;Sun of event week only';
+  } else if (expansionSlotsOpen === 0) {
+    tempCheckboxHint = 'All ' + expansionSlotsTotal + ' temporary spots are filled';
+  } else {
+    tempCheckboxHint = expansionSlotsOpen + ' of ' + expansionSlotsTotal +
+                       ' temporary spots open &middot; auto-drops Wed 3am ET';
+  }
+  var tempCheckboxHtml =
+    '<label class="waiver-temp-spot' + (tempCheckboxEnabled ? '' : ' waiver-temp-spot--disabled') + '" ' +
+           'for="useTempSpot">' +
+      '<input type="checkbox" id="useTempSpot" ' + (tempCheckboxEnabled ? '' : 'disabled') + '>' +
+      '<span class="waiver-temp-spot__label">' +
+        '<span class="waiver-temp-spot__title">Use a temporary roster spot</span>' +
+        '<span class="waiver-temp-spot__hint">' + tempCheckboxHint + '</span>' +
+      '</span>' +
+    '</label>';
+
   var overlay = document.createElement('div');
   overlay.id = 'claimModal';
   overlay.className = 'move-flex-modal-overlay';
@@ -1637,6 +1727,7 @@ function openClaimModal(fighterId) {
           '<label class="waiver-modal-label">' + escapeHtml(dropLabel) + '</label>' +
           '<select class="waiver-filter" id="dropSelect" style="width:100%">' + dropOptions + '</select>' +
         '</div>' +
+        tempCheckboxHtml +
         // Live validation slot — populated by validateClaimModal() on every change
         '<p class="waiver-cap-warning" id="claimWarning" style="display:none"></p>' +
         '<div class="move-flex-modal__actions">' +
@@ -1655,6 +1746,8 @@ function openClaimModal(fighterId) {
   document.getElementById('cancelClaimBtn').addEventListener('click', closeClaimModal);
   document.getElementById('closeClaimBtn').addEventListener('click', closeClaimModal);
   document.getElementById('dropSelect').addEventListener('change', validateClaimModal);
+  var tempCheckbox = document.getElementById('useTempSpot');
+  if (tempCheckbox) tempCheckbox.addEventListener('change', validateClaimModal);
   overlay.addEventListener('click', function(e) { if (e.target === overlay) closeClaimModal(); });
   document.addEventListener('keydown', _claimEscHandler);
 
@@ -1670,13 +1763,22 @@ function openClaimModal(fighterId) {
 function validateClaimModal() {
   if (!claimingFighter) return;
 
-  var dropSelect = document.getElementById('dropSelect');
-  var warning    = document.getElementById('claimWarning');
-  var submit     = document.getElementById('confirmClaimBtn');
+  var dropSelect   = document.getElementById('dropSelect');
+  var tempCheckbox = document.getElementById('useTempSpot');
+  var warning      = document.getElementById('claimWarning');
+  var submit       = document.getElementById('confirmClaimBtn');
   if (!dropSelect || !warning || !submit) return;
 
-  var dropId = dropSelect.value || null;
-  var atCap  = myRoster.length >= rosterCap;
+  var dropId        = dropSelect.value || null;
+  var useExpansion  = !!(tempCheckbox && !tempCheckbox.disabled && tempCheckbox.checked);
+  // If the user opts into a temp spot, both the total cap and the flex
+  // capacity expand for the duration of the +3 window.
+  var effectiveCap  = useExpansion
+    ? ((typeof getRosterCapExpandedForEvent === 'function')
+        ? getRosterCapExpandedForEvent(nextEvent, league && league.scoring_config)
+        : ROSTER_SIZE_EXPANDED)
+    : ROSTER_SIZE_BASE;
+  var atCap         = myRoster.length >= effectiveCap;
 
   // Build the projected roster after the swap
   var projectedRoster = myRoster
@@ -1688,10 +1790,10 @@ function validateClaimModal() {
 
   if (atCap && !dropId) {
     // Advisory: you must drop someone. Crimson because Submit is blocked.
-    message  = 'You are at the ' + rosterCap + '-fighter cap. Select a fighter to drop.';
+    message  = 'You are at the ' + effectiveCap + '-fighter cap. Select a fighter to drop.';
     blocking = true;
   } else {
-    var constructionErr = checkRosterConstruction(projectedRoster);
+    var constructionErr = checkRosterConstruction(projectedRoster, { useExpansion: useExpansion, event: nextEvent });
     if (constructionErr) {
       message  = constructionErr;
       blocking = true;
@@ -1728,11 +1830,18 @@ function _claimEscHandler(e) {
 async function submitClaim() {
   if (!claimingFighter) return;
 
-  var dropId = document.getElementById('dropSelect').value || null;
-  var atCap  = myRoster.length >= rosterCap;
+  var dropId        = document.getElementById('dropSelect').value || null;
+  var tempCheckbox  = document.getElementById('useTempSpot');
+  var useExpansion  = !!(tempCheckbox && !tempCheckbox.disabled && tempCheckbox.checked);
+  var effectiveCap  = useExpansion
+    ? ((typeof getRosterCapExpandedForEvent === 'function')
+        ? getRosterCapExpandedForEvent(nextEvent, league && league.scoring_config)
+        : ROSTER_SIZE_EXPANDED)
+    : ROSTER_SIZE_BASE;
+  var atCap         = myRoster.length >= effectiveCap;
 
   if (atCap && !dropId) {
-    alert('You are at the ' + rosterCap + '-fighter cap. Please select a fighter to drop.');
+    alert('You are at the ' + effectiveCap + '-fighter cap. Please select a fighter to drop.');
     return;
   }
 
@@ -1740,7 +1849,7 @@ async function submitClaim() {
   var projectedRoster = myRoster
     .filter(function(f) { return !dropId || f.id !== dropId; })
     .concat([claimingFighter]);
-  var constructionErr = checkRosterConstruction(projectedRoster);
+  var constructionErr = checkRosterConstruction(projectedRoster, { useExpansion: useExpansion, event: nextEvent });
   if (constructionErr) {
     alert(constructionErr);
     return;
@@ -1782,11 +1891,18 @@ async function submitClaim() {
 async function submitInstantAdd() {
   if (!claimingFighter) return;
 
-  var dropId = document.getElementById('dropSelect').value || null;
-  var atCap  = myRoster.length >= rosterCap;
+  var dropId        = document.getElementById('dropSelect').value || null;
+  var tempCheckbox  = document.getElementById('useTempSpot');
+  var useExpansion  = !!(tempCheckbox && !tempCheckbox.disabled && tempCheckbox.checked);
+  var effectiveCap  = useExpansion
+    ? ((typeof getRosterCapExpandedForEvent === 'function')
+        ? getRosterCapExpandedForEvent(nextEvent, league && league.scoring_config)
+        : ROSTER_SIZE_EXPANDED)
+    : ROSTER_SIZE_BASE;
+  var atCap         = myRoster.length >= effectiveCap;
 
   if (atCap && !dropId) {
-    alert('You are at the ' + rosterCap + '-fighter cap. Please select a fighter to drop.');
+    alert('You are at the ' + effectiveCap + '-fighter cap. Please select a fighter to drop.');
     return;
   }
 
@@ -1794,7 +1910,7 @@ async function submitInstantAdd() {
   var projectedRoster = myRoster
     .filter(function(f) { return !dropId || f.id !== dropId; })
     .concat([claimingFighter]);
-  var constructionErr = checkRosterConstruction(projectedRoster);
+  var constructionErr = checkRosterConstruction(projectedRoster, { useExpansion: useExpansion, event: nextEvent });
   if (constructionErr) {
     alert(constructionErr);
     return;
@@ -2123,9 +2239,22 @@ async function refreshData() {
 // If total Any-Flex demand exceeds ROSTER_FLEX_SLOTS, the roster won't fit.
 // Returns null when fighters fit, otherwise a user-facing error message.
 
-function checkRosterConstruction(fighters) {
-  if (fighters.length > ROSTER_SIZE_EXPANDED) {
-    return 'Roster cannot exceed ' + ROSTER_SIZE_EXPANDED + ' fighters even during the event-week expansion.';
+// Optional opts.useExpansion = true loosens the limits to the event-week
+// expansion caps. The expansion size depends on the upcoming event:
+// numbered PPVs get +3, Fight Nights get +2. Pass opts.event (the next
+// ufc_events row) so the caller's view of the cap matches reality;
+// without it we fall back to the +3 numbered-event default.
+function checkRosterConstruction(fighters, opts) {
+  opts = opts || {};
+  var bonus = (opts.useExpansion && typeof getEventBonusSize === 'function')
+    ? getEventBonusSize(opts.event, league && league.scoring_config)
+    : (opts.useExpansion ? (ROSTER_SIZE_EXPANDED - ROSTER_SIZE_BASE) : 0);
+  var flexLimit   = ROSTER_FLEX_SLOTS + bonus;
+  var totalLimit  = ROSTER_SIZE_BASE  + bonus;
+
+  if (fighters.length > totalLimit) {
+    return 'Roster cannot exceed ' + totalLimit + ' fighters' +
+           (opts.useExpansion ? ' even during the event-week expansion.' : '.');
   }
 
   var counts = {};
@@ -2143,10 +2272,10 @@ function checkRosterConstruction(fighters) {
     }
   });
 
-  if (anyFlexNeeded > ROSTER_FLEX_SLOTS) {
+  if (anyFlexNeeded > flexLimit) {
     var why = 'too many fighters in ' + overFullDivisions.join(', ');
     return 'This claim won\'t fit your roster — ' + why +
-           '. The Any-Division Flex bucket only holds ' + ROSTER_FLEX_SLOTS +
+           '. The Any-Division Flex bucket only holds ' + flexLimit +
            '. Pick a different fighter to drop.';
   }
   return null;

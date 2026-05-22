@@ -1,6 +1,7 @@
 // ========================================================================
 // LINEUP PAGE LOGIC
-// Lets each manager pick 3 starters from their roster for the next UFC event.
+// Lets each manager pick starters from their roster for the next UFC event.
+// Numbered PPVs (UFC 329, UFC 330, …) get 3 starters; Fight Nights get 2.
 // Starter cards display at the top; the full roster list is below.
 // Clicking "Start" on a roster row fills a card slot. Clicking "Bench" on
 // a card empties that slot and returns the fighter to the bench.
@@ -37,7 +38,16 @@ const DIVISION_LABELS = {
   heavyweight:       "Men's Heavyweight"
 };
 
+// Maximum possible starter count — used for empty-slot rendering caps,
+// fallback labels, and any callsite that doesn't have an event in hand.
+// The actual count for the currently-selected event comes from
+// getStarterCountForEvent(selectedEvent): 3 for numbered, 2 for Fight Night.
 const MAX_STARTERS = 3;
+function currentStarterCount() {
+  return (typeof getStarterCountForEvent === 'function')
+    ? getStarterCountForEvent(selectedEvent, leagueScoringConfig)
+    : MAX_STARTERS;
+}
 
 // Card-position ordering used to sort fights from headliner down.
 const CARD_POSITION_ORDER = { main_event: 0, co_main: 1, main_card: 2 };
@@ -157,6 +167,20 @@ let selectedEventComputedScores = {};
 // division line when the fighter is NOT on the currently-selected event.
 let rosterNextFightMap = {};
 
+// fighter_id -> { fighterProb, opponentProb, source, marketUrl } for the
+// fighter's next booked fight. Populated by FightOdds.loadFightOdds.
+let rosterFightOddsMap = {};
+
+// Same shape but scoped to fighters on the currently-selected event's card.
+// Used by the fight card modal so odds appear next to every fighter,
+// roster or not.
+let fightCardOddsMap = {};
+
+// fighter_id -> projection info (projected_points + components). Populated
+// alongside the odds map; rendered as a "PROJ 24.7" pill next to the odds.
+let rosterProjectionsMap   = {};
+let fightCardProjectionsMap = {};
+
 // Interval id for the live-update refresh. Fires every 60s while an event
 // is happening today, re-fetching fight results so newly-finished fights
 // surface without the user refreshing.
@@ -256,9 +280,20 @@ async function initLineup() {
   // show "Fights May 30 vs Pereira" for fighters NOT on the currently-
   // selected event (when they're on the current event, the existing matchup
   // line takes precedence).
+  var rosterIdsForLookup = myRoster.map(function(f) { return f.id; });
   if (typeof NextFight !== 'undefined') {
-    var rosterIdsForNF = myRoster.map(function(f) { return f.id; });
-    rosterNextFightMap = await NextFight.loadNextFights(rosterIdsForNF);
+    rosterNextFightMap = await NextFight.loadNextFights(rosterIdsForLookup);
+  }
+  // Load Polymarket odds + projected points for each rostered fighter's
+  // next fight (when one is in the fight_odds table). Shown as small inline
+  // pills on the row. Run in parallel — independent queries.
+  if (typeof FightOdds !== 'undefined' || typeof Projections !== 'undefined') {
+    const [odds, projections] = await Promise.all([
+      typeof FightOdds   !== 'undefined' ? FightOdds.loadFightOdds(rosterIdsForLookup) : {},
+      typeof Projections !== 'undefined' ? Projections.load(rosterIdsForLookup)        : {}
+    ]);
+    rosterFightOddsMap    = odds;
+    rosterProjectionsMap  = projections;
   }
 
   // Load the per-event data (starters + scores) for the default event.
@@ -306,6 +341,28 @@ function pickDefaultEvent(events) {
 // 5pm ET = 21:00 UTC in summer (EDT, UTC-4) or 22:00 UTC in winter (EST,
 // UTC-5). We use Intl.DateTimeFormat to detect the correct offset for the
 // specific event date so DST transitions are handled correctly.
+// Display name for the event picker.
+//   Numbered PPVs ("UFC 329", "UFC 330", ...) show as-is.
+//   Non-numbered Vegas cards are at the UFC Apex facility — show as
+//   "UFC APEX" rather than the generic "UFC Las Vegas".
+//   Everything else ("UFC Fight Night", "UFC on ABC", etc.) gets
+//   re-labelled as "UFC <City>" — pulled from the first chunk of
+//   ufc_events.venue ("Macau, China" → "UFC Macau"). Falls back to
+//   the original name when venue is missing.
+function displayEventName(ev) {
+  if (!ev) return '';
+  if (/^UFC\s+\d+\b/i.test(ev.name || '')) return ev.name;
+  if (ev.venue) {
+    var venue = String(ev.venue);
+    if (/las vegas/i.test(venue))  return 'UFC APEX';
+    // One-off override: the Washington card is sponsor-named "Freedom 250".
+    if (/washington/i.test(venue)) return 'UFC Freedom 250';
+    var city = venue.split(',')[0].trim();
+    if (city) return 'UFC ' + city;
+  }
+  return ev.name || '';
+}
+
 function getEffectiveLockTime(event) {
   if (!event || !event.event_date) return null;
   if (event.lineup_lock_time) return new Date(event.lineup_lock_time);
@@ -496,6 +553,19 @@ async function loadEventData() {
       });
     });
   }
+
+  // Load Polymarket odds + projected points for every fighter on this
+  // event's card so the fight card modal can show both next to each name.
+  fightCardOddsMap = {};
+  fightCardProjectionsMap = {};
+  if (idArr.length > 0) {
+    const [odds, projections] = await Promise.all([
+      typeof FightOdds   !== 'undefined' ? FightOdds.loadFightOdds(idArr) : {},
+      typeof Projections !== 'undefined' ? Projections.load(idArr)        : {}
+    ]);
+    fightCardOddsMap        = odds;
+    fightCardProjectionsMap = projections;
+  }
 }
 
 // Switch to a different event from the picker. Re-loads per-event state
@@ -519,6 +589,10 @@ async function onSelectEvent(eventId) {
 function renderEventBanner() {
   const el = document.getElementById('eventBanner');
   const started = selections.size;
+  // Numbered PPVs use 3 starters, Fight Nights use 2 — pull from the
+  // shared helper so the banner reflects whatever rule the commissioner
+  // configured (or the league defaults).
+  const total = currentStarterCount();
 
   // Status label — past events are "Final", future events toggle between
   // "Open" and "Locked", and an event happening RIGHT NOW (today + lock
@@ -553,7 +627,7 @@ function renderEventBanner() {
     var totalScored = 0;
     Object.keys(selectedEventScores).forEach(function(id) { totalScored += selectedEventScores[id] || 0; });
     rightHtml = '<p class="this-week-card__deadline">' +
-                  started + '/3 started &middot; ' + (Math.round(totalScored * 100) / 100).toFixed(2) + ' pts' +
+                  started + '/' + total + ' started &middot; ' + (Math.round(totalScored * 100) / 100).toFixed(2) + ' pts' +
                 '</p>';
   } else if (hasFutureLock) {
     // Prominent countdown — populated by startLockCountdown(). The four
@@ -568,17 +642,17 @@ function renderEventBanner() {
           '<span class="event-countdown__cell"><span class="event-countdown__num" id="cdMins">--</span><span class="event-countdown__unit">m</span></span>' +
           '<span class="event-countdown__cell"><span class="event-countdown__num" id="cdSecs">--</span><span class="event-countdown__unit">s</span></span>' +
         '</div>' +
-        '<p class="event-countdown__hint">' + started + '/3 set</p>' +
+        '<p class="event-countdown__hint">' + started + '/' + total + ' set</p>' +
       '</div>';
   } else {
-    rightHtml = '<p class="this-week-card__deadline">Locks at first prelim &middot; ' + started + '/3 set</p>';
+    rightHtml = '<p class="this-week-card__deadline">Locks at first prelim &middot; ' + started + '/' + total + ' set</p>';
   }
 
   var eventName = 'TBD';
   var eventDate = '';
   var eventMatchup = '';
   if (selectedEvent) {
-    eventName = selectedEvent.name;
+    eventName = displayEventName(selectedEvent);
     var dateObj = new Date(selectedEvent.event_date + 'T12:00:00');
     eventDate = dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
     if (selectedEvent.venue) eventDate += ' &middot; ' + escapeHtml(selectedEvent.venue);
@@ -592,15 +666,19 @@ function renderEventBanner() {
   // member's lineup at the implied event).
   var picker = '';
   if (!isViewMode && availableEvents.length > 1) {
+    // data-custom-dropdown opts the select into CustomDropdown.enhance,
+    // which swaps it for a div-based component with stylable rows. The
+    // date goes on data-sub so the menu can render it as a muted second
+    // column instead of cramming "(Aug 15, 2026)" into the label.
     picker = '<div class="lineup-event-picker">' +
                '<label for="lineupEventSelect" class="lineup-event-picker__label">Viewing</label>' +
-               '<select id="lineupEventSelect" class="waiver-filter">';
+               '<select id="lineupEventSelect" class="waiver-filter" data-custom-dropdown="true">';
     availableEvents.forEach(function(ev) {
       var d = new Date(ev.event_date + 'T12:00:00');
       var dStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
       var sel  = (selectedEvent && ev.id === selectedEvent.id) ? ' selected' : '';
-      picker  += '<option value="' + ev.id + '"' + sel + '>' +
-                   escapeHtml(ev.name) + ' (' + escapeHtml(dStr) + ')' +
+      picker  += '<option value="' + ev.id + '"' + sel + ' data-sub="' + escapeHtml(dStr) + '">' +
+                   escapeHtml(displayEventName(ev)) +
                  '</option>';
     });
     picker += '</select></div>';
@@ -657,6 +735,11 @@ function renderEventBanner() {
   var pickEl = document.getElementById('lineupEventSelect');
   if (pickEl) {
     pickEl.addEventListener('change', function() { onSelectEvent(this.value); });
+    // Swap the native <select> for the styled custom dropdown. The wrap
+    // it builds gets torn down on the next renderEventBanner pass, so
+    // no cleanup is needed here — innerHTML replacement above already
+    // wiped the previous instance.
+    if (typeof CustomDropdown !== 'undefined') CustomDropdown.enhance(pickEl);
   }
 
   // Always restart the countdown after a banner render — it clears any
@@ -775,12 +858,20 @@ function renderStarterSlots() {
     return myRoster.find(function(f) { return f.id === id; });
   }).filter(Boolean);
 
+  // Fight card lookup is needed by buildStarterCard to thread opponent
+  // names into the projection-pill breakdown context. Computed once and
+  // passed in.
+  const fightCardLookup = buildFightCardLookup();
+  // Numbered events get 3 starters, Fight Nights get 2 — fewer fighters
+  // available on the smaller cards.
+  const starterCount = currentStarterCount();
+
   let html = '';
 
-  for (let slot = 0; slot < MAX_STARTERS; slot++) {
+  for (let slot = 0; slot < starterCount; slot++) {
     const fighter = startedFighters[slot];
     if (fighter) {
-      html += buildStarterCard(fighter, slot + 1);
+      html += buildStarterCard(fighter, slot + 1, fightCardLookup);
     } else {
       html += buildEmptySlot(slot + 1);
     }
@@ -789,7 +880,7 @@ function renderStarterSlots() {
   el.innerHTML = html;
 
   // Update the count label
-  document.getElementById('starterCount').textContent = '(' + selections.size + ' / ' + MAX_STARTERS + ')';
+  document.getElementById('starterCount').textContent = '(' + selections.size + ' / ' + starterCount + ')';
 
   // Wire Bench buttons
   el.querySelectorAll('.lineup-bench-btn').forEach(function(btn) {
@@ -822,7 +913,7 @@ function renderStarterSlots() {
 }
 
 // Returns the HTML for a filled starter card
-function buildStarterCard(fighter, slotNum) {
+function buildStarterCard(fighter, slotNum, fightCardLookup) {
   const tierClass  = tierModifier(fighter);
   const rankLabel  = fighter.is_champion ? 'C'     : (fighter.current_rank ? '#' + fighter.current_rank : 'NR');
   const rankSub    = fighter.is_champion ? 'CHAMP' : 'RANK';
@@ -853,6 +944,42 @@ function buildStarterCard(fighter, slotNum) {
                   '</span>';
   }
 
+  // Opponent line — "vs. Deiveson Figueiredo". Shown regardless of whether
+  // the event has been scored yet; useful context either way. Hidden only
+  // when this starter isn't actually on the selected event's card (rare
+  // edge case where the user starts a fighter who's not fighting here).
+  var sFightInfo = (fightCardLookup && fightCardLookup[fighter.id]) || null;
+  var opponentLine = sFightInfo && sFightInfo.opponent
+    ? '<p class="lineup-starter-card__opponent">vs. ' + escapeHtml(sFightInfo.opponent) + '</p>'
+    : '';
+
+  // Pre-fight forecast row: Polymarket odds chip + projection pill. Both
+  // disappear once any scores arrive for the event (event is underway /
+  // done), since the actual scoring takes over from there. Each piece is
+  // optional — falls through when missing rather than showing placeholders.
+  var forecastRow = '';
+  if (!anyScoresSaved) {
+    var oddsChip = (typeof FightOdds !== 'undefined' && rosterFightOddsMap[fighter.id])
+      ? FightOdds.chipHtml(rosterFightOddsMap[fighter.id], { showBrand: false })
+      : '';
+    var projPill = (typeof Projections !== 'undefined' && rosterProjectionsMap[fighter.id])
+      ? Projections.pillHtml(rosterProjectionsMap[fighter.id], {
+          fighterId:    fighter.id,
+          fighterName:  fighter.name,
+          opponentName: sFightInfo ? sFightInfo.opponent : '',
+          eventName:    (selectedEvent && selectedEvent.name) ? selectedEvent.name : ''
+        })
+      : '';
+    if (oddsChip || projPill) {
+      forecastRow =
+        '<div class="lineup-starter-card__forecast">' +
+          oddsChip +
+          (oddsChip && projPill ? ' ' : '') +
+          projPill +
+        '</div>';
+    }
+  }
+
   return (
     // data-modal-fighter-id is the click target for opening the fighter
     // modal. tabindex/role/aria-label make the card keyboard-activatable.
@@ -869,6 +996,8 @@ function buildStarterCard(fighter, slotNum) {
       '<div class="fighter-card__info">' +
         '<p class="fighter-card__division">' + escapeHtml(divLabel) + '</p>' +
         '<p class="fighter-card__name">' + escapeHtml(fighter.name) + '</p>' +
+        opponentLine +
+        forecastRow +
         '<div class="fighter-card__stat-row">' +
           '<p class="fighter-card__record">' + record + '</p>' +
           scoreInline +
@@ -937,7 +1066,8 @@ function renderRosterList() {
     return;
   }
 
-  const isFull = selections.size >= MAX_STARTERS;
+  const starterCount = currentStarterCount();
+  const isFull = selections.size >= starterCount;
 
   // Determine whether the +3 cap expansion is currently in effect. When
   // expanded, render the TERF section unconditionally so managers can see
@@ -980,7 +1110,7 @@ function renderRosterList() {
 
   // Build the render context once so all row renderers share the same derived data
   const ctx = {
-    isFull:        selections.size >= MAX_STARTERS,
+    isFull:        selections.size >= starterCount,
     flexCount:     groups['any_flex'].length,
     flexDivisions: groups['any_flex'].map(function(f) { return f.primary_division; }),
     divisionGroups: groups,
@@ -1153,7 +1283,11 @@ function renderImbalanceBanner(roster, capExpanded) {
 // the roster isn't trimmed back to ROSTER_SIZE_BASE by Wed 3am ET.
 function renderTerfSection(fighters, ctx) {
   fighters = fighters || [];
-  const expansionSlots = ROSTER_SIZE_EXPANDED - ROSTER_SIZE_BASE;
+  // Numbered events get +3 temporary slots, Fight Nights get +2 (both
+  // configurable per-league via scoring_config).
+  const expansionSlots = (typeof getEventBonusSize === 'function')
+    ? getEventBonusSize(selectedEvent, leagueScoringConfig)
+    : (ROSTER_SIZE_EXPANDED - ROSTER_SIZE_BASE);
   const pipsHtml = renderPips(fighters.length, expansionSlots);
 
   // Wrap the whole section so we can tint the rows inside via CSS — distinct
@@ -1315,6 +1449,31 @@ function renderRosterRow(fighter, ctx, slotType) {
     rightStat = '<span class="lineup-roster-row__record">' + record + '</span>';
   }
 
+  // Polymarket odds chip + projection pill — built once and reused inline
+  // with whichever matchup line we render (current-event matchup OR
+  // next-fight line). Both follow the same "show if available" pattern.
+  const oddsChip = (typeof FightOdds !== 'undefined' && rosterFightOddsMap[fighter.id])
+    ? FightOdds.inlineHtml(rosterFightOddsMap[fighter.id])
+    : '';
+  // Build the projection pill with the opponent + event context the
+  // breakdown modal needs. Prefer the current-event matchup (fightInfo)
+  // when the fighter is on this card; otherwise fall back to their next
+  // booked fight from rosterNextFightMap.
+  const projOppName = fightInfo
+    ? fightInfo.opponent
+    : (rosterNextFightMap[fighter.id] ? rosterNextFightMap[fighter.id].opponent_name : '');
+  const projEvtName = fightInfo
+    ? (fightInfo.eventName || '')
+    : (rosterNextFightMap[fighter.id] ? rosterNextFightMap[fighter.id].event_name    : '');
+  const projPill = (typeof Projections !== 'undefined' && rosterProjectionsMap[fighter.id])
+    ? Projections.pillHtml(rosterProjectionsMap[fighter.id], {
+        fighterId:    fighter.id,
+        fighterName:  fighter.name,
+        opponentName: projOppName,
+        eventName:    projEvtName
+      })
+    : '';
+
   // Next-fight line: shown only when the fighter is NOT on the currently-
   // selected event (where the matchup line above already covers them) but
   // DOES have a future booked fight. Lets the manager see at a glance who's
@@ -1324,6 +1483,8 @@ function renderRosterRow(fighter, ctx, slotType) {
     nextFightLine =
       '<span class="lineup-roster-row__matchup waiver-next-fight">' +
         'Fights ' + escapeHtml(NextFight.formatShort(rosterNextFightMap[fighter.id])) +
+        (oddsChip ? ' ' + oddsChip : '') +
+        (projPill ? ' ' + projPill : '') +
       '</span>';
   }
 
@@ -1337,9 +1498,10 @@ function renderRosterRow(fighter, ctx, slotType) {
           ? '<span class="lineup-roster-row__matchup">' +
               'vs. ' + escapeHtml(fightInfo.opponent) +
               (fightInfo.badge ? ' <span class="lineup-roster-row__matchup-badge">' + escapeHtml(fightInfo.badge) + '</span>' : '') +
+              (oddsChip ? ' ' + oddsChip : '') +
+              (projPill ? ' ' + projPill : '') +
             '</span>'
-          : '') +
-        nextFightLine +
+          : nextFightLine) +
         '<span class="lineup-roster-row__division">' + escapeHtml(divLine) + '</span>' +
       '</div>' +
       rightStat +
@@ -1376,15 +1538,16 @@ async function toggleStarter(fighterId) {
     }
     selections.delete(fighterId);
   } else {
-    if (selections.size >= MAX_STARTERS) return;
-    // Start: pick the smallest slot_position in [1, MAX_STARTERS] that isn't
+    const starterCount = currentStarterCount();
+    if (selections.size >= starterCount) return;
+    // Start: pick the smallest slot_position in [1, starterCount] that isn't
     // already in use. The previous "selections.size + 1" approach collided
     // with surviving rows when a starter was benched and a new one started
     // (the freed slot wasn't reused, so we'd insert a duplicate of an
     // existing slot_position).
     const taken = new Set(Object.values(selectionSlots));
     let slotPos = 0;
-    for (let i = 1; i <= MAX_STARTERS; i++) {
+    for (let i = 1; i <= starterCount; i++) {
       if (!taken.has(i)) { slotPos = i; break; }
     }
     if (slotPos === 0) return; // shouldn't happen given the size check above
@@ -1784,165 +1947,24 @@ async function moveOutOfFlex(moverId, swapPartnerId) {
 // Clicking the overlay or the close button dismisses it.
 // ========================================================================
 function showFightCardModal() {
-  // Remove any existing modal first
-  var existing = document.getElementById('fightCardModal');
-  if (existing) existing.remove();
+  if (!selectedEvent || typeof FightCardModal === 'undefined') return;
 
-  // Build id-keyed lookups so each corner can be tagged with its roster
-  // ownership state. Skipped in view mode — "Yours"/"Starter" pills don't
-  // make sense when looking at another manager's lineup.
-  var rosterIds  = {};
-  var starterIds = {};
+  // Build ownership lookups so each fighter side can be tagged with a
+  // YOURS / STARTER pill. Skipped in view mode — those pills don't make
+  // sense when looking at another manager's lineup.
+  var rosterIds  = null;
+  var starterIds = null;
   if (!isViewMode) {
+    rosterIds  = {};
+    starterIds = {};
     myRoster.forEach(function(f) { rosterIds[f.id] = true; });
     selections.forEach(function(id) { starterIds[id] = true; });
   }
-  function cornerClass(fighterId, sideMod) {
-    var classes = 'fight-row__fighter ' + sideMod;
-    if (starterIds[fighterId])      classes += ' fight-row__fighter--starter';
-    else if (rosterIds[fighterId])  classes += ' fight-row__fighter--mine';
-    return classes;
-  }
 
-  // Group fights for display. UFC main cards are conventionally the top 5
-  // fights (main event + co-main + 3 others). Fights 6+ are prelims.
-  // We use fight_order when available; fall back to splitting at index 5.
-  var hasOrder = selectedEventFightCard.some(function(f) { return f.fightOrder != null; });
-  var mainCardFights, prelimFights;
-  if (hasOrder) {
-    mainCardFights = selectedEventFightCard.filter(function(f) { return f.fightOrder != null && f.fightOrder <= 5; });
-    prelimFights   = selectedEventFightCard.filter(function(f) { return f.fightOrder == null || f.fightOrder > 5; });
-  } else {
-    // Legacy data without fight_order — keep the old main_event/co_main split
-    mainCardFights = selectedEventFightCard.slice(0, 5);
-    prelimFights   = selectedEventFightCard.slice(5);
-  }
-
-  // Subline for each fighter: champion / interim / BMF / rank (whichever
-  // applies) — kept compact so the row stays on one line on most screens.
-  function rankSubline(f) {
-    if (!f) return '';
-    if (f.isChampion) return '<span class="fight-row__rank fight-row__rank--champ">Champion</span>';
-    if (f.isSubChamp && f.subTitleType === 'interim') return '<span class="fight-row__rank fight-row__rank--interim">Interim Champion</span>';
-    if (f.isSubChamp && f.subTitleType === 'bmf')     return '<span class="fight-row__rank fight-row__rank--bmf">BMF Champion</span>';
-    if (f.currentRank) return '<span class="fight-row__rank">#' + f.currentRank + '</span>';
-    return '<span class="fight-row__rank fight-row__rank--unranked">Unranked</span>';
-  }
-
-  function ownershipPill(fighterId) {
-    if (starterIds[fighterId]) return '<span class="fight-row__pill fight-row__pill--starter">STARTER</span>';
-    if (rosterIds[fighterId])  return '<span class="fight-row__pill fight-row__pill--yours">YOURS</span>';
-    return '';
-  }
-
-  function fighterSide(fighter, sideMod, isWinner) {
-    if (!fighter || !fighter.id) {
-      return '<div class="fight-row__side ' + sideMod + '"><span class="fight-row__name">TBD</span></div>';
-    }
-    const photoHtml = fighter.photoUrl
-      ? '<img class="fight-row__photo" src="' + escapeHtml(fighter.photoUrl) + '" alt="' + escapeHtml(fighter.name) + '" onerror="this.style.display=\'none\'">'
-      : '<div class="fight-row__photo fight-row__photo--placeholder"></div>';
-    const winnerMark = isWinner ? '<span class="fight-row__winner-mark" title="Winner">✓</span>' : '';
-    const flag = (typeof countryFlag === 'function') ? countryFlag(fighter.country) : '';
-    const flagHtml = flag ? '<span class="fight-row__flag">' + flag + '</span>' : '';
-    return (
-      '<button class="fight-row__side ' + sideMod + '" data-open-fighter="' + fighter.id + '" type="button">' +
-        photoHtml +
-        '<div class="fight-row__text">' +
-          '<span class="fight-row__name">' + winnerMark + flagHtml + escapeHtml(fighter.name) + '</span>' +
-          '<span class="fight-row__sub">' + rankSubline(fighter) + ownershipPill(fighter.id) + '</span>' +
-        '</div>' +
-      '</button>'
-    );
-  }
-
-  function fightRowHtml(fight) {
-    var badgeHtml = fight.badge
-      ? '<span class="fight-row__badge">' + escapeHtml(fight.badge) + '</span>'
-      : '';
-    var redIsWinner  = fight.outcome && fight.winnerId === fight.redId;
-    var blueIsWinner = fight.outcome && fight.winnerId === fight.blueId;
-    return (
-      '<div class="fight-row">' +
-        fighterSide(fight.red,  'fight-row__side--red',  redIsWinner) +
-        '<div class="fight-row__center">' +
-          badgeHtml +
-          '<span class="fight-row__weight">' + escapeHtml(fight.weightClass) + '</span>' +
-          '<span class="fight-row__vs">vs</span>' +
-        '</div>' +
-        fighterSide(fight.blue, 'fight-row__side--blue', blueIsWinner) +
-      '</div>'
-    );
-  }
-
-  var sectionsHtml = '';
-  if (selectedEventFightCard.length === 0) {
-    sectionsHtml = '<p class="draft-empty" style="padding:var(--space-6)">No fights yet for this event. The card hasn\'t been announced or scraped.</p>';
-  } else {
-    if (mainCardFights.length > 0) {
-      sectionsHtml +=
-        '<div class="fight-card-section">' +
-          '<p class="fight-card-section__label">Main Card</p>' +
-          mainCardFights.map(fightRowHtml).join('') +
-        '</div>';
-    }
-    if (prelimFights.length > 0) {
-      sectionsHtml +=
-        '<div class="fight-card-section">' +
-          '<p class="fight-card-section__label">Prelims</p>' +
-          prelimFights.map(fightRowHtml).join('') +
-        '</div>';
-    }
-  }
-
-  var modal = document.createElement('div');
-  modal.id = 'fightCardModal';
-  modal.className = 'fight-card-modal-overlay';
-  modal.innerHTML =
-    '<div class="fight-card-modal" role="dialog" aria-modal="true" aria-label="Fight Card">' +
-      '<div class="fight-card-modal__header">' +
-        '<div>' +
-          '<p class="fight-card-modal__eyebrow">Fight Card</p>' +
-          '<p class="fight-card-modal__title">' + escapeHtml(selectedEvent ? selectedEvent.name : 'TBD') + '</p>' +
-        '</div>' +
-        '<button class="fight-card-modal__close" id="closeFightCardBtn" aria-label="Close">&times;</button>' +
-      '</div>' +
-      '<div class="fight-card-modal__body">' + sectionsHtml + '</div>' +
-    '</div>';
-
-  document.body.appendChild(modal);
-
-  // Close on button click
-  document.getElementById('closeFightCardBtn').addEventListener('click', closeFightCardModal);
-
-  // Wire each fighter side to open the fighter modal. We don't close the
-  // fight card modal — the fighter modal opens on top, and dismissing it
-  // returns the user to the same fight card view.
-  modal.querySelectorAll('[data-open-fighter]').forEach(function(btn) {
-    btn.addEventListener('click', function(e) {
-      e.stopPropagation();
-      var fid = btn.getAttribute('data-open-fighter');
-      if (fid && typeof showFighterModal === 'function') showFighterModal(fid);
-    });
+  FightCardModal.show(selectedEvent.id, {
+    rosterIds:  rosterIds,
+    starterIds: starterIds
   });
-
-  // Close on overlay click (but not on the modal itself)
-  modal.addEventListener('click', function(e) {
-    if (e.target === modal) closeFightCardModal();
-  });
-
-  // Close on Escape key
-  document.addEventListener('keydown', handleModalEscape);
-}
-
-function closeFightCardModal() {
-  var modal = document.getElementById('fightCardModal');
-  if (modal) modal.remove();
-  document.removeEventListener('keydown', handleModalEscape);
-}
-
-function handleModalEscape(e) {
-  if (e.key === 'Escape') closeFightCardModal();
 }
 
 // ========================================================================
@@ -1957,8 +1979,6 @@ function showHowItWorksModal() {
   var existing = document.getElementById('howItWorksModal');
   if (existing) existing.remove();
 
-  var expansionSlots = ROSTER_SIZE_EXPANDED - ROSTER_SIZE_BASE;
-
   var bodyHtml =
     '<section class="how-section">' +
       '<h3 class="how-section__title">Your roster</h3>' +
@@ -1967,14 +1987,14 @@ function showHowItWorksModal() {
         '<li><strong>' + ROSTER_SLOTS_PER_DIVISION + ' fighter per weight class</strong> — 8 men\'s divisions + 3 women\'s = 11 slots</li>' +
         '<li><strong>' + ROSTER_FLEX_SLOTS + ' flex slots</strong> for fighters in any weight class</li>' +
       '</ul>' +
-      '<p>Before each UFC event, you pick <strong>3 starters</strong> from your roster. Only they score points for you.</p>' +
+      '<p>Before each UFC event, you pick starters from your roster — <strong>3 for numbered PPVs</strong> (UFC 329, UFC 330, …) and <strong>2 for Fight Nights</strong>. Only they score points for you.</p>' +
     '</section>' +
 
     '<section class="how-section">' +
       '<h3 class="how-section__title">Weekly schedule</h3>' +
       '<p>UFC events are on Saturdays. The week around each event runs like this — all cutoffs are <strong>3am ET</strong>:</p>' +
       '<table class="how-section__schedule">' +
-        '<tr><td><strong>Thursday</strong></td><td>Pre-event waivers open. Roster cap expands by +' + expansionSlots + ' (Temporary Flex)</td></tr>' +
+        '<tr><td><strong>Thursday</strong></td><td>Pre-event waivers open. Roster cap expands by +3 (numbered PPV) or +2 (Fight Night) — Temporary Flex slots</td></tr>' +
         '<tr><td><strong>Friday</strong></td><td>Pre-event waiver claims process — worst standings get first pick</td></tr>' +
         '<tr><td><strong>Saturday</strong></td><td>Event day. Lineup locks at the first prelim (about 5pm ET)</td></tr>' +
         '<tr><td><strong>Sunday</strong></td><td>Post-event waivers open. Cap reverts to ' + ROSTER_SIZE_BASE + '</td></tr>' +
