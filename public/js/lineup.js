@@ -2070,6 +2070,29 @@ function renderTeamTile(fighter, opts) {
     ? '<img class="whole-team-tile__photo" src="' + fighter.photo_url + '" alt="" onerror="this.style.display=\'none\'">'
     : '<div class="whole-team-tile__photo-placeholder"></div>';
 
+  // Interim / BMF badge consistent with the other roster surfaces. Stacks
+  // beneath the rank corner badge so the tile keeps a clear visual hierarchy.
+  var subBadgeHtml = '';
+  if (fighter.is_sub_champion && fighter.sub_title_type === 'interim') {
+    subBadgeHtml = '<span class="whole-team-tile__sub-badge subrank-interim">INT</span>';
+  } else if (fighter.is_sub_champion && fighter.sub_title_type === 'bmf') {
+    subBadgeHtml = '<span class="whole-team-tile__sub-badge subrank-bmf">BMF</span>';
+  }
+
+  // Event score corner (shown on past events / live events with results).
+  // Mirrors the per-row hindsight display on the main lineup roster.
+  var ptsHtml = '';
+  var computed = selectedEventComputedScores[fighter.id];
+  if (computed != null) {
+    var ptsStr = (Math.round(computed * 100) / 100).toFixed(2);
+    var ptsClass = 'whole-team-tile__pts' + (isStarter ? ' whole-team-tile__pts--starter' : '');
+    ptsHtml = '<span class="' + ptsClass + '">' + ptsStr + '</span>';
+  }
+
+  // Inline flag for quick country recognition; falls through when missing.
+  var flag = (typeof countryFlag === 'function') ? countryFlag(fighter.country) : '';
+  var nameHtml = (flag ? '<span class="whole-team-tile__flag">' + flag + '</span> ' : '') + escapeHtml(fighter.name);
+
   var classes = 'whole-team-tile';
   if (isStarter)            classes += ' whole-team-tile--starter';
   if (fighter.is_champion)  classes += ' whole-team-tile--champion';
@@ -2079,12 +2102,14 @@ function renderTeamTile(fighter, opts) {
       '<div class="whole-team-tile__photo-wrap">' +
         photoHtml +
         '<span class="whole-team-tile__rank">' + escapeHtml(rankLabel) + '</span>' +
+        subBadgeHtml +
         (isStarter
           ? '<span class="whole-team-tile__badge" title="Starter" aria-label="Starter">&#9733;</span>'
           : '') +
+        ptsHtml +
       '</div>' +
       '<div class="whole-team-tile__info">' +
-        '<p class="whole-team-tile__name" title="' + escapeHtml(fighter.name) + '">' + escapeHtml(fighter.name) + '</p>' +
+        '<p class="whole-team-tile__name" title="' + escapeHtml(fighter.name) + '">' + nameHtml + '</p>' +
         (opts.showDivision
           ? '<p class="whole-team-tile__div">' + escapeHtml(divLabel) + '</p>'
           : '') +
