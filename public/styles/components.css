@@ -6236,13 +6236,37 @@ body {
    an explanatory note about the Wed 3am ET auto-drop.
    ============================================================ */
 
-.lineup-slot-header--terf {
-  border-top: 1px dashed var(--accent-gold);
+/* Whole TERF section wrapper — teal-tinted background so the temporary
+   slots read as visually distinct from the regular roster sections. */
+.lineup-terf-section {
   margin-top: var(--space-6);
-  padding-top: var(--space-4);
+  padding: var(--space-4) var(--space-4) var(--space-3);
+  background: var(--accent-temporary-subtle);
+  border: 1px solid var(--accent-temporary);
+  border-radius: 8px;
+  position: relative;
+}
+.lineup-terf-section::before {
+  /* Small floating "TEMPORARY" eyebrow */
+  content: "EVENT-WEEK EXPANSION";
+  position: absolute;
+  top: -9px;
+  left: var(--space-4);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: var(--accent-temporary);
+  background: var(--bg-primary);
+  padding: 0 6px;
+}
+
+.lineup-slot-header--terf {
+  border-top: none;
+  margin-top: 0;
+  padding-top: 0;
 }
 .lineup-slot-header--terf .lineup-slot-header__title {
-  color: var(--accent-gold);
+  color: var(--accent-temporary);
 }
 
 .lineup-terf-note {
@@ -6251,10 +6275,17 @@ body {
   font-style: italic;
   margin: 0 0 var(--space-3) 0;
   padding: var(--space-2) var(--space-3);
-  background: rgba(212, 175, 55, 0.06);
-  border-left: 2px solid var(--accent-gold);
+  background: var(--bg-primary);
+  border-left: 2px solid var(--accent-temporary);
   border-radius: 0 4px 4px 0;
   line-height: 1.5;
+}
+
+/* Rows inside the TERF section pick up a subtle teal left-border so each
+   row also reads as part of the temporary block. */
+.lineup-terf-section .lineup-roster-row {
+  border-left: 3px solid var(--accent-temporary);
+  background: rgba(63, 184, 176, 0.04);
 }
 
 /* ============================================================

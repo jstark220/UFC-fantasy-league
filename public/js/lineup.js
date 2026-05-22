@@ -937,10 +937,10 @@ function renderRosterList() {
 
   // Determine whether the +3 cap expansion is currently in effect. Only when
   // expanded do we split out a "Temporary Extended Roster Flex" (TERF) section
-  // for the most recently acquired fighters that exceed the normal cap of 20.
+  // for the most recently acquired fighters above the normal base cap.
   const eventDate    = selectedEvent ? selectedEvent.event_date : null;
   const capExpanded  = typeof isCapExpanded === 'function' ? isCapExpanded(new Date(), eventDate) : false;
-  const overflow     = Math.max(0, myRoster.length - 20);
+  const overflow     = Math.max(0, myRoster.length - ROSTER_SIZE_BASE);
   const showTerf     = capExpanded && overflow > 0;
 
   // If TERF is active, peel the most-recently-acquired N fighters off the
@@ -1145,17 +1145,24 @@ function renderImbalanceBanner(roster, capExpanded) {
 // Renders the Temporary Extended Roster Flex section — the +3 fighters
 // granted during the Thu→Sun event-week cap expansion. Headers + footnote
 // make it explicit these slots are temporary and will be auto-dropped if
-// the roster isn't trimmed back to 20 by Wed 3am ET.
+// the roster isn't trimmed back to ROSTER_SIZE_BASE by Wed 3am ET.
 function renderTerfSection(fighters, ctx) {
   if (!fighters || fighters.length === 0) return '';
-  const pipsHtml = renderPips(fighters.length, 3);
-  let html = '<div class="lineup-slot-header lineup-slot-header--terf">';
-  html += '<span class="lineup-slot-header__title">Temporary Extended Roster Flex</span>';
+  const expansionSlots = ROSTER_SIZE_EXPANDED - ROSTER_SIZE_BASE;
+  const pipsHtml = renderPips(fighters.length, expansionSlots);
+
+  // Wrap the whole section so we can tint the rows inside via CSS — distinct
+  // teal accent so the temporary slots read clearly as "not part of the
+  // regular roster construction".
+  let html = '<div class="lineup-terf-section">';
+  html += '<div class="lineup-slot-header lineup-slot-header--terf">';
+  html += '<span class="lineup-slot-header__title">Temporary Flex &mdash; Event Week</span>';
   html += '<span class="lineup-slot-header__pips">' + pipsHtml + '</span>';
   html += '</div>';
   html += '<p class="lineup-terf-note">' +
-            'These three slots are open while waivers are active for the upcoming event. ' +
-            'Drop your roster back to 20 by Wed 3am ET, or the most recently added fighters here will be auto-dropped.' +
+            'These extra slots are open while waivers are active for the upcoming event. ' +
+            'Drop your roster back to ' + ROSTER_SIZE_BASE + ' by Wed 3am ET, ' +
+            'or the most recently added fighters here will be auto-dropped.' +
           '</p>';
 
   // Sort started fighters to the top (mirrors renderSlotSection)
@@ -1168,6 +1175,7 @@ function renderTerfSection(fighters, ctx) {
   sorted.forEach(function(fighter) {
     html += renderRosterRow(fighter, ctx, 'any_flex');
   });
+  html += '</div>';  // close .lineup-terf-section
   return html;
 }
 

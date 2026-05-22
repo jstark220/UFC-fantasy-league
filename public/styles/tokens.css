@@ -36,6 +36,8 @@
   --accent-success:        #4A9D6F; /* wins, completed actions */
   --accent-warning:        #D4A84B; /* shared with gold — lineup lock, cap alerts */
   --accent-error:          #C13B2E; /* errors (same hue as crimson, different context) */
+  --accent-temporary:        #3FB8B0; /* teal — temporary / expansion state (event-week +3) */
+  --accent-temporary-subtle: rgba(63, 184, 176, 0.08);
 
   /* -- Fighter tier border colors (trading card system) -- */
   --tier-champion: #D4A84B; /* gold */
