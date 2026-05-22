@@ -108,6 +108,11 @@ async function scrapePage(url, label) {
       name: shortenName(full_name),
       event_date: parseDate(rawDate),
       venue,
+      // ufcstats lists events on two separate pages — "completed" vs
+      // "upcoming". Mark them accordingly so the waiver-phase logic
+      // (which anchors to the next non-completed event) doesn't end up
+      // hunting back through 30 years of history.
+      is_completed: label === 'completed',
     });
   });
 
