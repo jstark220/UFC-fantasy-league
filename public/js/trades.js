@@ -49,10 +49,16 @@ async function initTrades() {
 
   document.getElementById('leagueLink').href = 'league.html?id=' + leagueId;
 
-  const [leagueRes, membersRes, fightersRes, rostersRes, tradesRes] = await Promise.all([
+  // Fetch league/members/rosters/trades in parallel. Fighters are fetched
+  // separately AFTER we know which fighter_ids are actually on rosters in
+  // this league — the fighters table has ~6,000 rows and Supabase's
+  // default 1000-row select limit was cutting off any rostered fighter
+  // whose name sorted past the alphabetical cutoff. We only need ~160
+  // fighters max (8 managers × 20 slots), so an .in() filter on the
+  // roster IDs is both correct and faster.
+  const [leagueRes, membersRes, rostersRes, tradesRes] = await Promise.all([
     supabaseClient.from('leagues').select('id, name, commissioner_id').eq('id', leagueId).single(),
     supabaseClient.from('league_members').select('id, user_id, team_name, is_commissioner').eq('league_id', leagueId),
-    supabaseClient.from('fighters').select('id, name, primary_division, current_rank, is_champion, is_sub_champion, sub_title_type, record_wins, record_losses, record_draws, photo_url').order('name'),
     supabaseClient.from('rosters').select('fighter_id, league_member_id').eq('league_id', leagueId),
     supabaseClient.from('trades').select('*').eq('league_id', leagueId).order('proposed_at', { ascending: false })
   ]);
@@ -69,11 +75,19 @@ async function initTrades() {
   // any other commissioner-only controls on this page.
   isCommissioner = Commissioner.isCommissioner(league, members, user.id);
 
-  // Build fighter lookup map
-  (fightersRes.data || []).forEach(function(f) { allFighters[f.id] = f; });
-
   allRosters = rostersRes.data || [];
   myTrades   = tradesRes.data || [];
+
+  // Now load only the fighters that appear on rosters. This both avoids
+  // the 1000-row select limit and saves bandwidth.
+  const rosteredIds = Array.from(new Set(allRosters.map(function(r) { return r.fighter_id; })));
+  if (rosteredIds.length > 0) {
+    const fightersRes = await supabaseClient
+      .from('fighters')
+      .select('id, name, primary_division, current_rank, is_champion, is_sub_champion, sub_title_type, record_wins, record_losses, record_draws, photo_url')
+      .in('id', rosteredIds);
+    (fightersRes.data || []).forEach(function(f) { allFighters[f.id] = f; });
+  }
 
   // Lazy processor: any accepted trade past its 24h review deadline gets
   // executed before we render. Idempotent — only touches rows where
