@@ -58,11 +58,11 @@
           <span class="dashboard-stat__label">Active Leagues</span>
         </div>
         <div class="dashboard-stat">
-          <span class="dashboard-stat__value">UFC 329</span>
+          <span class="dashboard-stat__value" id="statNextEvent">—</span>
           <span class="dashboard-stat__label">Next Event</span>
         </div>
         <div class="dashboard-stat">
-          <span class="dashboard-stat__value">Sat May 3</span>
+          <span class="dashboard-stat__value" id="statLineupLock">—</span>
           <span class="dashboard-stat__label">Lineup Locks</span>
         </div>
       </div>
@@ -97,6 +97,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/supabase-config.js"></script>
   <script src="js/auth-guard.js"></script>
+  <script src="js/empty-state.js"></script>
   <script src="js/dashboard.js"></script>
 
   <!-- Sync theme toggle icon to current theme after page loads -->

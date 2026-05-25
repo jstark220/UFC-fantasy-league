@@ -827,7 +827,12 @@ function renderFighterPool() {
   const poolEl = document.getElementById('fighterPool');
 
   if (fighters.length === 0) {
-    poolEl.innerHTML = '<p class="draft-empty" style="padding: var(--space-4) 0">No fighters match your filters.</p>';
+    poolEl.innerHTML = EmptyState.html({
+      kind:    'search',
+      title:   'No fighters match',
+      body:    'Try clearing the division or status filter.',
+      compact: true
+    });
     return;
   }
 
@@ -1059,7 +1064,15 @@ function renderViewAllList() {
   }
 
   if (fighters.length === 0) {
-    body.innerHTML = '<p class="draft-empty" style="padding: var(--space-6) 0; grid-column: 1 / -1; text-align: center">No fighters match your filters.</p>';
+    body.innerHTML =
+      '<div style="grid-column: 1 / -1">' +
+      EmptyState.html({
+        kind:    'search',
+        title:   'No fighters match',
+        body:    'Try clearing the division or status filter.',
+        compact: true
+      }) +
+      '</div>';
     return;
   }
 
@@ -1322,7 +1335,12 @@ function renderMyRoster() {
   // Drafted fighters in pick order — uses the lineup-roster-row look but compact
   html += '<div class="draft-my-picks">';
   if (myPickFighters.length === 0) {
-    html += '<p class="draft-empty" style="padding: var(--space-4) 0">No picks yet.</p>';
+    html += EmptyState.html({
+      kind:    'roster',
+      title:   'No picks yet',
+      body:    'Your drafted fighters will land here as the draft unfolds.',
+      compact: true
+    });
   } else {
     myPickFighters.forEach(function(f, idx) {
       const rankLabel = f.is_champion ? 'C' : (f.current_rank ? '#' + f.current_rank : 'NR');
@@ -1683,10 +1701,12 @@ function renderQueue() {
     : (isMyTurn() ? 'Your pick — draft from queue or pool' : 'Queued for upcoming picks');
 
   if (queue.length === 0) {
-    listEl.innerHTML =
-      '<p class="draft-empty" style="padding: var(--space-4) 0">' +
-        'Add fighters here while waiting for your turn. They auto-clear when drafted.' +
-      '</p>';
+    listEl.innerHTML = EmptyState.html({
+      kind:    'roster',
+      title:   'Queue is empty',
+      body:    'Add fighters here while waiting for your turn. They auto-clear when drafted.',
+      compact: true
+    });
     return;
   }
 

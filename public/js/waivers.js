@@ -184,11 +184,11 @@ async function initWaivers() {
   document.title = 'Free Agency - ' + league.name;
   document.getElementById('leagueName').textContent = league.name;
 
-  var nav = '<a href="standings.html?id=' + leagueId + '" class="btn-secondary">Standings</a>';
-  nav    += '<a href="waivers.html?id='   + leagueId + '" class="btn-primary">Free Agency</a>';
-  nav    += '<a href="trades.html?id='    + leagueId + '" class="btn-secondary">Trades</a>';
-  nav    += '<a href="lineup.html?id='    + leagueId + '" class="btn-secondary">My Lineup</a>';
-  document.getElementById('headerActions').innerHTML = nav;
+  LeagueNav.renderInto('headerActions', {
+    leagueId: leagueId,
+    memberId: myMemberId,
+    active:   'freeAgency'
+  });
 
   wireUpTabs();
   wireUpSearch();
@@ -1233,7 +1233,12 @@ function renderAvailableFighters() {
   var el = document.getElementById('availableContent');
 
   if (filtered.length === 0) {
-    el.innerHTML = '<p class="draft-empty" style="padding: var(--space-4) 0">No available fighters match your search.</p>';
+    el.innerHTML = EmptyState.html({
+      kind:  'search',
+      title: 'No fighters match',
+      body:  'Try clearing the division filter or adjusting your search.',
+      compact: true
+    });
     return;
   }
 
@@ -1403,7 +1408,11 @@ function renderMyClaims() {
   }
 
   if (myClaims.length === 0) {
-    el.innerHTML = '<p class="draft-empty" style="padding: var(--space-4) 0">No waiver claims yet. Go to "Available Fighters" to submit one.</p>';
+    el.innerHTML = EmptyState.html({
+      kind:  'claims',
+      title: 'No claims submitted',
+      body:  'Submit a waiver claim from Available Fighters and your pending claims will appear here.'
+    });
     return;
   }
 
@@ -1492,9 +1501,11 @@ function renderRosterActivity() {
   var el = document.getElementById('activityContent');
 
   if (leagueActivity.length === 0) {
-    el.innerHTML = '<p class="draft-empty" style="padding: var(--space-4) 0">' +
-      'No approved roster moves yet. They will appear here after waivers process.' +
-      '</p>';
+    el.innerHTML = EmptyState.html({
+      kind:  'activity',
+      title: 'No moves yet',
+      body:  'Roster moves across the league show up here after waivers process.'
+    });
     return;
   }
 
@@ -1572,7 +1583,12 @@ function renderProcessingQueue() {
       '</div>';
 
   if (pendingAllClaims.length === 0) {
-    el.innerHTML = headerHtml + '<p class="draft-empty" style="padding: var(--space-4) 0">No pending claims to process.</p></div>';
+    el.innerHTML = headerHtml + EmptyState.html({
+      kind:    'claims',
+      title:   'No pending claims',
+      body:    'When managers submit waiver claims, they\'ll queue up here for you to process.',
+      compact: true
+    }) + '</div>';
     document.getElementById('processBtn').addEventListener('click', processWaivers);
     return;
   }
@@ -2230,13 +2246,15 @@ async function refreshData() {
 // ========================================================================
 // Current roster rules (single source of truth: ROSTER_* constants in
 // waiver-phase.js):
-//   * 1 fighter per weight class — 11 weight classes (8 men + 3 women)
+//   * 1 fighter per MEN'S weight class — 8 divisions
+//   * 1 Women's Flex slot (any of the 3 women's divisions)
 //   * 6 fighters in the Any-Division Flex bucket (any weight class)
-//   * Total cap = 17 (base) or 20 (during the +3 event-week expansion)
+//   * Total cap = 15 (base) or 17–18 during the event-week expansion
 //
-// Construction works by spillover: a division can hold up to
-// ROSTER_SLOTS_PER_DIVISION; anything beyond that pushes into Any-Flex.
-// If total Any-Flex demand exceeds ROSTER_FLEX_SLOTS, the roster won't fit.
+// Construction works by spillover:
+//   * Each men's division holds up to ROSTER_SLOTS_PER_DIVISION; overflow → any-flex
+//   * Women's divisions share a single Women's Flex slot; overflow → any-flex
+//   * Any-flex demand must stay within ROSTER_FLEX_SLOTS (+ event-week bonus)
 // Returns null when fighters fit, otherwise a user-facing error message.
 
 // Optional opts.useExpansion = true loosens the limits to the event-week
@@ -2257,20 +2275,36 @@ function checkRosterConstruction(fighters, opts) {
            (opts.useExpansion ? ' even during the event-week expansion.' : '.');
   }
 
+  // Count fighters per division, plus a separate tally of women's fighters
+  // across all three women's divisions (they share the Women's Flex slot).
   var counts = {};
+  var womensTotal = 0;
   fighters.forEach(function(f) {
     counts[f.primary_division] = (counts[f.primary_division] || 0) + 1;
+    if (WOMENS_DIVISIONS_KEYS.indexOf(f.primary_division) !== -1) {
+      womensTotal++;
+    }
   });
 
-  var anyFlexNeeded = 0;
+  var anyFlexNeeded     = 0;
   var overFullDivisions = [];
+
+  // Men's divisions — each capped at ROSTER_SLOTS_PER_DIVISION (1)
   Object.keys(counts).forEach(function(div) {
+    if (WOMENS_DIVISIONS_KEYS.indexOf(div) !== -1) return;  // women's pooled separately
     var overflow = Math.max(0, counts[div] - ROSTER_SLOTS_PER_DIVISION);
     if (overflow > 0) {
       anyFlexNeeded += overflow;
       overFullDivisions.push(DIVISION_LABELS[div] || div);
     }
   });
+
+  // Women's pool — anything beyond ROSTER_WOMENS_FLEX_SLOTS (1) spills over
+  var womensOverflow = Math.max(0, womensTotal - ROSTER_WOMENS_FLEX_SLOTS);
+  if (womensOverflow > 0) {
+    anyFlexNeeded += womensOverflow;
+    overFullDivisions.push("Women's Flex");
+  }
 
   if (anyFlexNeeded > flexLimit) {
     var why = 'too many fighters in ' + overFullDivisions.join(', ');

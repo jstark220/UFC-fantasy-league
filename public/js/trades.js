@@ -57,7 +57,7 @@ async function initTrades() {
   // fighters max (8 managers × 20 slots), so an .in() filter on the
   // roster IDs is both correct and faster.
   const [leagueRes, membersRes, rostersRes, tradesRes] = await Promise.all([
-    supabaseClient.from('leagues').select('id, name, commissioner_id').eq('id', leagueId).single(),
+    supabaseClient.from('leagues').select('id, name, commissioner_id, scoring_config').eq('id', leagueId).single(),
     supabaseClient.from('league_members').select('id, user_id, team_name, is_commissioner').eq('league_id', leagueId),
     supabaseClient.from('rosters').select('fighter_id, league_member_id').eq('league_id', leagueId),
     supabaseClient.from('trades').select('*').eq('league_id', leagueId).order('proposed_at', { ascending: false })
@@ -97,12 +97,11 @@ async function initTrades() {
   document.title = 'Trades - ' + league.name;
   document.getElementById('leagueName').textContent = league.name;
 
-  // Header nav matches the rest of the app
-  let nav  = '<a href="standings.html?id=' + leagueId + '" class="btn-secondary">Standings</a>';
-      nav += '<a href="waivers.html?id='   + leagueId + '" class="btn-secondary">Free Agency</a>';
-      nav += '<a href="trades.html?id='    + leagueId + '" class="btn-primary">Trades</a>';
-      nav += '<a href="lineup.html?id='    + leagueId + '" class="btn-secondary">My Lineup</a>';
-  document.getElementById('headerActions').innerHTML = nav;
+  LeagueNav.renderInto('headerActions', {
+    leagueId: leagueId,
+    memberId: myMemberId,
+    active:   'trades'
+  });
 
   wireUpTabs();
   populatePartnerSelect();
@@ -110,6 +109,18 @@ async function initTrades() {
   renderPending();
   renderSent();
   updateTabBadges();
+
+  // Fantasy Value chips on trade cards are populated async — once FV is
+  // loaded for the league's scoring config, re-render each tab so the
+  // FV chips + value-imbalance indicator appear. Fire-and-forget; a slow
+  // FV load just delays the chips, doesn't block the page.
+  if (typeof FantasyValue !== 'undefined' && FantasyValue.ensureLoaded) {
+    FantasyValue.ensureLoaded(leagueId, league.scoring_config).then(function () {
+      renderIncoming();
+      renderPending();
+      renderSent();
+    }).catch(function () { /* swallow — chips just stay absent */ });
+  }
 
   // If we arrived from a "Propose Trade" button in the fighter modal,
   // pre-select the partner (if applicable) and the fighter.
@@ -275,7 +286,11 @@ function togglePick(row, set, counterId) {
 
 function buildPickerList(fighters, side) {
   if (fighters.length === 0) {
-    return '<p class="draft-empty" style="padding: var(--space-4) 0">No fighters on this roster.</p>';
+    return EmptyState.html({
+      kind:    'roster',
+      title:   'No fighters on this roster',
+      compact: true
+    });
   }
 
   var html = '';
@@ -384,7 +399,11 @@ function renderIncoming() {
   });
 
   if (incoming.length === 0) {
-    el.innerHTML = '<p class="draft-empty" style="padding: var(--space-4) 0">No incoming trade offers.</p>';
+    el.innerHTML = EmptyState.html({
+      kind:  'trades',
+      title: 'No incoming offers',
+      body:  'When another manager sends you a trade, it\'ll appear here for you to accept, reject, or counter.'
+    });
     return;
   }
 
@@ -423,11 +442,11 @@ function renderPending() {
   });
 
   if (pending.length === 0) {
-    el.innerHTML = '<p class="draft-empty" style="padding: var(--space-4) 0">' +
-      'No trades are in the review window. Trades land here after a recipient ' +
-      'accepts; they auto-execute 24 hours later unless the commissioner pushes ' +
-      'them through sooner.' +
-    '</p>';
+    el.innerHTML = EmptyState.html({
+      kind:  'trades',
+      title: 'No trades in review',
+      body:  'Accepted trades sit here for 24 hours before they auto-execute. The commissioner can push them through sooner.'
+    });
     return;
   }
 
@@ -461,7 +480,11 @@ function renderSent() {
   var sent = myTrades.filter(function(t) { return t.proposer_id === myMemberId; });
 
   if (sent.length === 0) {
-    el.innerHTML = '<p class="draft-empty" style="padding: var(--space-4) 0">You have not proposed any trades yet.</p>';
+    el.innerHTML = EmptyState.html({
+      kind:  'trades',
+      title: 'No trade offers sent',
+      body:  'Propose a swap with another manager and it\'ll show up here while they decide.'
+    });
     return;
   }
 
@@ -514,12 +537,41 @@ function renderTradeCard(trade, memberMap, view) {
     ? new Date(trade.proposed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
     : '';
 
+  // Inline SVG "swap" arrow — matches the nav-tab trade icon for a
+  // consistent visual language across the app.
+  var swapSvg =
+    '<svg class="trade-card__arrow-svg" viewBox="0 0 24 24" fill="none" ' +
+      'stroke="currentColor" stroke-width="1.75" stroke-linecap="round" ' +
+      'stroke-linejoin="round" aria-hidden="true">' +
+      '<path d="M4 9h13" /><path d="m14 6 3 3-3 3" />' +
+      '<path d="M20 15H7" /><path d="m10 18-3-3 3-3" />' +
+    '</svg>';
+
+  // Value indicator — sum FV on each side, show "+X.X FV" on whichever
+  // side gets the bigger haul. Hidden when FV isn't loaded or the trade
+  // is even-FV (within 0.5 — too noisy to call out).
+  var propFv      = tradeSideFvTotal(propGives);
+  var recFv       = tradeSideFvTotal(recGives);
+  // From each side's perspective: you "get" what the OTHER side gives.
+  var proposerGets = recFv;
+  var recipientGets = propFv;
+  var fvDelta = Math.abs(proposerGets - recipientGets);
+  var fvIndicator = '';
+  if ((propFv > 0 || recFv > 0) && fvDelta >= 0.5) {
+    var favoredSide = proposerGets > recipientGets ? 'proposer' : 'recipient';
+    fvIndicator =
+      '<span class="trade-card__value-indicator trade-card__value-indicator--' + favoredSide + '" ' +
+            'title="Side getting more Fantasy Value">' +
+        '+' + fvDelta.toFixed(1) + ' FV' +
+      '</span>';
+  }
+
   var html =
     '<div class="trade-card' + (isResolved ? ' trade-card--resolved' : '') + '">' +
       '<div class="trade-card__header">' +
         '<span class="trade-card__teams">' +
           escapeHtml(proposer ? proposer.team_name : '?') +
-          ' <span class="trade-card__arrow">⇆</span> ' +
+          ' <span class="trade-card__arrow">' + swapSvg + '</span> ' +
           escapeHtml(recipient ? recipient.team_name : '?') +
         '</span>' +
         '<span class="trade-card__meta">' +
@@ -530,7 +582,10 @@ function renderTradeCard(trade, memberMap, view) {
 
       '<div class="trade-card__sides">' +
         renderTradeSide(proposer, propGives) +
-        '<span class="trade-card__divider" aria-hidden="true">⇄</span>' +
+        '<span class="trade-card__divider" aria-hidden="true">' +
+          swapSvg +
+          fvIndicator +
+        '</span>' +
         renderTradeSide(recipient, recGives) +
       '</div>';
 
@@ -592,29 +647,76 @@ function renderTradeCard(trade, memberMap, view) {
   return html;
 }
 
+// Sum the Fantasy Value of every fighter in a list. Returns 0 if FV isn't
+// loaded yet or any fighter is unknown — the divider just hides itself.
+function tradeSideFvTotal(fighterIds) {
+  if (typeof FantasyValue === 'undefined' || !FantasyValue.scoreFor) return 0;
+  var total = 0;
+  for (var i = 0; i < fighterIds.length; i++) {
+    var v = FantasyValue.scoreFor(fighterIds[i]);
+    if (typeof v === 'number') total += v;
+  }
+  return total;
+}
+
+function renderTradeFighterTile(f) {
+  if (!f) {
+    return '<div class="trade-fighter-tile trade-fighter-tile--missing">' +
+             '<span>Unknown fighter</span>' +
+           '</div>';
+  }
+
+  var divLabel = TRADE_DIVISION_LABELS[f.primary_division] || f.primary_division;
+  var rankLabel = f.is_champion ? 'C' : (f.current_rank ? '#' + f.current_rank : 'NR');
+  var rankClass = f.is_champion ? 'trade-fighter-tile__rank--champ'
+                : (f.current_rank ? 'trade-fighter-tile__rank--ranked'
+                                  : 'trade-fighter-tile__rank--unranked');
+
+  var photoHtml = f.photo_url
+    ? '<img class="trade-fighter-tile__photo" src="' + escapeHtml(f.photo_url) +
+      '" alt="' + escapeHtml(f.name) + '" onerror="this.style.display=\'none\'">'
+    : '';
+
+  // Fantasy Value chip — only renders if FV is loaded for this fighter.
+  var fvHtml = '';
+  if (typeof FantasyValue !== 'undefined' && FantasyValue.scoreFor) {
+    var fv = FantasyValue.scoreFor(f.id);
+    if (typeof fv === 'number') {
+      fvHtml = '<span class="trade-fighter-tile__fv">FV ' + fv.toFixed(1) + '</span>';
+    }
+  }
+
+  return (
+    '<div class="trade-fighter-tile">' +
+      '<div class="trade-fighter-tile__photo-wrap">' +
+        photoHtml +
+      '</div>' +
+      '<div class="trade-fighter-tile__info">' +
+        '<span class="trade-fighter-tile__name">' + escapeHtml(f.name) + '</span>' +
+        '<span class="trade-fighter-tile__meta">' +
+          '<span class="trade-fighter-tile__rank ' + rankClass + '">' + rankLabel + '</span>' +
+          '<span class="trade-fighter-tile__div">' + escapeHtml(divLabel) + '</span>' +
+        '</span>' +
+        (fvHtml ? '<span class="trade-fighter-tile__chips">' + fvHtml + '</span>' : '') +
+      '</div>' +
+    '</div>'
+  );
+}
+
 function renderTradeSide(member, fighterIds) {
   var html = '<div class="trade-card__side">' +
                '<span class="trade-card__side-label">' +
                  escapeHtml(member ? member.team_name : '?') + ' gives' +
-               '</span>';
+               '</span>' +
+               '<div class="trade-card__tiles">';
   if (fighterIds.length === 0) {
-    html += '<span class="trade-card__fighter trade-card__fighter--none">—</span>';
+    html += '<div class="trade-fighter-tile trade-fighter-tile--empty"><span>—</span></div>';
   } else {
     fighterIds.forEach(function(id) {
-      var f = allFighters[id];
-      if (!f) {
-        html += '<span class="trade-card__fighter">Unknown fighter</span>';
-        return;
-      }
-      var divLabel = TRADE_DIVISION_LABELS[f.primary_division] || f.primary_division;
-      html +=
-        '<div class="trade-card__fighter">' +
-          '<span class="trade-card__fighter-name">' + escapeHtml(f.name) + '</span>' +
-          '<span class="trade-card__fighter-div">' + escapeHtml(divLabel) + '</span>' +
-        '</div>';
+      html += renderTradeFighterTile(allFighters[id]);
     });
   }
-  html += '</div>';
+  html += '</div></div>';
   return html;
 }
 

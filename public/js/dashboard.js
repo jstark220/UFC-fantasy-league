@@ -21,6 +21,10 @@ async function initDashboard() {
   // Auth confirmed — reveal the page
   document.getElementById('dashboardContent').style.display = 'block';
 
+  // Fire-and-forget: replace the placeholder Next Event / Lineup Locks
+  // tiles with real data from the soonest upcoming ufc_events row.
+  loadNextEventTiles();
+
   // Prefer the user's saved display_name from profiles; fall back to the
   // local part of their email if they haven't set one yet.
   const fallback = (user.email || '').split('@')[0];
@@ -58,63 +62,246 @@ async function initDashboard() {
     return;
   }
 
-  // ---- Fetch member counts for each league ----
-  const leagueIds = memberships.map(function(m) { return m.league_id; });
+  // ---- Fetch enrichment data for each league row ----
+  // Parallel: every member of every league I'm in (for standings + member
+  // counts), every scoring row aggregated to a points-by-member map, the
+  // soonest upcoming event globally, and my own starter selections for
+  // that event so we can flag "lineup not set" cards.
+  const leagueIds  = memberships.map(function(m) { return m.league_id; });
+  const myMemberRowIds = memberships.map(function(m) {
+    // memberships is from league_members with this user — we need our
+    // league_member id per league. The select above includes team_name
+    // and league_id but not the row's PK; refetch lean.
+    return null;
+  });
 
-  const { data: allMembers } = await supabaseClient
-    .from('league_members')
-    .select('league_id')
-    .in('league_id', leagueIds);
+  const todayISO = new Date().toISOString().slice(0, 10);
 
-  // Build a lookup of { leagueId: memberCount }
-  var memberCounts = {};
-  if (allMembers) {
-    allMembers.forEach(function(m) {
-      memberCounts[m.league_id] = (memberCounts[m.league_id] || 0) + 1;
-    });
+  const [allMembersRes, scoresRes, myRowsRes, nextEventRes] = await Promise.all([
+    supabaseClient
+      .from('league_members')
+      .select('id, league_id, team_name, user_id')
+      .in('league_id', leagueIds),
+    supabaseClient
+      .from('scores')
+      .select('league_id, league_member_id, total_points')
+      .in('league_id', leagueIds),
+    supabaseClient
+      .from('league_members')
+      .select('id, league_id')
+      .in('league_id', leagueIds)
+      .eq('user_id', user.id),
+    supabaseClient
+      .from('ufc_events')
+      .select('id, name, event_date, venue, lineup_lock_time')
+      .gte('event_date', todayISO)
+      .order('event_date', { ascending: true })
+      .limit(1)
+      .maybeSingle()
+  ]);
+
+  // Index: leagueId -> [{ id, team_name, user_id }]
+  var membersByLeague = {};
+  (allMembersRes.data || []).forEach(function (m) {
+    (membersByLeague[m.league_id] = membersByLeague[m.league_id] || []).push(m);
+  });
+
+  // Index: leagueId -> { memberId -> totalPoints }
+  var pointsByLeague = {};
+  (scoresRes.data || []).forEach(function (row) {
+    var bucket = pointsByLeague[row.league_id] = pointsByLeague[row.league_id] || {};
+    bucket[row.league_member_id] = (bucket[row.league_member_id] || 0) + Number(row.total_points || 0);
+  });
+
+  // Index: leagueId -> my league_member.id
+  var myMemberIdByLeague = {};
+  (myRowsRes.data || []).forEach(function (m) { myMemberIdByLeague[m.league_id] = m.id; });
+
+  // Next event + my starter selections for it. The selections query runs
+  // only if we actually got an event back; otherwise the lineup-status
+  // badge is hidden across all cards.
+  var nextEvent  = nextEventRes && nextEventRes.data ? nextEventRes.data : null;
+  var hasLineup  = {}; // leagueId -> true if I have any starter for nextEvent
+  if (nextEvent) {
+    var myIds = Object.values(myMemberIdByLeague);
+    if (myIds.length > 0) {
+      var selRes = await supabaseClient
+        .from('starter_selections')
+        .select('league_member_id')
+        .eq('event_id', nextEvent.id)
+        .in('league_member_id', myIds);
+      (selRes.data || []).forEach(function (s) {
+        // Find which league this member belongs to
+        for (var lid in myMemberIdByLeague) {
+          if (myMemberIdByLeague[lid] === s.league_member_id) {
+            hasLineup[lid] = true;
+            break;
+          }
+        }
+      });
+    }
   }
 
-  // ---- Render a compact row for each league ----
+  // ---- Render a rich card per league ----
   var listEl = document.getElementById('leaguesList');
-  var wrap = document.createElement('div');
+  var wrap   = document.createElement('div');
   wrap.className = 'dashboard-league-list';
 
-  memberships.forEach(function(membership) {
-    var league = membership.leagues;
-    var memberCount = memberCounts[membership.league_id] || 0;
-    var formatLabel = league.format === 'dynasty' ? 'Dynasty' : 'Season-Long';
-
-    // Commissioner of this league? Primary owner (leagues.commissioner_id)
-    // OR a co-commissioner (league_members.is_commissioner). Mirrors the
-    // logic in Commissioner.memberIsCommissioner so the badge matches the
-    // gating everywhere else in the app.
-    var isCommish = (league.commissioner_id === user.id) ||
-                    (membership.is_commissioner === true);
-
-    var commishBadge = isCommish
-      ? '<span class="commish-badge" title="You\'re a commissioner of this league">Commish</span>'
-      : '';
-
-    var row = document.createElement('div');
-    row.className = 'dashboard-league-row';
-    row.innerHTML =
-      '<div class="dashboard-league-row__info">' +
-        '<p class="dashboard-league-row__name">' +
-          escapeHtml(league.name) +
-          commishBadge +
-        '</p>' +
-        '<p class="dashboard-league-row__meta">' +
-          formatLabel + ' &middot; ' +
-          memberCount + ' / ' + league.max_managers + ' managers &middot; ' +
-          'Your team: ' + escapeHtml(membership.team_name) +
-        '</p>' +
-      '</div>' +
-      '<a href="league.html?id=' + league.id + '" class="btn-secondary">View league</a>';
-
-    wrap.appendChild(row);
+  memberships.forEach(function (membership) {
+    wrap.appendChild(buildLeagueCard({
+      user:        user,
+      membership:  membership,
+      members:     membersByLeague[membership.league_id] || [],
+      points:      pointsByLeague[membership.league_id]  || {},
+      myMemberId:  myMemberIdByLeague[membership.league_id],
+      nextEvent:   nextEvent,
+      hasLineup:   !!hasLineup[membership.league_id]
+    }));
   });
 
   listEl.appendChild(wrap);
+}
+
+// ========================================================================
+// LEAGUE CARD
+// One rich card per league: header (name + commish badge), three stat
+// tiles (your rank, points behind #1, next event countdown), and a
+// footer alert when the lineup isn't set for the upcoming event.
+// The whole card is a single <a> so clicking anywhere jumps to the
+// league hub — the right-side arrow is decorative.
+// ========================================================================
+function buildLeagueCard(opts) {
+  var league      = opts.membership.leagues;
+  var memberCount = opts.members.length;
+  var formatLabel = league.format === 'dynasty' ? 'Dynasty' : 'Season-Long';
+  var isCommish   = (league.commissioner_id === opts.user.id)
+                 || (opts.membership.is_commissioner === true);
+
+  // ---- Standings: sort members by total points desc; find my position ----
+  var ranked = opts.members
+    .map(function (m) { return { id: m.id, total: opts.points[m.id] || 0 }; })
+    .sort(function (a, b) { return b.total - a.total; });
+
+  var hasAnyScores = ranked.some(function (r) { return r.total > 0; });
+  var myRank       = '—';
+  var myTotal      = 0;
+  var pointsBehind = null;
+  if (hasAnyScores && opts.myMemberId) {
+    for (var i = 0; i < ranked.length; i++) {
+      if (ranked[i].id === opts.myMemberId) {
+        myRank  = i + 1;
+        myTotal = ranked[i].total;
+        if (i > 0) pointsBehind = ranked[0].total - myTotal;
+        break;
+      }
+    }
+  }
+
+  var rankClass = myRank === 1 ? ' league-card-stat__value--gold'
+                : myRank === 2 ? ' league-card-stat__value--silver'
+                : myRank === 3 ? ' league-card-stat__value--bronze'
+                : '';
+  var rankSub = hasAnyScores ? 'of ' + memberCount : 'no scores yet';
+  var rankDisplay = hasAnyScores
+    ? '#' + myRank
+    : '—';
+
+  // ---- Behind tile: "-142.3" vs leader, "1st" if leading, "—" if no scores
+  var behindDisplay, behindSub;
+  if (!hasAnyScores) {
+    behindDisplay = '—';
+    behindSub     = 'season ahead';
+  } else if (myRank === 1) {
+    behindDisplay = myTotal.toFixed(1);
+    behindSub     = 'pts in 1st';
+  } else if (pointsBehind != null) {
+    behindDisplay = '-' + pointsBehind.toFixed(1);
+    behindSub     = 'behind 1st';
+  } else {
+    behindDisplay = '—';
+    behindSub     = 'pts';
+  }
+
+  // ---- Next event tile: name + countdown to lock (or "TBD") ----
+  var nextDisplay, nextSub;
+  if (opts.nextEvent) {
+    nextDisplay = displayEventName(opts.nextEvent);
+    var lockISO = opts.nextEvent.lineup_lock_time;
+    var lockDate = lockISO ? new Date(lockISO) : new Date(opts.nextEvent.event_date + 'T17:00:00');
+    var diffMs = lockDate.getTime() - Date.now();
+    if (diffMs <= 0) {
+      nextSub = 'lineup locked';
+    } else {
+      var days  = Math.floor(diffMs / 86400000);
+      var hours = Math.floor((diffMs % 86400000) / 3600000);
+      if (days > 0)      nextSub = 'locks in ' + days + 'd ' + hours + 'h';
+      else if (hours > 0)nextSub = 'locks in ' + hours + 'h';
+      else               nextSub = 'locks soon';
+    }
+  } else {
+    nextDisplay = 'TBD';
+    nextSub     = 'no events scheduled';
+  }
+
+  // ---- Lineup alert: only show before lock when no starters set ----
+  var alertHtml = '';
+  if (opts.nextEvent && !opts.hasLineup) {
+    var locked = opts.nextEvent.lineup_lock_time
+      ? new Date(opts.nextEvent.lineup_lock_time).getTime() < Date.now()
+      : false;
+    if (!locked) {
+      alertHtml =
+        '<div class="dashboard-league-card__alert">' +
+          '<svg class="dashboard-league-card__alert-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+            '<path d="M12 4 2 20h20Z" /><path d="M12 10v5" /><circle cx="12" cy="18" r="0.5" fill="currentColor" />' +
+          '</svg>' +
+          '<span>Lineup not set for ' + escapeHtml(displayEventName(opts.nextEvent)) + '</span>' +
+        '</div>';
+    }
+  }
+
+  var commishBadge = isCommish
+    ? '<span class="commish-badge" title="You\'re a commissioner of this league">Commish</span>'
+    : '';
+
+  var anchor = document.createElement('a');
+  anchor.className = 'dashboard-league-card';
+  anchor.href = 'league.html?id=' + encodeURIComponent(league.id);
+  anchor.innerHTML =
+    '<div class="dashboard-league-card__header">' +
+      '<div class="dashboard-league-card__heading">' +
+        '<p class="dashboard-league-card__name">' +
+          escapeHtml(league.name) + commishBadge +
+        '</p>' +
+        '<p class="dashboard-league-card__meta">' +
+          formatLabel + ' · ' +
+          memberCount + ' / ' + league.max_managers + ' managers · ' +
+          'Your team: ' + escapeHtml(opts.membership.team_name) +
+        '</p>' +
+      '</div>' +
+      '<svg class="dashboard-league-card__arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+        '<path d="M9 6l6 6-6 6" />' +
+      '</svg>' +
+    '</div>' +
+
+    '<div class="dashboard-league-card__stats">' +
+      '<div class="league-card-stat">' +
+        '<span class="league-card-stat__value' + rankClass + '">' + rankDisplay + '</span>' +
+        '<span class="league-card-stat__label">' + rankSub + '</span>' +
+      '</div>' +
+      '<div class="league-card-stat">' +
+        '<span class="league-card-stat__value">' + escapeHtml(behindDisplay) + '</span>' +
+        '<span class="league-card-stat__label">' + behindSub + '</span>' +
+      '</div>' +
+      '<div class="league-card-stat league-card-stat--wide">' +
+        '<span class="league-card-stat__value league-card-stat__value--text">' + escapeHtml(nextDisplay) + '</span>' +
+        '<span class="league-card-stat__label">' + escapeHtml(nextSub) + '</span>' +
+      '</div>' +
+    '</div>' +
+
+    alertHtml;
+
+  return anchor;
 }
 
 // Escapes user-supplied strings before inserting into innerHTML to prevent XSS
@@ -122,6 +309,59 @@ function escapeHtml(str) {
   var div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML;
+}
+
+// ========================================================================
+// NEXT EVENT + LINEUP LOCK TILES
+// Replaces the hardcoded placeholders with the soonest upcoming UFC
+// event. Same display rule as the rest of the app — numbered PPVs show
+// as-is, Vegas → UFC APEX, Washington → UFC Freedom 250, else
+// "UFC <City>" pulled from the first chunk of ufc_events.venue.
+// ========================================================================
+
+function displayEventName(ev) {
+  if (!ev) return '';
+  if (/^UFC\s+\d+\b/i.test(ev.name || '')) return ev.name;
+  if (ev.venue) {
+    var venue = String(ev.venue);
+    if (/las vegas/i.test(venue))  return 'UFC APEX';
+    if (/washington/i.test(venue)) return 'UFC Freedom 250';
+    var city = venue.split(',')[0].trim();
+    if (city) return 'UFC ' + city;
+  }
+  return ev.name || '';
+}
+
+async function loadNextEventTiles() {
+  var nameEl = document.getElementById('statNextEvent');
+  var lockEl = document.getElementById('statLineupLock');
+
+  var todayISO = new Date().toISOString().slice(0, 10);
+  var res = await supabaseClient
+    .from('ufc_events')
+    .select('id, name, event_date, venue, lineup_lock_time')
+    .gte('event_date', todayISO)
+    .order('event_date', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (res.error || !res.data) {
+    if (nameEl) nameEl.textContent = '—';
+    if (lockEl) lockEl.textContent = 'TBD';
+    return;
+  }
+  var event = res.data;
+
+  if (nameEl) nameEl.textContent = displayEventName(event);
+
+  // Lock display: short weekday + month + day. Card locks Saturday at
+  // first prelim; the date itself is the most useful at-a-glance signal.
+  if (lockEl) {
+    var d = new Date(event.event_date + 'T12:00:00');
+    lockEl.textContent = d.toLocaleDateString('en-US', {
+      weekday: 'short', month: 'short', day: 'numeric'
+    });
+  }
 }
 
 initDashboard();

@@ -65,7 +65,7 @@ async function initLeague() {
   // countdown).
   const { data: league, error: leagueError } = await supabaseClient
     .from('leagues')
-    .select('id, name, format, draft_format, season_start_date, invite_code, commissioner_id, max_managers, draft_started, draft_completed, draft_order, draft_scheduled_at, roster_size')
+    .select('id, name, format, draft_format, season_start_date, invite_code, commissioner_id, max_managers, draft_started, draft_completed, draft_order, draft_scheduled_at, roster_size, scoring_config')
     .eq('id', leagueId)
     .single();
 
@@ -137,26 +137,39 @@ async function initLeague() {
   // soonest upcoming event from ufc_events and starts a live countdown.
   wireNextEventBanner();
 
-  // ---- Render nav links in the page header ----
-  // Standings is always visible. Lineup/Waivers/Trades appear once the draft starts.
-  // Chat lives in the popup widget (top nav + floating bubble) on every page,
-  // so we no longer surface it as a league-page CTA.
+  // ---- Wire the comprehensive "How it works" primer ----
+  // LeaguePrimer is shared across every league-context page. Passing the
+  // pre-fetched league row in preempts its own background fetch.
+  if (typeof LeaguePrimer !== 'undefined') {
+    LeaguePrimer.install(league);
+  }
+
+  // ---- Render nav tabs in the page header ----
+  // Tabs visible depend on draft phase. The Draft Room CTA during the draft
+  // window is a special standalone button (keeps the original red filled
+  // styling — it's a temporary call-to-action, not a persistent nav tab).
+  var tabs = ['leagueHome', 'standings'];
+  if (league.draft_started) {
+    tabs.push('freeAgency', 'trades');
+    if (league.draft_completed) tabs.push('lineup');
+  }
+  if (isCommissioner && league.draft_started) tabs.push('scoreEvent');
+
   var navHtml = '';
-  navHtml += '<a href="standings.html?id=' + leagueId + '" class="btn-secondary">Standings</a>';
   if (league.draft_started && !league.draft_completed) {
     navHtml += '<a href="draft.html?id=' + leagueId + '" class="btn-primary">Draft Room</a>';
   }
-  if (league.draft_started) {
-    navHtml += '<a href="waivers.html?id=' + leagueId + '" class="btn-secondary">Free Agency</a>';
-    navHtml += '<a href="trades.html?id=' + leagueId + '" class="btn-secondary">Trades</a>';
-    if (league.draft_completed) {
-      navHtml += '<a href="lineup.html?id=' + leagueId + '" class="btn-primary">Lineup</a>';
-    }
-  }
-  if (isCommissioner && league.draft_started) {
-    navHtml += '<a href="score-event.html?league=' + leagueId + '" class="btn-secondary">Score Event</a>';
-  }
-  document.getElementById('headerActions').innerHTML = navHtml;
+  // Draft Room CTA stays as a separate btn-primary alongside the nav strip.
+  // Empty wrapper div hosts LeagueNav so badges can re-render async without
+  // disturbing the Draft Room button.
+  var headerEl = document.getElementById('headerActions');
+  headerEl.innerHTML = navHtml + '<div id="leagueNavStrip"></div>';
+  LeagueNav.renderInto('leagueNavStrip', {
+    leagueId: leagueId,
+    memberId: myMemberId,
+    active:   'leagueHome',
+    tabs:     tabs
+  });
 
   // ---- Render details grid ----
   const formatDisplay    = league.format === 'dynasty' ? 'Dynasty' : 'Season-Long';
@@ -213,10 +226,9 @@ async function initLeague() {
   // ---- Load real free agents into the panel ----
   loadFreeAgents();
 
-  // ---- Refresh hardcoded Top Performer photos with fresh URLs from the DB.
-  // The HTML originally embedded UFC.com URLs with security tokens (`itok`)
-  // that go stale over time, so we look the photos up by name instead.
-  refreshPerformerPhotos();
+  // ---- Wire the Top Performers widget to real data from the most recent
+  // completed event. Replaces the hardcoded placeholder rows in the HTML.
+  renderTopPerformers();
 }
 
 // ========================================================================
@@ -1048,7 +1060,12 @@ async function loadFreeAgents() {
   ]);
 
   if (rostersRes.error || fightersRes.error) {
-    el.innerHTML = '<p class="draft-empty">Could not load free agents.</p>';
+    el.innerHTML = EmptyState.html({
+      kind:    'fighters',
+      title:   'Couldn\'t load free agents',
+      body:    'Refresh the page or try again in a moment.',
+      compact: true
+    });
     return;
   }
 
@@ -1058,7 +1075,12 @@ async function loadFreeAgents() {
   const available = fightersRes.data.filter(function(f) { return !ownedIds.has(f.id); });
 
   if (available.length === 0) {
-    el.innerHTML = '<p class="draft-empty">No free agents available.</p>';
+    el.innerHTML = EmptyState.html({
+      kind:    'fighters',
+      title:   'No free agents',
+      body:    'Every fighter is rostered right now. Check back after the next waiver cycle.',
+      compact: true
+    });
     return;
   }
 
@@ -1110,7 +1132,9 @@ async function loadFreeAgents() {
     const label    = buttonLabel(fighter);
 
     return (
-      '<div class="free-agent-row">' +
+      '<div class="free-agent-row" ' +
+           'data-open-fighter="' + escapeHtml(fighter.id) + '" ' +
+           'tabindex="0" role="button" aria-label="' + escapeHtml(fighter.name) + ' details">' +
         '<div class="free-agent-row__photo-wrap">' +
           (fighter.photo_url
             ? '<img class="free-agent-row__photo" src="' + fighter.photo_url + '" alt="' + escapeHtml(fighter.name) + '" onerror="this.style.display=\'none\'">'
@@ -1137,48 +1161,193 @@ async function loadFreeAgents() {
   // fighters, claim windows, roster construction validation). Doing
   // an inline insert here previously let users re-add fighters they
   // had just dropped, bypassing the 48h rolling waiver hold.
+  // stopPropagation so clicking the button doesn't also fire the row's
+  // "open fighter modal" handler.
   el.querySelectorAll('.free-agent-row__add').forEach(function(btn) {
-    btn.addEventListener('click', function() {
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
       var fighterId = btn.getAttribute('data-fighter-id');
       window.location.href = 'waivers.html?id=' + leagueIdRef +
                              '&claim=' + encodeURIComponent(fighterId);
     });
   });
+
+  // Row click opens the fighter modal. Same keyboard shortcut as the
+  // Top Performers rows (Enter / Space).
+  el.querySelectorAll('.free-agent-row[data-open-fighter]').forEach(function(row) {
+    row.addEventListener('click', function() {
+      var fid = row.getAttribute('data-open-fighter');
+      if (fid && typeof showFighterModal === 'function') showFighterModal(fid);
+    });
+    row.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        var fid = row.getAttribute('data-open-fighter');
+        if (fid && typeof showFighterModal === 'function') showFighterModal(fid);
+      }
+    });
+  });
 }
 
 // ========================================================================
-// REFRESH TOP-PERFORMER PHOTOS
-// The Top Performers section (left panel of league-live-row) is currently
-// hardcoded placeholder data. The original HTML embedded UFC.com image URLs
-// with `itok` security tokens that expire — when the token rotates, the
-// img 404s and the photo wrap renders blank.
-//
-// Pulling photo_url directly from the DB by name keeps the images fresh as
-// long as fetchFighterPhotos.js has been run recently. When the rest of
-// this section gets wired to real top-scorer data, this function can go
-// away (the dynamic renderer will set src directly).
+// TOP PERFORMERS WIDGET
+// Replaces the hardcoded placeholder rows in the left panel of
+// league-live-row with the actual top 5 scorers from the most recent
+// completed event. Uses the shared Scoring engine + this league's
+// scoring_config so the numbers match whatever the standings show.
 // ========================================================================
-async function refreshPerformerPhotos() {
-  const imgs = document.querySelectorAll('.performer-row__photo[data-fighter-name]');
-  if (!imgs.length) return;
 
-  const names = Array.from(imgs).map(function(img) { return img.getAttribute('data-fighter-name'); });
+function formatDivisionLabel(s) {
+  if (!s) return '';
+  if (s === 'strawweight')    return "Women's Strawweight";
+  if (s === 'flyweight_w')    return "Women's Flyweight";
+  if (s === 'bantamweight_w') return "Women's Bantamweight";
+  // Men's divisions stay snake-case in the DB → display as Title Case
+  return s.split('_').map(function (w) {
+    return w.charAt(0).toUpperCase() + w.slice(1);
+  }).join(' ');
+}
 
-  const { data, error } = await supabaseClient
-    .from('fighters')
-    .select('name, photo_url')
-    .in('name', names);
+async function renderTopPerformers() {
+  // Locate the Top Performers panel via its section label so we don't
+  // depend on a specific position in the live-row.
+  var panelLabel = null;
+  document.querySelectorAll('.league-live-panel .section-label').forEach(function (lbl) {
+    if (lbl.textContent.indexOf('Top Performers') === 0) panelLabel = lbl;
+  });
+  if (!panelLabel) return;
+  var panel = panelLabel.closest('.league-live-panel');
 
-  if (error || !data) return;
+  function showEmpty(message) {
+    panel.querySelectorAll('.performer-row, .draft-empty').forEach(function (el) { el.remove(); });
+    panelLabel.insertAdjacentHTML('afterend', '<p class="draft-empty">' + escapeHtml(message) + '</p>');
+  }
 
-  // Build name → photo_url map; tolerate fighters with no photo_url
-  const photoMap = {};
-  data.forEach(function(f) { photoMap[f.name] = f.photo_url; });
+  // 1. Most recent completed event. Pull `venue` too so we can apply the
+  // same display rules used elsewhere ("UFC <City>" for Fight Nights,
+  // "UFC APEX" for Vegas, numbered PPVs unchanged).
+  var eventRes = await supabaseClient
+    .from('ufc_events')
+    .select('id, name, event_date, venue')
+    .eq('is_completed', true)
+    .order('event_date', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  var event = eventRes && eventRes.data ? eventRes.data : null;
+  if (!event) {
+    panelLabel.textContent = 'Top Performers';
+    showEmpty('No completed events yet.');
+    return;
+  }
 
-  imgs.forEach(function(img) {
-    const url = photoMap[img.getAttribute('data-fighter-name')];
-    if (url) img.src = url;
-    // No url? Leave the img blank — onerror will hide it as before.
+  // 2. Fight results for the event — full column list so the shared
+  // Scoring engine has everything it needs to compute per-fighter scores.
+  var fightRes = await supabaseClient
+    .from('fight_results')
+    .select(
+      'id, event_id, fighter_a_id, fighter_b_id, winner_id, outcome, ' +
+      'end_round, end_time_seconds, card_position, title_type, is_title_defense, ' +
+      'fighter_a_sig_strikes, fighter_a_takedowns, fighter_a_knockdowns, fighter_a_control_seconds, ' +
+      'fighter_b_sig_strikes, fighter_b_takedowns, fighter_b_knockdowns, fighter_b_control_seconds, ' +
+      'fighter_a_opponent_rank, fighter_b_opponent_rank, ' +
+      'fighter_a_potn, fighter_b_potn, fight_of_the_night'
+    )
+    .eq('event_id', event.id)
+    .not('outcome', 'is', null);
+  var fights = (fightRes && fightRes.data) || [];
+
+  panelLabel.textContent = 'Top Performers · ' + displayEventName(event);
+
+  if (fights.length === 0) {
+    showEmpty('No scored fights yet.');
+    return;
+  }
+
+  // 3. Per-fighter scores. No-contests are skipped (the scoring engine
+  // would still compute base activity points, but a NC isn't a "performer"
+  // moment so it doesn't belong on this leaderboard).
+  var scoringCfg = leagueData ? leagueData.scoring_config : null;
+  var byFighter = {};
+  fights.forEach(function (fight) {
+    if (fight.outcome === 'no_contest') return;
+    [true, false].forEach(function (isA) {
+      var fid = isA ? fight.fighter_a_id : fight.fighter_b_id;
+      if (!fid) return;
+      var score = Scoring.computeFighterScore(fight, isA, scoringCfg);
+      byFighter[fid] = score.total;
+    });
+  });
+
+  var top = Object.keys(byFighter)
+    .map(function (id) { return { id: id, pts: byFighter[id] }; })
+    .sort(function (a, b) { return b.pts - a.pts; })
+    .slice(0, 5);
+  if (top.length === 0) {
+    showEmpty('No scored fights yet.');
+    return;
+  }
+
+  // 4. Fighter details + roster ownership for the top 5.
+  var ids = top.map(function (t) { return t.id; });
+  var supplemental = await Promise.all([
+    supabaseClient.from('fighters').select('id, name, primary_division, photo_url').in('id', ids),
+    supabaseClient.from('rosters').select('fighter_id, league_member_id').eq('league_id', leagueIdRef).in('fighter_id', ids)
+  ]);
+  var fighterMap = {};
+  (supplemental[0].data || []).forEach(function (f) { fighterMap[f.id] = f; });
+  var ownerMap = {};
+  (supplemental[1].data || []).forEach(function (r) { ownerMap[r.fighter_id] = r.league_member_id; });
+  var memberNameMap = {};
+  (membersData || []).forEach(function (m) { memberNameMap[m.id] = m.team_name; });
+
+  // 5. Render rows
+  var rowsHtml = top.map(function (t, idx) {
+    var f = fighterMap[t.id];
+    if (!f) return '';
+    var rank = idx + 1;
+    var rankClass = rank === 1 ? ' performer-row--gold'
+                  : rank === 2 ? ' performer-row--silver'
+                  : rank === 3 ? ' performer-row--bronze' : '';
+    var ownerId   = ownerMap[t.id];
+    var ownerName = ownerId ? (memberNameMap[ownerId] || '—') : 'Free Agent';
+    var division  = formatDivisionLabel(f.primary_division);
+    var photoSrc  = f.photo_url ? ' src="' + escapeHtml(f.photo_url) + '"' : '';
+    return (
+      '<div class="performer-row' + rankClass + '" ' +
+           'data-open-fighter="' + escapeHtml(f.id) + '" ' +
+           'tabindex="0" role="button" aria-label="' + escapeHtml(f.name) + ' details">' +
+        '<span class="performer-row__rank">' + rank + '</span>' +
+        '<div class="performer-row__photo-wrap">' +
+          '<img class="performer-row__photo"' + photoSrc + ' alt="' + escapeHtml(f.name) + '" onerror="this.style.display=\'none\'">' +
+        '</div>' +
+        '<div class="performer-row__info">' +
+          '<span class="performer-row__name">' + escapeHtml(f.name) + '</span>' +
+          '<span class="performer-row__division">' + escapeHtml(division) + '</span>' +
+        '</div>' +
+        '<div class="performer-row__right">' +
+          '<span class="performer-row__pts">' + t.pts.toFixed(1) + '</span>' +
+          '<span class="performer-row__owner">' + escapeHtml(ownerName) + '</span>' +
+        '</div>' +
+      '</div>'
+    );
+  }).join('');
+
+  panel.querySelectorAll('.performer-row, .draft-empty').forEach(function (el) { el.remove(); });
+  panelLabel.insertAdjacentHTML('afterend', rowsHtml);
+
+  // Wire row clicks to open the fighter modal.
+  panel.querySelectorAll('.performer-row[data-open-fighter]').forEach(function (row) {
+    row.addEventListener('click', function () {
+      var fid = row.getAttribute('data-open-fighter');
+      if (fid && typeof showFighterModal === 'function') showFighterModal(fid);
+    });
+    row.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        var fid = row.getAttribute('data-open-fighter');
+        if (fid && typeof showFighterModal === 'function') showFighterModal(fid);
+      }
+    });
   });
 }
 

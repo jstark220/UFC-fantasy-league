@@ -169,7 +169,11 @@ async function loadEventData() {
 function renderEventBanner() {
   const el = document.getElementById('eventBanner');
   if (!selectedEvent) {
-    el.innerHTML = '<p class="draft-empty">No events scheduled yet.</p>';
+    el.innerHTML = EmptyState.html({
+      kind:  'events',
+      title: 'No events scheduled',
+      body:  'Once the UFC calendar publishes more cards, they\'ll show up here.'
+    });
     return;
   }
 
@@ -250,7 +254,11 @@ function renderLineupsGrid() {
   const el = document.getElementById('lineupsGrid');
 
   if (members.length === 0) {
-    el.innerHTML = '<p class="draft-empty">No managers in this league yet.</p>';
+    el.innerHTML = EmptyState.html({
+      kind:  'roster',
+      title: 'No managers yet',
+      body:  'Invite friends to join your league and their lineups will show up here.'
+    });
     return;
   }
 

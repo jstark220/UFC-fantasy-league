@@ -215,8 +215,17 @@ async function showFighterModal(fighterId) {
       }
       queueBtn.disabled = false;
       var nowQueued = window.isQueued(id);
-      queueBtn.innerHTML = nowQueued ? 'Queued &#x2715;' : '+ Queue';
-      queueBtn.classList.toggle('fighter-modal__queue-btn--queued', nowQueued);
+      var nextIcon = nowQueued
+        ? '<svg class="modal-cta__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+            '<path d="M4 7h11" /><path d="M4 12h11" /><path d="M4 17h7" />' +
+            '<circle cx="18" cy="17" r="4" /><path d="m16 17 1.5 1.5L20 16" />' +
+          '</svg>'
+        : '<svg class="modal-cta__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+            '<path d="M4 7h11" /><path d="M4 12h11" /><path d="M4 17h7" />' +
+            '<circle cx="18" cy="17" r="4" /><path d="M16 17h4" /><path d="M18 15v4" />' +
+          '</svg>';
+      queueBtn.innerHTML = nextIcon + '<span>' + (nowQueued ? 'Queued' : 'Queue') + '</span>';
+      queueBtn.classList.toggle('modal-cta--queued', nowQueued);
     });
   }
 
@@ -331,7 +340,12 @@ function buildFighterModalHtml(fighter, fights, fighterId, opponentMap, tradeCtx
   // Fight history rows
   var historyHtml = '';
   if (fights.length === 0) {
-    historyHtml = '<p class="draft-empty" style="padding:var(--space-4)">No fight results recorded yet.</p>';
+    historyHtml = EmptyState.html({
+      kind:    'standings',
+      title:   'No fights logged',
+      body:    'Fight history will appear here once results are recorded.',
+      compact: true
+    });
   } else {
     var rows = fights.map(function(fight, idx) {
       var isA      = fight.fighter_a_id === fighterId;
@@ -492,14 +506,44 @@ function buildFighterModalHtml(fighter, fights, fighterId, opponentMap, tradeCtx
           //   Propose Trade (after draft completes): visible for fighters
           //   on someone's roster.
           (function() {
+            // Inline SVG icons — 16px line-art that picks up currentColor
+            // so the active/queued/primary states tint cleanly.
+            var ICONS = {
+              draft:
+                '<svg class="modal-cta__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+                  '<path d="M12 4v12" /><path d="m7 11 5 5 5-5" /><path d="M4 20h16" />' +
+                '</svg>',
+              queueAdd:
+                '<svg class="modal-cta__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+                  '<path d="M4 7h11" /><path d="M4 12h11" /><path d="M4 17h7" />' +
+                  '<circle cx="18" cy="17" r="4" /><path d="M16 17h4" /><path d="M18 15v4" />' +
+                '</svg>',
+              queueChecked:
+                '<svg class="modal-cta__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+                  '<path d="M4 7h11" /><path d="M4 12h11" /><path d="M4 17h7" />' +
+                  '<circle cx="18" cy="17" r="4" /><path d="m16 17 1.5 1.5L20 16" />' +
+                '</svg>',
+              trade:
+                '<svg class="modal-cta__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+                  '<path d="M4 9h13" /><path d="m14 6 3 3-3 3" />' +
+                  '<path d="M20 15H7"  /><path d="m10 18-3-3 3-3" />' +
+                '</svg>'
+            };
+
             var html = '';
+            // Primary action priority: Draft (during draft) > Trade (post-draft).
+            // The "primary" crimson treatment is reserved for the most
+            // important action in the current context — at most one button
+            // in the row should ever wear it.
             var canDraft = tradeCtx.draftActive
                         && !tradeCtx.ownerMemberId
                         && typeof window.makePick === 'function';
             if (canDraft) {
-              html += '<button class="btn-primary fighter-modal__draft-btn" ' +
+              html += '<button class="modal-cta modal-cta--primary" data-cta="draft" ' +
                         'id="fighterModalDraftBtn" data-draft-fighter="' +
-                        _mEsc(fighterId) + '">Draft Fighter</button>';
+                        _mEsc(fighterId) + '">' +
+                        ICONS.draft + '<span>Draft Fighter</span>' +
+                      '</button>';
             }
             var canQueue = !tradeCtx.ownerMemberId
                         && !tradeCtx.draftCompleted
@@ -507,18 +551,22 @@ function buildFighterModalHtml(fighter, fights, fighterId, opponentMap, tradeCtx
                         && typeof window.isQueued === 'function';
             if (canQueue) {
               var alreadyQueued = window.isQueued(fighterId);
-              var label = alreadyQueued ? 'Queued &#x2715;' : '+ Queue';
-              var queuedClass = alreadyQueued ? ' fighter-modal__queue-btn--queued' : '';
-              html += '<button class="btn-secondary fighter-modal__queue-btn' + queuedClass + '" ' +
+              var label = alreadyQueued ? 'Queued' : 'Queue';
+              var queuedClass = alreadyQueued ? ' modal-cta--queued' : '';
+              var qIcon = alreadyQueued ? ICONS.queueChecked : ICONS.queueAdd;
+              html += '<button class="modal-cta' + queuedClass + '" data-cta="queue" ' +
                         'id="fighterModalQueueBtn" data-queue-fighter="' +
-                        _mEsc(fighterId) + '">' + label + '</button>';
+                        _mEsc(fighterId) + '">' +
+                        qIcon + '<span>' + label + '</span>' +
+                      '</button>';
             }
             if (tradeCtx.ownerMemberId && tradeCtx.draftCompleted) {
-              html += '<button class="btn-secondary fighter-modal__trade-btn" ' +
-                        'id="fighterModalTradeBtn">Propose Trade</button>';
+              // Post-draft, Propose Trade is the row's primary action.
+              html += '<button class="modal-cta modal-cta--primary" data-cta="trade" ' +
+                        'id="fighterModalTradeBtn">' +
+                        ICONS.trade + '<span>Propose Trade</span>' +
+                      '</button>';
             }
-            // Wrap any CTAs in a flex row so multiple buttons sit side-by-side
-            // instead of stacking inside the hero's flex column.
             return html ? '<div class="fighter-modal__cta-row">' + html + '</div>' : '';
           })() +
         '</div>' +

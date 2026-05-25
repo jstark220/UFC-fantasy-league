@@ -973,6 +973,202 @@ body {
   flex-wrap: wrap;
 }
 
+/* ========================================================================
+   NAV TABS — segmented bar
+   One rounded outer container with hairline internal dividers and a
+   crimson-tinted "active chip" that pops out of the strip. Tabs include
+   inline SVG icons above the label, optional notification badges in the
+   icon's top-right corner, and per-icon hover micro-animations.
+   ======================================================================== */
+.nav-tabs {
+  display: inline-flex;
+  align-items: stretch;
+  padding: 4px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18),
+              inset 0 1px 0 rgba(255, 255, 255, 0.02);
+}
+
+[data-theme="light"] .nav-tabs {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.nav-tab {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 96px;
+  padding: 9px 16px 10px;
+  background-color: transparent;
+  border: none;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 600;
+  text-decoration: none;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  position: relative;
+  transition: color 0.18s ease, background-color 0.18s ease;
+}
+
+/* Hairline divider between adjacent tabs. Vertical thin line in the
+   centered 60% of the tab height, so dividers look like part of the
+   strip's geometry rather than ad-hoc bars. */
+.nav-tab + .nav-tab::before {
+  content: '';
+  position: absolute;
+  left: -1px;
+  top: 22%;
+  bottom: 22%;
+  width: 1px;
+  background-color: var(--border-subtle);
+  transition: opacity 0.18s ease;
+}
+
+.nav-tab__icon-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.nav-tab__icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  transition: color 0.2s ease, transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform-origin: center;
+}
+
+.nav-tab__label {
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* Hover — gentle background fill, no lift (we're inside a segmented bar
+   so individual lift would break the strip). Hide the dividers on either
+   side of the hovered tab so the fill reads as a clean chip. */
+.nav-tab:hover {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+.nav-tab:hover .nav-tab__icon {
+  color: var(--text-primary);
+}
+.nav-tab:hover::before,
+.nav-tab:hover + .nav-tab::before {
+  opacity: 0;
+}
+
+/* ----- Per-icon hover micro-animations ----- */
+.nav-tab[data-nav-key="leagueHome"]:hover .nav-tab__icon { transform: translateY(-2px) scale(1.05); }
+.nav-tab[data-nav-key="standings"]:hover  .nav-tab__icon { transform: translateY(-2px) scale(1.04); }
+.nav-tab[data-nav-key="freeAgency"]:hover .nav-tab__icon { transform: scale(1.12) rotate(-4deg); }
+.nav-tab[data-nav-key="trades"]:hover     .nav-tab__icon { animation: navTabTradesShuffle 0.7s ease-in-out; }
+.nav-tab[data-nav-key="lineup"]:hover     .nav-tab__icon { transform: scale(1.05) rotate(-2deg); }
+.nav-tab[data-nav-key="scoreEvent"]:hover .nav-tab__icon { animation: navTabFlagWave 0.9s ease-in-out infinite; }
+
+@keyframes navTabTradesShuffle {
+  0%   { transform: translateX(0); }
+  30%  { transform: translateX(2px); }
+  60%  { transform: translateX(-2px); }
+  100% { transform: translateX(0); }
+}
+@keyframes navTabFlagWave {
+  0%, 100% { transform: rotate(-2deg) scale(1.04); }
+  50%      { transform: rotate(4deg) scale(1.06); }
+}
+
+/* ----- Active / primary state ----- */
+/* The active tab becomes a crimson chip inside the bar. Subtle crimson
+   ring + tinted fill + crimson icon. Hides the dividers around it. */
+.nav-tab--active,
+.nav-tab--primary {
+  color: var(--text-primary);
+  background-color: rgba(193, 59, 46, 0.14);
+  box-shadow:
+    inset 0 0 0 1px rgba(193, 59, 46, 0.55),
+    0 2px 10px rgba(193, 59, 46, 0.18);
+}
+.nav-tab--active .nav-tab__icon,
+.nav-tab--primary .nav-tab__icon {
+  color: var(--accent-crimson);
+}
+.nav-tab--active::before,
+.nav-tab--primary::before,
+.nav-tab--active + .nav-tab::before,
+.nav-tab--primary + .nav-tab::before {
+  opacity: 0;
+}
+.nav-tab--active:hover,
+.nav-tab--primary:hover {
+  background-color: rgba(193, 59, 46, 0.20);
+  box-shadow:
+    inset 0 0 0 1px rgba(193, 59, 46, 0.70),
+    0 4px 14px rgba(193, 59, 46, 0.28);
+}
+
+/* ----- Notification badge ----- */
+/* Sits over the icon's top-right corner. Count form shows a number;
+   dot form is a 7px filled circle for "something new but no count". */
+.nav-tab__badge {
+  position: absolute;
+  top: -4px;
+  right: -7px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--accent-crimson);
+  color: #fff;
+  border: 1.5px solid var(--bg-secondary);
+  border-radius: 999px;
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0;
+}
+.nav-tab__badge--dot {
+  width: 9px;
+  height: 9px;
+  min-width: 0;
+  padding: 0;
+  top: -2px;
+  right: -3px;
+}
+/* When the parent tab is the active chip, the badge's border needs to
+   match the tinted-chip background, not the bar surface. */
+.nav-tab--active .nav-tab__badge,
+.nav-tab--primary .nav-tab__badge {
+  border-color: var(--bg-primary);
+}
+
+/* Compact layout on narrower screens — drop the label, keep the icons
+   visible. Active tab still announces its state via aria-current if pages
+   ever wire that. */
+@media (max-width: 720px) {
+  .nav-tab {
+    min-width: 0;
+    padding: 8px 10px;
+  }
+  .nav-tab__label {
+    font-size: 10px;
+    letter-spacing: 0.03em;
+  }
+}
+
 /* Generic content section inside the league page body */
 .league-section {
   margin-bottom: var(--space-8);
@@ -1058,6 +1254,106 @@ body {
   color: var(--text-tertiary);
   font-style: italic;
   margin: 0 0 var(--space-4) 0;
+}
+
+/* ========================================================================
+   EMPTY STATE
+   Shared "nothing here yet" card used wherever a list/section has no
+   data. Line-art glyph + headline + sub + optional CTA. Replaces the
+   old single-line .draft-empty italic-text pattern. Rendered by
+   js/empty-state.js — see EmptyState.html() / .render().
+   ======================================================================== */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--space-5);
+  padding: var(--space-12) var(--space-8);
+  background: var(--bg-secondary);
+  border: 1px dashed var(--border-strong);
+  border-radius: 12px;
+  color: var(--text-secondary);
+}
+
+.empty-state--compact {
+  padding: var(--space-8) var(--space-6);
+  border: none;
+  background: transparent;
+  gap: var(--space-3);
+}
+
+/* Icon sits in a soft tinted disc — the disc gives the line glyph a
+   visual anchor without competing with the surrounding content. */
+.empty-state__icon-wrap {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: var(--bg-tertiary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+  margin-bottom: var(--space-2);
+  position: relative;
+}
+.empty-state__icon-wrap::after {
+  /* Soft radial highlight — feels lit from the top. */
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 25%, rgba(255,255,255,0.04), transparent 60%);
+  pointer-events: none;
+}
+.empty-state--compact .empty-state__icon-wrap {
+  width: 56px;
+  height: 56px;
+}
+
+.empty-state__icon {
+  width: 36px;
+  height: 36px;
+}
+.empty-state--compact .empty-state__icon {
+  width: 28px;
+  height: 28px;
+}
+
+.empty-state__title {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--text-h3);
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+}
+
+.empty-state__body {
+  margin: 0;
+  font-size: var(--text-body-sm);
+  color: var(--text-secondary);
+  line-height: 1.6;
+  max-width: 42ch;
+}
+
+.empty-state__cta {
+  margin-top: var(--space-3);
+}
+
+/* Compact variant uses smaller title to keep proportions sensible
+   inside small panels. */
+.empty-state--compact .empty-state__title {
+  font-size: var(--text-body);
+}
+
+[data-theme="light"] .empty-state {
+  background: var(--bg-secondary);
+}
+[data-theme="light"] .empty-state__icon-wrap {
+  background: var(--bg-primary);
 }
 
 .draft-actions {
@@ -1767,11 +2063,25 @@ body {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: 7px 0;
+  padding: 7px 8px;
+  margin: 0 -8px;
   border-bottom: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  transition: background 0.12s ease;
 }
 
 .performer-row:last-of-type { border-bottom: none; }
+
+/* Interactive affordance when the row is clickable — same treatment used
+   by the free-agent rows below for consistency. */
+.performer-row[data-open-fighter] {
+  cursor: pointer;
+}
+.performer-row[data-open-fighter]:hover,
+.performer-row[data-open-fighter]:focus-visible {
+  background: var(--bg-tertiary);
+  outline: none;
+}
 
 .performer-row__rank {
   font-family: var(--font-body);
@@ -1852,11 +2162,24 @@ body {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: 7px 0;
+  padding: 7px 8px;
+  margin: 0 -8px;
   border-bottom: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  transition: background 0.12s ease;
 }
 
 .free-agent-row:last-of-type { border-bottom: none; }
+
+/* Interactive affordance for clickable rows — opens the fighter modal. */
+.free-agent-row[data-open-fighter] {
+  cursor: pointer;
+}
+.free-agent-row[data-open-fighter]:hover,
+.free-agent-row[data-open-fighter]:focus-visible {
+  background: var(--bg-tertiary);
+  outline: none;
+}
 
 .free-agent-row__photo-wrap {
   width: 36px;
@@ -2077,9 +2400,10 @@ body {
 .dashboard-league-list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-4);
 }
 
+/* ----- Old row layout (kept for any legacy callers) ----- */
 .dashboard-league-row {
   background: var(--bg-secondary);
   border: 1px solid var(--border-subtle);
@@ -2094,6 +2418,163 @@ body {
 }
 
 .dashboard-league-row:hover { border-color: var(--border-strong); }
+
+/* ========================================================================
+   DASHBOARD LEAGUE CARD (rich)
+   The whole element is an <a> linking to the league hub. Header with
+   name + commish badge + chevron, three stat tiles (rank, points behind
+   #1, next event countdown), optional "lineup not set" alert footer.
+   ======================================================================== */
+.dashboard-league-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: var(--space-7) var(--space-8);
+  text-decoration: none;
+  color: inherit;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+[data-theme="light"] .dashboard-league-card {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+.dashboard-league-card:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+}
+.dashboard-league-card:hover .dashboard-league-card__arrow {
+  color: var(--accent-crimson);
+  transform: translateX(3px);
+}
+
+.dashboard-league-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.dashboard-league-card__heading {
+  min-width: 0;
+  flex: 1;
+}
+
+.dashboard-league-card__name {
+  font-family: var(--font-display);
+  font-size: var(--text-h3);
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  line-height: 1.1;
+  margin: 0 0 var(--space-3) 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.dashboard-league-card__meta {
+  font-size: var(--text-body-sm);
+  color: var(--text-tertiary);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.dashboard-league-card__arrow {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+  transition: color 0.18s ease, transform 0.18s ease;
+  margin-top: 4px;
+}
+
+/* Three stat tiles. The "next event" tile is wider since its content is
+   a string (event name) rather than a single number. */
+.dashboard-league-card__stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr 2fr;
+  gap: var(--space-4);
+}
+@media (max-width: 720px) {
+  .dashboard-league-card__stats {
+    grid-template-columns: 1fr 1fr;
+  }
+  .league-card-stat--wide {
+    grid-column: 1 / -1;
+  }
+}
+
+.league-card-stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-5) var(--space-5);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+}
+
+.league-card-stat__value {
+  font-family: var(--font-display);
+  font-size: var(--text-h2);
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Text-mode value (the next-event name): smaller font, normal letter
+   spacing, ellipsis when too long. */
+.league-card-stat__value--text {
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.league-card-stat__value--gold   { color: var(--accent-gold); }
+.league-card-stat__value--silver { color: #C0C0C0; }
+.league-card-stat__value--bronze { color: #CD7F32; }
+
+.league-card-stat__label {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+
+/* Footer alert when the user hasn't set their lineup for the upcoming
+   event. Crimson tint so it reads as a soft urgent prompt. */
+.dashboard-league-card__alert {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: var(--space-5);
+  padding: 10px 14px;
+  background: rgba(193, 59, 46, 0.10);
+  border: 1px solid rgba(193, 59, 46, 0.30);
+  border-radius: 8px;
+  color: var(--accent-crimson);
+  font-size: var(--text-body-sm);
+  font-weight: 600;
+  align-self: flex-start;
+}
+.dashboard-league-card__alert-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
 
 .dashboard-league-row__name {
   font-family: var(--font-display);
@@ -4057,70 +4538,148 @@ body {
   max-width: 1360px;
 }
 
-/* ----- How it works modal — schedule + rules explainer ----- */
-.fight-card-modal.how-it-works-modal {
-  max-width: 640px;
-}
-.how-section {
-  margin-bottom: var(--space-6);
-}
-.how-section:last-child {
-  margin-bottom: 0;
-}
-.how-section__title {
-  font-size: var(--text-body);
-  font-weight: 700;
-  margin: 0 0 var(--space-2);
-  color: var(--text-primary);
-  display: flex;
+/* ========================================================================
+   PAGE HELP MODAL
+   Shared "How it works" overlay used on every page. The chrome reuses
+   .fight-card-modal-overlay / .fight-card-modal; these classes style only
+   the section blocks inside the body, plus the small "?" trigger button
+   that lives in each page's header.
+   ======================================================================== */
+
+/* Sit the trigger near the page name. The header uses justify-content:
+   space-between; margin-right: auto on this button keeps the right-side
+   actions (.league-header__actions) flush right while this stays left. */
+.page-help-trigger {
+  display: inline-flex;
   align-items: center;
   gap: 8px;
+  padding: 6px 12px 6px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 13px;
+  cursor: pointer;
+  margin-right: auto;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
 }
-.how-section__title-dot {
-  display: inline-block;
-  width: 10px;
-  height: 10px;
+.page-help-trigger:hover {
+  border-color: var(--accent-crimson);
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+.page-help-trigger__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
-  flex-shrink: 0;
+  background: var(--accent-crimson);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
 }
-.how-section p {
-  margin: 0 0 var(--space-2);
-  color: var(--text-secondary);
-  line-height: 1.55;
-  font-size: var(--text-body-sm);
+.page-help-trigger__label {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 11px;
+  font-weight: 700;
 }
-.how-section p:last-child { margin-bottom: 0; }
-.how-section strong { color: var(--text-primary); }
-.how-section em { color: var(--text-secondary); font-style: italic; }
-.how-section__list {
-  margin: 0 0 var(--space-2);
-  padding-left: var(--space-5);
-  color: var(--text-secondary);
-  font-size: var(--text-body-sm);
+
+/* Modal card override — slightly narrower than the fight card modal since
+   this is a reading experience, not a side-by-side comparison. */
+.fight-card-modal.page-help-modal {
+  max-width: 680px;
 }
-.how-section__list li {
-  margin-bottom: 2px;
-  line-height: 1.5;
+
+/* Give the modal title a bit more air below the eyebrow than the default
+   fight-card modal (which is a tight 2px). */
+.page-help-modal .fight-card-modal__eyebrow {
+  margin-bottom: 6px;
 }
-.how-section__schedule {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: var(--space-2);
-  font-size: var(--text-body-sm);
+
+/* Body wrapper — sets the reading column width and section rhythm. */
+.page-help__body-wrap {
+  padding: var(--space-6) var(--space-6) var(--space-6);
 }
-.how-section__schedule td {
-  padding: 6px var(--space-2) 6px 0;
-  vertical-align: top;
-  color: var(--text-secondary);
-  line-height: 1.45;
+
+.page-help__section {
+  padding: var(--space-6) 0;
   border-bottom: 1px solid var(--border-subtle);
 }
-.how-section__schedule tr:last-child td { border-bottom: none; }
-.how-section__schedule td:first-child {
+.page-help__section:first-child { padding-top: var(--space-3); }
+.page-help__section:last-child  { border-bottom: none; padding-bottom: var(--space-3); }
+
+.page-help__heading {
+  font-family: var(--font-display);
+  font-size: var(--text-h3);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text-primary);
+  margin: 0 0 var(--space-4);
+  line-height: 1.1;
+}
+
+.page-help__body {
+  color: var(--text-secondary);
+  font-size: var(--text-body-sm);
+  line-height: 1.6;
+}
+.page-help__body p {
+  margin: 0 0 var(--space-3);
+}
+.page-help__body p:last-child { margin-bottom: 0; }
+.page-help__body strong { color: var(--text-primary); }
+.page-help__body em { color: var(--text-secondary); font-style: italic; }
+
+.page-help__body ul,
+.page-help__body ol {
+  margin: 0 0 var(--space-3);
+  padding-left: var(--space-5);
+}
+.page-help__body ul:last-child,
+.page-help__body ol:last-child { margin-bottom: 0; }
+.page-help__body li {
+  margin-bottom: 4px;
+  line-height: 1.55;
+}
+.page-help__body li:last-child { margin-bottom: 0; }
+
+/* Sub-heading inside a section body (e.g. "Base scoring", "Win bonuses") */
+.page-help__subheading {
+  margin: var(--space-3) 0 var(--space-2);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-primary);
+  font-weight: 700;
+}
+.page-help__subheading:first-child { margin-top: 0; }
+
+/* Two-column schedule table used in "The fight week" section. */
+.page-help__table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-body-sm);
+}
+.page-help__table td {
+  padding: 8px var(--space-3) 8px 0;
+  vertical-align: top;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.page-help__table tr:last-child td { border-bottom: none; }
+.page-help__table td:first-child {
   white-space: nowrap;
   color: var(--text-primary);
-  padding-right: var(--space-3);
   width: 110px;
+  padding-right: var(--space-3);
 }
 
 .whole-team-modal__body {
@@ -4785,10 +5344,90 @@ body {
   gap: var(--space-3);
   padding: 10px var(--space-4);
   border-bottom: 1px solid var(--border-subtle);
-  transition: background 0.1s ease;
+  /* Position so the FV chip can absolute-pop in on hover without
+     shifting the row's layout. */
+  position: relative;
+  transition: background 0.15s ease, transform 0.15s ease,
+              box-shadow 0.15s ease, border-color 0.15s ease;
 }
 
 .lineup-roster-row:last-child { border-bottom: none; }
+
+/* Subtle lift on hover — the row tilts forward by 1px and gets a soft
+   shadow under it, signaling "you can click into this fighter". */
+.lineup-roster-row:hover {
+  background: var(--bg-tertiary);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.20);
+  z-index: 2;
+}
+[data-theme="light"] .lineup-roster-row:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+/* ----- Fantasy Value chip on the row -----
+   Layout: [#rank] | [score] [FV]
+   Reads "this fighter is #18 in the league at 73.2 FV." The vertical
+   hairline between rank and score visually separates the two pieces
+   without needing extra punctuation. */
+.lineup-roster-row__fv {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  font-family: var(--font-body);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+.lineup-roster-row__fv-rank {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.01em;
+}
+.lineup-roster-row__fv-divider {
+  width: 1px;
+  height: 12px;
+  background: var(--border-strong);
+  transition: background 0.15s ease;
+}
+.lineup-roster-row__fv-val {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.lineup-roster-row__fv-label {
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-tertiary);
+  transition: color 0.15s ease;
+}
+.lineup-roster-row:hover .lineup-roster-row__fv {
+  background: rgba(193, 59, 46, 0.10);
+  border-color: rgba(193, 59, 46, 0.40);
+}
+.lineup-roster-row:hover .lineup-roster-row__fv-rank,
+.lineup-roster-row:hover .lineup-roster-row__fv-val {
+  color: var(--accent-crimson);
+}
+.lineup-roster-row:hover .lineup-roster-row__fv-label {
+  color: var(--accent-crimson);
+  opacity: 0.85;
+}
+.lineup-roster-row:hover .lineup-roster-row__fv-divider {
+  background: rgba(193, 59, 46, 0.40);
+}
+/* On narrow rows, hide the FV chip so the stat + buttons keep priority. */
+@media (max-width: 720px) {
+  .lineup-roster-row__fv { display: none; }
+}
 
 /* Crimson left accent for currently-started fighters */
 .lineup-roster-row--started {
@@ -5471,18 +6110,87 @@ body {
   align-self: flex-start;
 }
 
-.fighter-modal__trade-btn,
-.fighter-modal__draft-btn,
-.fighter-modal__queue-btn {
-  padding: 8px 18px;
-  font-size: var(--text-body-sm);
+/* ----- Modal CTA buttons (fighter modal action row) -----
+   Shares design language with .nav-tab: hairline border, subtle
+   gradient fill, soft elevation, crimson "primary" variant. Inline
+   icon + label since these are action verbs ("Draft Fighter") rather
+   than nav destinations. */
+.modal-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-decoration: none;
+  cursor: pointer;
+  position: relative;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+  transition: color 0.18s ease, border-color 0.18s ease,
+              background-color 0.18s ease, transform 0.18s ease,
+              box-shadow 0.18s ease;
+}
+[data-theme="light"] .modal-cta {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
-/* Queued state: dimmer to read as "this is already in the queue, click
-   again to remove" rather than as a primary call to action. */
-.fighter-modal__queue-btn--queued {
-  opacity: 0.7;
+.modal-cta__icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  transition: color 0.18s ease, transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
+
+.modal-cta:hover {
+  border-color: var(--text-secondary);
+  background-color: var(--bg-tertiary);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.22);
+}
+.modal-cta:hover .modal-cta__icon {
+  color: var(--text-primary);
+}
+.modal-cta:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+}
+
+/* Per-action icon micro-animations on hover */
+.modal-cta[data-cta="draft"]:hover  .modal-cta__icon { transform: translateY(2px) scale(1.05); }
+.modal-cta[data-cta="queue"]:hover  .modal-cta__icon { transform: scale(1.12); }
+.modal-cta[data-cta="trade"]:hover  .modal-cta__icon { animation: navTabTradesShuffle 0.7s ease-in-out; }
+
+/* Primary variant — the most prominent action in the row (Draft during
+   draft, Propose Trade after). Crimson chip mirroring .nav-tab--active. */
+.modal-cta--primary {
+  color: var(--text-primary);
+  border-color: var(--accent-crimson);
+  background-color: rgba(193, 59, 46, 0.14);
+  box-shadow:
+    inset 0 0 0 1px rgba(193, 59, 46, 0.55),
+    0 2px 10px rgba(193, 59, 46, 0.20);
+}
+.modal-cta--primary .modal-cta__icon { color: var(--accent-crimson); }
+.modal-cta--primary:hover {
+  border-color: var(--accent-crimson);
+  background-color: rgba(193, 59, 46, 0.20);
+  box-shadow:
+    inset 0 0 0 1px rgba(193, 59, 46, 0.70),
+    0 4px 14px rgba(193, 59, 46, 0.30);
+}
+
+/* Queued (toggled) state — same neutral chrome but icon is checked and
+   crimson, signaling "already queued, click again to remove". */
+.modal-cta--queued .modal-cta__icon { color: var(--accent-crimson); }
+.modal-cta--queued { color: var(--text-secondary); }
 
 /* ---- Career stat tiles ---- */
 .fighter-modal__stats {
@@ -5913,9 +6621,11 @@ body {
   white-space: nowrap;
 }
 
-.standings-th--rank { width: 48px; text-align: center; }
-.standings-th--team { text-align: left; }
-.standings-th--pts  { width: 110px; text-align: right; }
+.standings-th--rank  { width: 48px;  text-align: center; }
+.standings-th--move  { width: 44px;  text-align: center; }
+.standings-th--team  { text-align: left; }
+.standings-th--trend { width: 100px; text-align: center; }
+.standings-th--pts   { width: 110px; text-align: right; }
 
 .standings-row {
   border-bottom: 1px solid var(--border-subtle);
@@ -5948,6 +6658,70 @@ body {
 .standings-rank--gold   { color: var(--accent-gold); }
 .standings-rank--silver { color: #C0C0C0; }
 .standings-rank--bronze { color: #CD7F32; }
+
+/* Medal SVG used in place of the plain rank number for the top 3. The
+   number is baked into the SVG via a <text> element so font/size match
+   the geometry of the wreath path. */
+.standings-medal {
+  width: 28px;
+  height: 28px;
+  display: inline-block;
+  vertical-align: middle;
+}
+.standings-medal--gold   { color: var(--accent-gold); }
+.standings-medal--silver { color: #C0C0C0; }
+.standings-medal--bronze { color: #CD7F32; }
+
+/* Movement column — up/down arrows with the absolute delta. Stable rows
+   show a quiet em-dash. */
+.standings-move-cell {
+  padding: var(--space-4) var(--space-3);
+  text-align: center;
+  white-space: nowrap;
+}
+.standings-movement {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+.standings-movement svg {
+  width: 10px;
+  height: 10px;
+}
+.standings-movement--up {
+  color: #4ade80;
+  background: rgba(74, 222, 128, 0.12);
+}
+.standings-movement--down {
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.12);
+}
+.standings-movement--flat {
+  color: var(--text-tertiary);
+  background: transparent;
+  padding: 2px 0;
+}
+
+/* Trend column — small inline sparkline showing the last 8 event scores.
+   currentColor lets each row pick up its own accent (crimson on .row--me). */
+.standings-trend-cell {
+  padding: var(--space-4) var(--space-3);
+  text-align: center;
+  color: var(--text-secondary);
+}
+.standings-row--me .standings-trend-cell {
+  color: var(--accent-crimson);
+}
+.standings-sparkline {
+  display: inline-block;
+  vertical-align: middle;
+}
 
 .standings-team-cell {
   padding: var(--space-4);
@@ -6222,39 +6996,48 @@ body {
 /* Tab bar */
 .waiver-tabs {
   display: flex;
-  gap: 0;
+  gap: var(--space-2);
   border-bottom: 1px solid var(--border-subtle);
-  margin-bottom: var(--space-6);
+  margin-bottom: var(--space-8);
+  padding: 0 var(--space-2);
 }
 
 .waiver-tab {
   background: none;
   border: none;
   border-bottom: 3px solid transparent;
-  padding: var(--space-3) var(--space-6);
+  padding: var(--space-4) var(--space-6);
   font-family: var(--font-body);
   font-size: var(--text-body);
   font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--text-tertiary);
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  transition: color 0.15s, border-color 0.15s;
+  transition: color 0.18s ease, border-color 0.18s ease, background 0.18s ease;
   margin-bottom: -1px; /* overlap the container border */
+  border-radius: 8px 8px 0 0;
 }
 
 .waiver-tab:first-child {
-  padding-left: 0; /* align flush with the page content edge */
+  padding-left: var(--space-6);
 }
 
 .waiver-tab:hover {
   color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.02);
+}
+[data-theme="light"] .waiver-tab:hover {
+  background: rgba(0, 0, 0, 0.025);
 }
 
 .waiver-tab--active {
   color: var(--text-primary);
+  font-weight: 700;
   border-bottom-color: var(--accent-crimson);
+  background: rgba(193, 59, 46, 0.05);
 }
 
 .waiver-tab__count {
@@ -8985,9 +9768,18 @@ label .form-label__hint {
   background: var(--bg-secondary);
   border: 1px solid var(--border-subtle);
   border-left: 3px solid var(--accent-gold);
-  border-radius: 6px;
-  padding: var(--space-4) var(--space-6);
+  border-radius: 10px;
+  padding: var(--space-4) var(--space-6) var(--space-5);
   margin-bottom: var(--space-4);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+.trade-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
+}
+[data-theme="light"] .trade-card {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .trade-card--resolved {
@@ -9009,11 +9801,20 @@ label .form-label__hint {
   font-size: var(--text-heading-sm);
   letter-spacing: 0.04em;
   color: var(--text-primary);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .trade-card__arrow {
+  display: inline-flex;
+  align-items: center;
   color: var(--accent-gold);
-  margin: 0 var(--space-2);
+  margin: 0 var(--space-1);
+}
+.trade-card__arrow-svg {
+  width: 20px;
+  height: 20px;
 }
 
 .trade-card__meta {
@@ -9038,7 +9839,13 @@ label .form-label__hint {
   .trade-card__sides {
     grid-template-columns: 1fr;
   }
-  .trade-card__divider { display: none; }
+  /* Stack the divider as a horizontal row between the two sides so the
+     FV imbalance chip stays visible. */
+  .trade-card__divider {
+    flex-direction: row;
+    padding: var(--space-1) 0;
+  }
+  .trade-card__divider .trade-card__arrow-svg { transform: rotate(90deg); }
 }
 
 .trade-card__side {
@@ -9055,36 +9862,174 @@ label .form-label__hint {
   color: var(--text-tertiary);
 }
 
+/* Center column of the trade card: SVG swap arrow with the FV-imbalance
+   chip stacked below. Reads vertically as "what's being exchanged + who's
+   getting more value." */
 .trade-card__divider {
   align-self: center;
-  font-size: 24px;
-  color: var(--accent-gold);
-}
-
-.trade-card__fighter {
   display: flex;
   flex-direction: column;
-  padding: var(--space-2) var(--space-3);
-  background: var(--bg-primary);
-  border-radius: 4px;
-  border: 1px solid var(--border-subtle);
-}
-
-.trade-card__fighter--none {
+  align-items: center;
+  gap: 6px;
   color: var(--text-tertiary);
-  font-style: italic;
+}
+.trade-card__divider .trade-card__arrow-svg {
+  width: 22px;
+  height: 22px;
 }
 
-.trade-card__fighter-name {
+/* FV imbalance chip — small crimson pill on the favored side. Points
+   left or right depending on which side is favored. */
+.trade-card__value-indicator {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  background: rgba(193, 59, 46, 0.14);
+  border: 1px solid rgba(193, 59, 46, 0.45);
+  color: var(--accent-crimson);
+  border-radius: 999px;
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  position: relative;
+}
+.trade-card__value-indicator::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 0;
+  height: 0;
+  border-top:    4px solid transparent;
+  border-bottom: 4px solid transparent;
+  transform: translateY(-50%);
+}
+.trade-card__value-indicator--proposer::before {
+  left: -7px;
+  border-right: 6px solid rgba(193, 59, 46, 0.45);
+}
+.trade-card__value-indicator--recipient::before {
+  right: -7px;
+  border-left: 6px solid rgba(193, 59, 46, 0.45);
+}
+
+/* Wrapper holding the mini fighter tiles inside each side. */
+.trade-card__tiles {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* ----- Mini fighter tile (used in trade cards) -----
+   Photo thumb + name + rank + division + FV chip. */
+.trade-fighter-tile {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 8px 10px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+.trade-fighter-tile:hover {
+  border-color: var(--border-strong);
+  transform: translateX(1px);
+}
+
+.trade-fighter-tile__photo-wrap {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--bg-tertiary);
+  overflow: hidden;
+}
+.trade-fighter-tile__photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+  display: block;
+}
+
+.trade-fighter-tile__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.trade-fighter-tile__name {
   font-size: var(--text-body);
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
 }
 
-.trade-card__fighter-div {
+.trade-fighter-tile__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: var(--text-caption);
   color: var(--text-tertiary);
+  line-height: 1.2;
+}
+
+.trade-fighter-tile__rank {
+  font-weight: 800;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  background: var(--bg-tertiary);
+}
+.trade-fighter-tile__rank--champ {
+  background: rgba(212, 175, 55, 0.18);
+  color: var(--accent-gold);
+}
+.trade-fighter-tile__rank--ranked {
+  color: var(--text-primary);
+}
+.trade-fighter-tile__rank--unranked {
+  color: var(--text-tertiary);
+}
+
+.trade-fighter-tile__div {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.trade-fighter-tile__chips {
   margin-top: 2px;
+  display: inline-flex;
+  gap: 4px;
+}
+.trade-fighter-tile__fv {
+  display: inline-flex;
+  padding: 1px 5px;
+  background: rgba(193, 59, 46, 0.10);
+  border: 1px solid rgba(193, 59, 46, 0.30);
+  color: var(--accent-crimson);
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+}
+
+.trade-fighter-tile--empty,
+.trade-fighter-tile--missing {
+  justify-content: center;
+  font-style: italic;
+  color: var(--text-tertiary);
+  padding: 14px 10px;
 }
 
 .trade-card__message {

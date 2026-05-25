@@ -238,7 +238,7 @@ async function initLineup() {
   selectedEvent   = pickDefaultEvent(availableEvents);
   recomputeLockStatus(); // sets isLocked / isPastEvent based on selectedEvent
 
-  document.title = (isViewMode ? targetMember.team_name : 'Lineup') + ' - ' + league.name;
+  document.title = (isViewMode ? targetMember.team_name : 'Roster') + ' - ' + league.name;
   document.getElementById('leagueName').textContent = league.name;
 
   // In view mode the back link returns to standings; otherwise it stays on the league page
@@ -247,12 +247,14 @@ async function initLineup() {
     document.getElementById('leagueLink').textContent = '← Standings';
   }
 
-  // Nav links — Lineup is active only when viewing your own
-  var nav = '<a href="standings.html?id=' + leagueId + '" class="btn-secondary">Standings</a>';
-  nav += '<a href="waivers.html?id='  + leagueId + '" class="btn-secondary">Free Agency</a>';
-  nav += '<a href="trades.html?id='   + leagueId + '" class="btn-secondary">Trades</a>';
-  nav += '<a href="lineup.html?id='   + leagueId + '" class="' + (isViewMode ? 'btn-secondary' : 'btn-primary') + '">My Lineup</a>';
-  document.getElementById('headerActions').innerHTML = nav;
+  // Nav tabs — Lineup is "active" only when viewing your own; in view-mode
+  // (looking at another manager's lineup) the tab is idle since the current
+  // page is technically still the lineup feature, but it's not "your" lineup.
+  LeagueNav.renderInto('headerActions', {
+    leagueId: leagueId,
+    memberId: myMemberId,
+    active:   isViewMode ? null : 'lineup'
+  });
 
   // Fetch this user's roster ONCE — it's not event-specific.
   const rostersRes = await supabaseClient
@@ -300,6 +302,15 @@ async function initLineup() {
   await loadEventData();
 
   document.getElementById('pageContent').style.display = 'block';
+
+  // Fantasy Value chips populate async — heavy load (every fight result
+  // in the DB), so render the roster first and re-render when FV resolves.
+  // The chips just stay absent if the load fails.
+  if (typeof FantasyValue !== 'undefined' && FantasyValue.ensureLoaded) {
+    FantasyValue.ensureLoaded(leagueId, leagueScoringConfig).then(function () {
+      renderRosterList();
+    }).catch(function () { /* silent */ });
+  }
 
   renderEventBanner();
   renderStarterSlots();
@@ -715,9 +726,6 @@ function renderEventBanner() {
               encodeURIComponent(leagueId) +
               (selectedEvent ? '&event=' + encodeURIComponent(selectedEvent.id) : '') +
               '">View all lineups &rarr;</a>' +
-          '<button class="btn-ghost fight-card-btn" id="howItWorksBtn" title="How fantasy works">' +
-            '<span aria-hidden="true">&#9432;</span> How it works' +
-          '</button>' +
           editEventBtn +
         '</div>' +
       '</div>' +
@@ -728,7 +736,6 @@ function renderEventBanner() {
     '</div>';
 
   document.getElementById('viewFightCardBtn').addEventListener('click', showFightCardModal);
-  document.getElementById('howItWorksBtn').addEventListener('click', showHowItWorksModal);
   document.getElementById('viewWholeTeamBtn').addEventListener('click', showWholeTeamModal);
   var editBtn = document.getElementById('editEventBtn');
   if (editBtn) editBtn.addEventListener('click', showEditEventModal);
@@ -1062,7 +1069,12 @@ function renderRosterList() {
   const el = document.getElementById('rosterList');
 
   if (myRoster.length === 0) {
-    el.innerHTML = '<p class="draft-empty">No fighters on your roster yet.</p>';
+    el.innerHTML = EmptyState.html({
+      kind:  'roster',
+      title: 'Your roster is empty',
+      body:  'Once the draft completes, your fighters will live here. Until then, hang tight.',
+      cta:   { label: 'Browse free agents', href: 'waivers.html?id=' + leagueId, kind: 'secondary' }
+    });
     return;
   }
 
@@ -1099,8 +1111,9 @@ function renderRosterList() {
 
   // Build a map of slot type -> array of fighters (in roster order)
   const groups = {};
-  ALL_DIVISIONS.forEach(function(d) { groups[d] = []; });
-  groups['any_flex'] = [];
+  MENS_DIVISIONS.forEach(function(d) { groups[d] = []; });
+  groups['womens_flex'] = [];
+  groups['any_flex']    = [];
 
   assigned.forEach(function(item) {
     if (groups[item.slotType] !== undefined) {
@@ -1120,18 +1133,18 @@ function renderRosterList() {
 
   let html = '';
 
-  // One section per weight class (men's first, then women's), each with
-  // ROSTER_SLOTS_PER_DIVISION pip total. Only render sections that have
-  // at least one fighter — empty divisions just don't appear.
-  ALL_DIVISIONS.forEach(function(div) {
-    if (groups[div].length === 0) return;
+  // One section per men's weight class, each with ROSTER_SLOTS_PER_DIVISION
+  // pip total. Empty divisions still render so the roster requirements are
+  // visible (e.g., "Heavyweight: 0 / 1" with one empty pip).
+  MENS_DIVISIONS.forEach(function(div) {
     html += renderSlotSection(DIVISION_LABELS[div], groups[div], ROSTER_SLOTS_PER_DIVISION, ctx, div);
   });
 
+  // Women's Flex — single shared slot across all three women's divisions.
+  html += renderSlotSection("Women's Flex", groups['womens_flex'], ROSTER_WOMENS_FLEX_SLOTS, ctx, 'womens_flex');
+
   // Any-division flex section — the big spillover bucket
-  if (groups['any_flex'].length > 0) {
-    html += renderSlotSection('Any-Division Flex', groups['any_flex'], ROSTER_FLEX_SLOTS, ctx, 'any_flex');
-  }
+  html += renderSlotSection('Any-Division Flex', groups['any_flex'], ROSTER_FLEX_SLOTS, ctx, 'any_flex');
 
   // Temporary Extended Roster Flex — visible only while the +3 expansion is
   // active (Thu 3am ET event-week → Sun 3am ET after event). These fighters
@@ -1197,32 +1210,51 @@ function renderRosterList() {
 //
 // Returns null when balanced; otherwise { shortages, excesses }.
 function detectRosterImbalance(roster) {
+  // Count by division + tally women's separately (they share one slot).
   const counts = {};
-  ALL_DIVISIONS.forEach(function(d) { counts[d] = 0; });
+  MENS_DIVISIONS.forEach(function(d) { counts[d] = 0; });
+  let womensTotal = 0;
 
   roster.forEach(function(f) {
-    if (counts[f.primary_division] !== undefined) {
-      counts[f.primary_division]++;
+    const div = f.primary_division;
+    if (WOMENS_DIVISIONS.indexOf(div) !== -1) {
+      womensTotal++;
+    } else if (counts[div] !== undefined) {
+      counts[div]++;
     }
   });
 
   let anyFlexDemand = 0;
   const sources = [];
-  ALL_DIVISIONS.forEach(function(d) {
+
+  // Men's divisions — each capped at ROSTER_SLOTS_PER_DIVISION (1)
+  MENS_DIVISIONS.forEach(function(d) {
     if (counts[d] > ROSTER_SLOTS_PER_DIVISION) {
       anyFlexDemand += counts[d] - ROSTER_SLOTS_PER_DIVISION;
       sources.push(DIVISION_LABELS[d] + ' (' + counts[d] + ')');
     }
   });
 
+  // Women's pool — capped at ROSTER_WOMENS_FLEX_SLOTS (1)
+  if (womensTotal > ROSTER_WOMENS_FLEX_SLOTS) {
+    anyFlexDemand += womensTotal - ROSTER_WOMENS_FLEX_SLOTS;
+    sources.push("Women's Flex (" + womensTotal + ')');
+  }
+
   const shortages = [];
   const excesses  = [];
 
-  ALL_DIVISIONS.forEach(function(d) {
+  // Shortages: every men's division must have its required fighter, and
+  // the women's pool must have at least one fighter. We don't flag
+  // shortage on individual women's divisions — only the pool as a whole.
+  MENS_DIVISIONS.forEach(function(d) {
     if (counts[d] < ROSTER_SLOTS_PER_DIVISION) {
       shortages.push(DIVISION_LABELS[d] + ' (' + counts[d] + ' of ' + ROSTER_SLOTS_PER_DIVISION + ')');
     }
   });
+  if (womensTotal < ROSTER_WOMENS_FLEX_SLOTS) {
+    shortages.push("Women's Flex (" + womensTotal + ' of ' + ROSTER_WOMENS_FLEX_SLOTS + ')');
+  }
 
   if (anyFlexDemand > ROSTER_FLEX_SLOTS) {
     excesses.push(
@@ -1488,6 +1520,25 @@ function renderRosterRow(fighter, ctx, slotType) {
       '</span>';
   }
 
+  // Fantasy Value chip — populates async after FantasyValue.ensureLoaded.
+  // Layout: league rank → divider → score → "FV" label. Reads as
+  // "this fighter is #18 in the league at 73.2 FV."
+  let fvChip = '';
+  if (typeof FantasyValue !== 'undefined' && FantasyValue.scoreFor) {
+    const fvScore = FantasyValue.scoreFor(fighter.id);
+    if (typeof fvScore === 'number') {
+      const fvRankInfo = FantasyValue.rankFor && FantasyValue.rankFor(fighter.id);
+      const rankStr    = (fvRankInfo && fvRankInfo.rank) ? '#' + fvRankInfo.rank : '—';
+      fvChip =
+        '<span class="lineup-roster-row__fv" title="League rank · Fantasy Value score">' +
+          '<span class="lineup-roster-row__fv-rank">' + escapeHtml(rankStr) + '</span>' +
+          '<span class="lineup-roster-row__fv-divider" aria-hidden="true"></span>' +
+          '<span class="lineup-roster-row__fv-val">' + fvScore.toFixed(1) + '</span>' +
+          '<span class="lineup-roster-row__fv-label">FV</span>' +
+        '</span>';
+    }
+  }
+
   return (
     '<div class="lineup-roster-row' + rowClass + '" id="roster-row-' + fighter.id + '">' +
       '<div class="lineup-roster-row__photo-wrap">' + photoHtml + '</div>' +
@@ -1504,6 +1555,7 @@ function renderRosterRow(fighter, ctx, slotType) {
           : nextFightLine) +
         '<span class="lineup-roster-row__division">' + escapeHtml(divLine) + '</span>' +
       '</div>' +
+      fvChip +
       rightStat +
       btnHtml +
       flexBtn +
@@ -1968,94 +2020,6 @@ function showFightCardModal() {
 }
 
 // ========================================================================
-// HOW IT WORKS MODAL
-// Explains roster construction, the weekly schedule, waivers, and the
-// event-week +3 expansion to managers who know UFC but are new to fantasy.
-// All content is static — pulled from the same constants the rest of the
-// page uses (ROSTER_SIZE_BASE, ROSTER_FLEX_SLOTS, etc.) so it stays in
-// sync if those values ever change.
-// ========================================================================
-function showHowItWorksModal() {
-  var existing = document.getElementById('howItWorksModal');
-  if (existing) existing.remove();
-
-  var bodyHtml =
-    '<section class="how-section">' +
-      '<h3 class="how-section__title">Your roster</h3>' +
-      '<p>You own <strong>' + ROSTER_SIZE_BASE + ' fighters</strong> at a time:</p>' +
-      '<ul class="how-section__list">' +
-        '<li><strong>' + ROSTER_SLOTS_PER_DIVISION + ' fighter per weight class</strong> — 8 men\'s divisions + 3 women\'s = 11 slots</li>' +
-        '<li><strong>' + ROSTER_FLEX_SLOTS + ' flex slots</strong> for fighters in any weight class</li>' +
-      '</ul>' +
-      '<p>Before each UFC event, you pick starters from your roster — <strong>3 for numbered PPVs</strong> (UFC 329, UFC 330, …) and <strong>2 for Fight Nights</strong>. Only they score points for you.</p>' +
-    '</section>' +
-
-    '<section class="how-section">' +
-      '<h3 class="how-section__title">Weekly schedule</h3>' +
-      '<p>UFC events are on Saturdays. The week around each event runs like this — all cutoffs are <strong>3am ET</strong>:</p>' +
-      '<table class="how-section__schedule">' +
-        '<tr><td><strong>Thursday</strong></td><td>Pre-event waivers open. Roster cap expands by +3 (numbered PPV) or +2 (Fight Night) — Temporary Flex slots</td></tr>' +
-        '<tr><td><strong>Friday</strong></td><td>Pre-event waiver claims process — worst standings get first pick</td></tr>' +
-        '<tr><td><strong>Saturday</strong></td><td>Event day. Lineup locks at the first prelim (about 5pm ET)</td></tr>' +
-        '<tr><td><strong>Sunday</strong></td><td>Post-event waivers open. Cap reverts to ' + ROSTER_SIZE_BASE + '</td></tr>' +
-        '<tr><td><strong>Tuesday</strong></td><td>Post-event waiver claims process</td></tr>' +
-        '<tr><td><strong>Wednesday</strong></td><td>Auto-drop — anyone still over ' + ROSTER_SIZE_BASE + ' has their newest fighters dropped automatically</td></tr>' +
-      '</table>' +
-    '</section>' +
-
-    '<section class="how-section">' +
-      '<h3 class="how-section__title">Waivers vs free agency</h3>' +
-      '<p>During the two waiver windows (Thu&ndash;Fri and Sun&ndash;Tue), every roster add is a <strong>claim</strong> — not an instant pickup. If multiple managers claim the same fighter, the one with the worst standings wins.</p>' +
-      '<p>Outside those windows, available fighters are still on waivers for 48 hours after they\'re dropped (called <em>rolling waivers</em>). After 48 hours they become free agents and you can grab them instantly.</p>' +
-    '</section>' +
-
-    '<section class="how-section">' +
-      '<h3 class="how-section__title">' +
-        '<span class="how-section__title-dot" style="background: var(--accent-temporary);"></span>' +
-        'Event-week expansion' +
-      '</h3>' +
-      '<p>From <strong>Thursday 3am ET to Sunday 3am ET</strong> of every event week, you get <strong>' + expansionSlots + ' extra roster slots</strong> — shown in teal as <em>Temporary Flex</em>. Stack up on fighters competing this weekend, even if your roster\'s already at ' + ROSTER_SIZE_BASE + '.</p>' +
-      '<p>Wednesday\'s auto-drop will trim you back to ' + ROSTER_SIZE_BASE + ', cutting your <em>most recently added</em> fighters first. <strong>Active manager perk:</strong> if you make ' + expansionSlots + '+ manual drops during the expansion window, you skip auto-drop entirely.</p>' +
-    '</section>' +
-
-    '<section class="how-section">' +
-      '<h3 class="how-section__title">Scoring</h3>' +
-      '<p>Fighters earn points from actual fight stats: significant strikes, takedowns, knockdowns, control time. Wins, finishes, and big-stage bouts get bonus multipliers. Beating a top-ranked or champion opponent earns extra credit.</p>' +
-      '<p>Click any fighter\'s name to see their full scoring breakdown, fight history, and projected fantasy value.</p>' +
-    '</section>';
-
-  var modal = document.createElement('div');
-  modal.id = 'howItWorksModal';
-  modal.className = 'fight-card-modal-overlay';
-  modal.innerHTML =
-    '<div class="fight-card-modal how-it-works-modal" role="dialog" aria-modal="true" aria-label="How fantasy works">' +
-      '<div class="fight-card-modal__header">' +
-        '<div>' +
-          '<p class="fight-card-modal__eyebrow">Welcome to Knockdown</p>' +
-          '<p class="fight-card-modal__title">How fantasy works</p>' +
-        '</div>' +
-        '<button class="fight-card-modal__close" id="closeHowItWorksBtn" aria-label="Close">&times;</button>' +
-      '</div>' +
-      '<div class="fight-card-modal__body">' + bodyHtml + '</div>' +
-    '</div>';
-
-  document.body.appendChild(modal);
-  document.getElementById('closeHowItWorksBtn').addEventListener('click', closeHowItWorksModal);
-  modal.addEventListener('click', function(e) { if (e.target === modal) closeHowItWorksModal(); });
-  document.addEventListener('keydown', handleHowItWorksEscape);
-}
-
-function closeHowItWorksModal() {
-  var modal = document.getElementById('howItWorksModal');
-  if (modal) modal.remove();
-  document.removeEventListener('keydown', handleHowItWorksEscape);
-}
-
-function handleHowItWorksEscape(e) {
-  if (e.key === 'Escape') closeHowItWorksModal();
-}
-
-// ========================================================================
 // WHOLE TEAM MODAL
 // Compact 5×4 grid of every fighter on the user's roster, fits on a single
 // desktop screen without scrolling. Starters are highlighted; click any
@@ -2109,7 +2073,7 @@ function showWholeTeamModal() {
       '</div>' +
       '<div class="fight-card-modal__body whole-team-modal__body">' +
         (myRoster.length === 0
-          ? '<p class="draft-empty">No fighters on your roster yet.</p>'
+          ? EmptyState.html({ kind: 'roster', title: 'No fighters yet', body: 'Your drafted fighters will live here once the draft completes.' })
           : '<div class="whole-team-sections">' + sectionsHtml + '</div>') +
       '</div>' +
     '</div>';
@@ -2390,13 +2354,16 @@ async function saveEditEvent() {
 // greedily assigns each to its slot category.
 // ========================================================================
 function assignSlots(fighters) {
-  // Greedy slot assignment: each weight class gets up to
-  // ROSTER_SLOTS_PER_DIVISION slots; everything else falls into the
-  // Any-Division Flex pool (up to ROSTER_FLEX_SLOTS). Pinned fighters
-  // (slot_override = 'any_flex') claim their flex slot first so the
-  // algorithm doesn't hand those slots to ordinary overflow fighters.
+  // Greedy slot assignment for the new construction rules:
+  //   * Each men's division gets up to ROSTER_SLOTS_PER_DIVISION slots (1).
+  //   * Women's divisions share a single Women's Flex slot — first women's
+  //     fighter assigned fills it, subsequent ones overflow to any-flex.
+  //   * Any-Division Flex catches everything else (up to ROSTER_FLEX_SLOTS).
+  //   * Pinned fighters (slot_override = 'any_flex') claim a flex slot first
+  //     so the algorithm doesn't hand those slots to ordinary overflow.
   const divCounts = {};
-  ALL_DIVISIONS.forEach(function(d) { divCounts[d] = 0; });
+  MENS_DIVISIONS.forEach(function(d) { divCounts[d] = 0; });
+  let womensFlexFilled = 0;
   const result = [];
 
   const pinned   = fighters.filter(function(f) { return f.slot_override === 'any_flex'; });
@@ -2408,11 +2375,21 @@ function assignSlots(fighters) {
 
   unpinned.forEach(function(f) {
     const div = f.primary_division;
-    const cap = ROSTER_SLOTS_PER_DIVISION;
-    if (divCounts[div] !== undefined && divCounts[div] < cap) {
+    if (WOMENS_DIVISIONS.indexOf(div) !== -1) {
+      // Women's fighter — fill the shared Women's Flex slot first, then
+      // overflow to any-flex.
+      if (womensFlexFilled < ROSTER_WOMENS_FLEX_SLOTS) {
+        womensFlexFilled++;
+        result.push({ fighter: f, slotType: 'womens_flex' });
+      } else {
+        result.push({ fighter: f, slotType: 'any_flex' });
+      }
+    } else if (divCounts[div] !== undefined && divCounts[div] < ROSTER_SLOTS_PER_DIVISION) {
+      // Men's division with an open slot
       divCounts[div]++;
       result.push({ fighter: f, slotType: div });
     } else {
+      // Men's division already full, or unknown division → any-flex
       result.push({ fighter: f, slotType: 'any_flex' });
     }
   });

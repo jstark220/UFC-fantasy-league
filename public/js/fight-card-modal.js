@@ -300,7 +300,12 @@
 
     var sectionsHtml = '';
     if (fights.length === 0) {
-      sectionsHtml = '<p class="draft-empty" style="padding:var(--space-6)">No fights yet for this event. The card hasn\'t been announced or scraped.</p>';
+      sectionsHtml = EmptyState.html({
+        kind:    'events',
+        title:   'Card not announced',
+        body:    'Fights for this event haven\'t been published yet. Check back closer to fight week.',
+        compact: true
+      });
     } else {
       if (mainCard.length > 0) {
         sectionsHtml +=

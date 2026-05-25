@@ -25,13 +25,18 @@
 //   * 1 slot per weight class (11 total — 8 men's + 3 women's)
 //   * 6 Any-Division Flex slots (any fighter, regardless of weight class)
 //   * Base size: 17.  Event-week expansion adds +3 to 20.
-var ROSTER_SLOTS_PER_DIVISION = 1;
-var ROSTER_FLEX_SLOTS         = 6;
-var ROSTER_SIZE_BASE          = 17;   // 11 division + 6 flex
+var ROSTER_SLOTS_PER_DIVISION = 1;  // applies to MEN'S divisions only
+var ROSTER_WOMENS_FLEX_SLOTS  = 1;  // single shared slot across all three women's divisions
+var ROSTER_FLEX_SLOTS         = 6;  // any-division flex
+var ROSTER_SIZE_BASE          = 15; // 8 men's + 1 women's-flex + 6 any-flex
+
+// Division keys grouped by sex — used by construction-check + slot
+// assignment to pool women's divisions into a single shared slot.
+var WOMENS_DIVISIONS_KEYS = ['strawweight', 'flyweight_w', 'bantamweight_w'];
 // Maximum the cap can grow to during event-week expansion. Used as a
 // fallback when no event context is provided; callers that DO know the
 // upcoming event should use getEventBonusSize(event) instead.
-var ROSTER_SIZE_EXPANDED      = 20;   // event-week +3 cap (numbered events)
+var ROSTER_SIZE_EXPANDED      = 18; // event-week +3 cap (numbered events)
 
 // Defaults when a league's scoring_config doesn't override these. Numbered
 // PPVs get 3 starters / +3 TERF; Fight Nights get 2 starters / +2 TERF.

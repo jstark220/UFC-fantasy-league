@@ -67,11 +67,11 @@ async function initStandings() {
   document.title = 'Standings - ' + league.name;
   document.getElementById('leagueName').textContent = league.name;
 
-  var nav = '<a href="standings.html?id=' + leagueId + '" class="btn-primary">Standings</a>';
-  nav    += '<a href="waivers.html?id='   + leagueId + '" class="btn-secondary">Free Agency</a>';
-  nav    += '<a href="trades.html?id='    + leagueId + '" class="btn-secondary">Trades</a>';
-  nav    += '<a href="lineup.html?id='    + leagueId + '" class="btn-secondary">My Lineup</a>';
-  document.getElementById('headerActions').innerHTML = nav;
+  LeagueNav.renderInto('headerActions', {
+    leagueId: leagueId,
+    memberId: myMember.id,
+    active:   'standings'
+  });
 
   var standings = computeStandings(members, scores);
   renderStandings(standings, myMember.id);
@@ -81,9 +81,14 @@ async function initStandings() {
 
 // ========================================================================
 // COMPUTE STANDINGS
-// Returns members sorted by total points descending, each entry annotated
-// with total, lastEvent (points at the most recently scored event), and
-// last30d (points from events within the past 30 days).
+// Returns members sorted by total points descending. Each entry includes:
+//   total      — cumulative points
+//   lastEvent  — points at the most recently scored event
+//   last30d    — points from events within the past 30 days
+//   history    — array of points per event (chronological, oldest first,
+//                trimmed to the last 8 events) for the sparkline
+//   prevRank   — this member's rank AFTER the second-to-last event, so
+//                we can compute movement (current rank vs previous)
 // ========================================================================
 function computeStandings(members, scores) {
   var today = new Date();
@@ -91,48 +96,159 @@ function computeStandings(members, scores) {
   var thirtyDaysAgo = new Date(today);
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-  // Find the event_id with the latest event_date among all scored events
-  var latestEventId   = null;
-  var latestEventDate = null;
-  scores.forEach(function(s) {
+  // ---- Group raw score rows by event, ordered chronologically ----
+  // We pre-sort once so the cumulative-rank pass below can iterate in
+  // order without re-sorting per member.
+  var eventBuckets = {};   // eventId -> { date, pointsByMember }
+  scores.forEach(function (s) {
     if (!s.event) return;
-    var d = new Date(s.event.event_date + 'T12:00:00');
-    if (!latestEventDate || d > latestEventDate) {
-      latestEventDate = d;
-      latestEventId   = s.event.id;
+    if (!eventBuckets[s.event.id]) {
+      eventBuckets[s.event.id] = {
+        date:            new Date(s.event.event_date + 'T12:00:00'),
+        pointsByMember:  {}
+      };
     }
+    var b = eventBuckets[s.event.id];
+    b.pointsByMember[s.league_member_id] = (b.pointsByMember[s.league_member_id] || 0) + (s.total_points || 0);
   });
+  var orderedEvents = Object.keys(eventBuckets)
+    .map(function (id) { return { id: id, date: eventBuckets[id].date, pts: eventBuckets[id].pointsByMember }; })
+    .sort(function (a, b) { return a.date.getTime() - b.date.getTime(); });
 
-  // Seed every member at zero so all appear even with no score rows
+  // ---- Seed every member at zero ----
+  // historyMap holds per-member arrays of points per event (chronological).
   var memberMap = {};
-  members.forEach(function(m) {
-    memberMap[m.id] = { total: 0, lastEvent: 0, last30d: 0 };
+  members.forEach(function (m) {
+    memberMap[m.id] = { total: 0, lastEvent: 0, last30d: 0, history: [] };
   });
 
-  scores.forEach(function(s) {
-    if (!memberMap[s.league_member_id]) return;
-    var pts = s.total_points || 0;
-    memberMap[s.league_member_id].total += pts;
+  // ---- Walk events in order, accumulate totals + history ----
+  // After each event we snapshot the current ranking. The "previous rank"
+  // captured before the final event is what powers the movement arrows.
+  var rankByMemberPrev = {};
+  for (var i = 0; i < orderedEvents.length; i++) {
+    var ev = orderedEvents[i];
+    var isLast       = i === orderedEvents.length - 1;
+    var isSecondLast = i === orderedEvents.length - 2;
 
-    if (s.event) {
-      var eventDate = new Date(s.event.event_date + 'T12:00:00');
+    // Update running totals + per-event history first.
+    members.forEach(function (m) {
+      var pts = ev.pts[m.id] || 0;
+      memberMap[m.id].total += pts;
+      memberMap[m.id].history.push(pts);
 
-      if (s.event.id === latestEventId) {
-        memberMap[s.league_member_id].lastEvent += pts;
+      if (isLast) memberMap[m.id].lastEvent = pts;
+      if (ev.date >= thirtyDaysAgo && ev.date <= today) {
+        memberMap[m.id].last30d += pts;
       }
+    });
 
-      if (eventDate >= thirtyDaysAgo && eventDate <= today) {
-        memberMap[s.league_member_id].last30d += pts;
-      }
+    // Snapshot ranking AFTER the second-to-last event so it represents
+    // "rank before the most recent event's points landed."
+    if (isSecondLast) {
+      var snap = members.slice().sort(function (a, b) {
+        var d = memberMap[b.id].total - memberMap[a.id].total;
+        return d !== 0 ? d : a.team_name.localeCompare(b.team_name);
+      });
+      snap.forEach(function (m, idx) { rankByMemberPrev[m.id] = idx + 1; });
     }
+  }
+
+  // Trim history to the last 8 events for the sparkline.
+  members.forEach(function (m) {
+    var h = memberMap[m.id].history;
+    if (h.length > 8) memberMap[m.id].history = h.slice(h.length - 8);
   });
 
-  return members.map(function(m) {
-    return { member: m, total: memberMap[m.id].total, lastEvent: memberMap[m.id].lastEvent, last30d: memberMap[m.id].last30d };
-  }).sort(function(a, b) {
+  return members.map(function (m) {
+    return {
+      member:    m,
+      total:     memberMap[m.id].total,
+      lastEvent: memberMap[m.id].lastEvent,
+      last30d:   memberMap[m.id].last30d,
+      history:   memberMap[m.id].history,
+      prevRank:  rankByMemberPrev[m.id] != null ? rankByMemberPrev[m.id] : null
+    };
+  }).sort(function (a, b) {
     var diff = b.total - a.total;
     return diff !== 0 ? diff : a.member.team_name.localeCompare(b.member.team_name);
   });
+}
+
+// ========================================================================
+// SPARKLINE
+// Small inline SVG line chart for a manager's last-N event scores. No
+// axes, no labels — just the shape. Uses currentColor so it inherits
+// the row's text color (or a crimson override on the user's own row).
+// ========================================================================
+function sparklineSvg(values, opts) {
+  opts = opts || {};
+  var w     = opts.width  || 80;
+  var h     = opts.height || 22;
+  if (!values || values.length < 2) {
+    return '<svg class="standings-sparkline" viewBox="0 0 ' + w + ' ' + h + '" aria-hidden="true">' +
+             '<line x1="2" y1="' + (h / 2) + '" x2="' + (w - 2) + '" y2="' + (h / 2) + '" ' +
+                   'stroke="currentColor" stroke-width="1" stroke-dasharray="2 3" opacity="0.4" />' +
+           '</svg>';
+  }
+  var max = Math.max.apply(null, values);
+  var min = Math.min.apply(null, values);
+  var range = max - min || 1;
+  var stepX = (w - 4) / (values.length - 1);
+  // Map y so larger values sit higher (smaller y). Pad top/bottom 2px.
+  var points = values.map(function (v, i) {
+    var x = 2 + i * stepX;
+    var y = 2 + (1 - (v - min) / range) * (h - 4);
+    return x.toFixed(1) + ',' + y.toFixed(1);
+  }).join(' ');
+  // Trailing dot on the latest point so the eye finds "where we are now."
+  var lastIdx = values.length - 1;
+  var lastX = 2 + lastIdx * stepX;
+  var lastY = 2 + (1 - (values[lastIdx] - min) / range) * (h - 4);
+  return (
+    '<svg class="standings-sparkline" viewBox="0 0 ' + w + ' ' + h + '" aria-hidden="true">' +
+      '<polyline points="' + points + '" fill="none" stroke="currentColor" stroke-width="1.5" ' +
+                'stroke-linecap="round" stroke-linejoin="round" />' +
+      '<circle cx="' + lastX.toFixed(1) + '" cy="' + lastY.toFixed(1) + '" r="2" fill="currentColor" />' +
+    '</svg>'
+  );
+}
+
+// Movement chip helper — given current rank + previous rank, returns the
+// arrow markup. Stable (─) when ranks match or there's no previous data.
+function movementChipHtml(currentRank, previousRank) {
+  if (previousRank == null) {
+    return '<span class="standings-movement standings-movement--flat" aria-label="No change">─</span>';
+  }
+  var delta = previousRank - currentRank;  // positive = moved up
+  if (delta === 0) {
+    return '<span class="standings-movement standings-movement--flat" aria-label="No change">─</span>';
+  }
+  if (delta > 0) {
+    return '<span class="standings-movement standings-movement--up" aria-label="Up ' + delta + '">' +
+             '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3" /><path d="m3 6 3-3 3 3" /></svg>' +
+             delta +
+           '</span>';
+  }
+  return '<span class="standings-movement standings-movement--down" aria-label="Down ' + (-delta) + '">' +
+           '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3v6" /><path d="m3 6 3 3 3-3" /></svg>' +
+           (-delta) +
+         '</span>';
+}
+
+// Medal SVG for #1–#3. Returns empty string for #4+.
+function medalSvg(rank) {
+  if (rank > 3) return '';
+  var klass = rank === 1 ? 'standings-medal--gold'
+            : rank === 2 ? 'standings-medal--silver'
+            :              'standings-medal--bronze';
+  return (
+    '<svg class="standings-medal ' + klass + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<path d="M8 3 L10 11 M16 3 L14 11" />' +
+      '<circle cx="12" cy="15" r="6" fill="currentColor" fill-opacity="0.15" />' +
+      '<text x="12" y="18" text-anchor="middle" font-family="system-ui" font-size="7" font-weight="800" fill="currentColor" stroke="none">' + rank + '</text>' +
+    '</svg>'
+  );
 }
 
 // ========================================================================
@@ -155,6 +271,10 @@ function renderStandings(standings, myMemberId) {
                   : rank === 2 ? ' standings-rank--silver'
                   : rank === 3 ? ' standings-rank--bronze' : '';
 
+    // Top-3 get a medal glyph alongside the number; otherwise just the
+    // plain rank number.
+    var rankGlyph = medalSvg(rank);
+
     var totalCell = entry.total > 0
       ? '<button class="standings-pts-link" type="button" ' +
               'data-member-id="' + escapeHtml(member.id) + '" ' +
@@ -168,14 +288,18 @@ function renderStandings(standings, myMemberId) {
     return (
       '<tr class="standings-row' + (isMe ? ' standings-row--me' : '') + '">' +
         '<td class="standings-rank-cell">' +
-          '<span class="standings-rank' + rankClass + '">' + rank + '</span>' +
+          '<span class="standings-rank' + rankClass + '">' +
+            (rankGlyph || rank) +
+          '</span>' +
         '</td>' +
+        '<td class="standings-move-cell">' + movementChipHtml(rank, entry.prevRank) + '</td>' +
         '<td class="standings-team-cell">' +
           '<a href="lineup.html?id=' + leagueId + '&member=' + escapeHtml(member.id) + '" class="standings-team-link">' +
             escapeHtml(member.team_name) +
           '</a>' +
           (isMe ? '<span class="standings-you">you</span>' : '') +
         '</td>' +
+        '<td class="standings-trend-cell">' + sparklineSvg(entry.history, { width: 88, height: 22 }) + '</td>' +
         '<td class="standings-pts-cell">' + totalCell + '</td>' +
         '<td class="standings-pts-cell">' + formatDelta(entry.lastEvent) + '</td>' +
         '<td class="standings-pts-cell">' + formatDelta(entry.last30d)   + '</td>' +
@@ -194,7 +318,9 @@ function renderStandings(standings, myMemberId) {
       '<thead>' +
         '<tr>' +
           '<th class="standings-th standings-th--rank">#</th>' +
+          '<th class="standings-th standings-th--move" title="Movement since last event">Δ</th>' +
           '<th class="standings-th standings-th--team">Team</th>' +
+          '<th class="standings-th standings-th--trend">Trend</th>' +
           '<th class="standings-th standings-th--pts">Total Pts</th>' +
           '<th class="standings-th standings-th--pts">Last Event</th>' +
           '<th class="standings-th standings-th--pts">Last 30 Days</th>' +
@@ -374,7 +500,12 @@ function renderPtsBreakdownBody() {
 
   var listHtml = '';
   if (rows.length === 0) {
-    listHtml = '<p class="draft-empty" style="padding: var(--space-6)">No completed fights yet for this manager.</p>';
+    listHtml = EmptyState.html({
+      kind:    'standings',
+      title:   'No completed fights',
+      body:    'This manager\'s starters haven\'t scored any points yet.',
+      compact: true
+    });
   } else {
     listHtml = rows.map(function (r) {
       var photoHtml = r.fighterPhoto

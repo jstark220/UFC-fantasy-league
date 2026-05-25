@@ -237,7 +237,11 @@ function renderFightHistory(fights, fighterId, opponentMap) {
     '(' + fights.length + ')';
 
   if (fights.length === 0) {
-    el.innerHTML = '<p class="draft-empty">No fight results recorded yet.</p>';
+    el.innerHTML = EmptyState.html({
+      kind:  'standings',
+      title: 'No fights logged',
+      body:  'Fight history will appear here once results are recorded.'
+    });
     return;
   }
 
@@ -323,8 +327,11 @@ function renderFightHistory(fights, fighterId, opponentMap) {
 // Placeholder until fight card data is seeded into ufc_events.
 // ========================================================================
 function renderNextFight() {
-  document.getElementById('nextFight').innerHTML =
-    '<p class="draft-empty">No upcoming fight booked yet.</p>';
+  document.getElementById('nextFight').innerHTML = EmptyState.html({
+    kind:  'events',
+    title: 'No upcoming fight',
+    body:  'This fighter doesn\'t have a booked bout yet.'
+  });
 }
 
 // ========================================================================
