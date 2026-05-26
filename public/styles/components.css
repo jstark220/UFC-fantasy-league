@@ -1579,6 +1579,25 @@ body {
   margin-top: var(--space-3);
 }
 
+/* Wrapper for both the Enter Draft Room button and the Mock Draft link
+   inside the scheduled-pre-draft block. Keeps them on the same row. */
+.draft-schedule__actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-top: var(--space-3);
+}
+.draft-schedule__actions .draft-schedule__enter { margin-top: 0; }
+
+/* Mock-draft link variant — same shape as the existing ghost button but
+   slightly de-emphasized so the primary draft entry stays the headline. */
+.draft-schedule__mock,
+.league-mock-link {
+  font-size: var(--text-caption);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
 
 /* ========================================================================
    DRAFT TIME MODAL
@@ -8223,7 +8242,45 @@ select.form-input option,
 /* Pick clock — sits next to the pick counter on the right side of the
    draft status bar. Color states (low/critical/expired) tighten the
    visual urgency as the clock approaches zero. */
+/* "Your next pick" indicator — always-visible chip in the status strip.
+   Sits next to the pick clock; hidden when it's already your turn or the
+   draft is done. Subdued styling so the gold pick clock stays dominant
+   when both are visible. */
+.draft-next-pick {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(193, 59, 46, 0.10);
+  border: 1px solid rgba(193, 59, 46, 0.35);
+  font-variant-numeric: tabular-nums;
+}
+.draft-next-pick[hidden] { display: none; }
+.draft-next-pick__label {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--accent-crimson);
+  opacity: 0.85;
+}
+.draft-next-pick__value {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-family: var(--font-display);
+  font-size: 13px;
+  color: var(--text-primary);
+  letter-spacing: 0.02em;
+}
+.draft-next-pick__num   { color: var(--accent-crimson); }
+.draft-next-pick__sep   { color: var(--text-tertiary); opacity: 0.6; }
+.draft-next-pick__count { font-family: var(--font-body); font-size: 11px; font-weight: 600; color: var(--text-secondary); }
+.draft-next-pick__eta   { font-family: var(--font-body); font-size: 11px; font-weight: 600; color: var(--text-secondary); }
+
 .draft-timer {
+  position: relative;
   display: inline-flex;
   align-items: baseline;
   gap: 8px;
@@ -8231,7 +8288,39 @@ select.form-input option,
   border-radius: 6px;
   background: rgba(74, 222, 128, 0.12);
   border: 1px solid rgba(74, 222, 128, 0.4);
-  transition: background 0.2s ease, border-color 0.2s ease;
+  /* Default color matches the green text — drives currentColor for the
+     ring. Urgency state classes override this. */
+  color: #4ade80;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  /* Ring + label + value sit on the same baseline; ring is absolutely
+     positioned so it doesn't affect text layout. */
+  overflow: hidden;
+}
+/* Conic-gradient progress ring — fills the timer pill from full to empty
+   as --timer-progress decreases from 1 to 0. JS updates the property every
+   200ms so the sweep reads as a continuous wipe rather than a tick.
+   Sits behind the text (z-index: 0) with the text on top (z-index: 1). */
+.draft-timer__ring {
+  position: absolute;
+  inset: 0;
+  background: conic-gradient(
+    from -90deg,
+    currentColor 0,
+    currentColor calc(var(--timer-progress, 1) * 360deg),
+    transparent calc(var(--timer-progress, 1) * 360deg),
+    transparent 360deg
+  );
+  /* Match the parent's color tint at low opacity — the conic gradient picks
+     up the current text color so it shifts with the urgency states. */
+  opacity: 0.18;
+  pointer-events: none;
+  z-index: 0;
+  transition: opacity 0.2s ease;
+}
+.draft-timer__label,
+.draft-timer__value {
+  position: relative;
+  z-index: 1;
 }
 .draft-timer__label {
   font-size: 9px;
@@ -8250,37 +8339,43 @@ select.form-input option,
   text-align: right;
 }
 
-/* < 30s — gold warning */
+/* < 30s — gold warning. Color set on the wrapper too so the ring picks it up. */
 .draft-timer--low {
   background: var(--accent-gold-subtle);
   border-color: rgba(212, 168, 75, 0.5);
+  color: var(--accent-gold);
 }
 .draft-timer--low .draft-timer__label,
 .draft-timer--low .draft-timer__value {
   color: var(--accent-gold);
 }
 
-/* < 10s — crimson, slow pulse to draw the eye */
+/* < 10s — crimson, slow pulse to draw the eye. Ring opacity bumps up so
+   it reads as urgent without competing with the pulse glow. */
 .draft-timer--critical {
   background: rgba(193, 59, 46, 0.15);
   border-color: rgba(193, 59, 46, 0.6);
+  color: var(--accent-crimson);
   animation: draft-timer-pulse 1s ease-in-out infinite;
 }
 .draft-timer--critical .draft-timer__label,
 .draft-timer--critical .draft-timer__value {
   color: var(--accent-crimson);
 }
+.draft-timer--critical .draft-timer__ring { opacity: 0.32; }
 
 /* 0:00 — solid crimson, no animation. The pick is "expired" but still open
-   in v1 since we don't auto-pick yet. */
+   in v1 since we don't auto-pick yet. Ring full and dim. */
 .draft-timer--expired {
   background: rgba(193, 59, 46, 0.22);
   border-color: var(--accent-crimson);
+  color: var(--accent-crimson);
 }
 .draft-timer--expired .draft-timer__label,
 .draft-timer--expired .draft-timer__value {
   color: var(--accent-crimson);
 }
+.draft-timer--expired .draft-timer__ring { opacity: 0.4; }
 
 @keyframes draft-timer-pulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(193, 59, 46, 0.4); }
@@ -8309,6 +8404,81 @@ select.form-input option,
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--text-tertiary);
+}
+
+/* Right-side cluster of the queue panel header — holds the empty/queued
+   hint AND the auto-draft toggle so they share the same baseline. */
+.draft-queue-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* Auto-draft toggle pill. Subtle when off (just a faded outline), full
+   crimson with a pulsing dot when on. Sits inline with the queue hint. */
+.draft-autodraft-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.draft-autodraft-toggle:hover {
+  border-color: var(--accent-crimson);
+  color: var(--text-primary);
+}
+.draft-autodraft-toggle__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+  opacity: 0.55;
+  transition: background 0.15s ease, opacity 0.15s ease;
+}
+.draft-autodraft-toggle--on {
+  background: rgba(193, 59, 46, 0.18);
+  border-color: var(--accent-crimson);
+  color: var(--accent-crimson);
+}
+.draft-autodraft-toggle--on .draft-autodraft-toggle__dot {
+  background: var(--accent-crimson);
+  opacity: 1;
+  animation: autodraft-dot-pulse 1.6s ease-in-out infinite;
+}
+@keyframes autodraft-dot-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(193, 59, 46, 0.45); }
+  50%      { box-shadow: 0 0 0 4px rgba(193, 59, 46, 0); }
+}
+
+/* "Auto-draft is on" reassurance banner. Sits between the queue header
+   and the queue body so the user always sees what's going to happen
+   when their turn lands. Hidden when the toggle is off. */
+.draft-autodraft-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px var(--space-4);
+  background: rgba(193, 59, 46, 0.10);
+  border-top:    1px solid rgba(193, 59, 46, 0.20);
+  border-bottom: 1px solid rgba(193, 59, 46, 0.15);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.draft-autodraft-banner[hidden] { display: none; }
+.draft-autodraft-banner__icon {
+  font-size: 14px;
+  color: var(--accent-crimson);
 }
 
 /* Queue toggle button on fighter pool rows. Different from the Pick
@@ -8614,7 +8784,11 @@ select.form-input option,
   overflow-y: auto;
   padding: var(--space-4) var(--space-6);
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  /* 2 wide on a typical 1200px modal; collapses to 1 below ~1080px viewport.
+     The previous 360px min squeezed 3 cramped columns where fighter names
+     ellipsised after a few characters and matchup lines wrapped to single
+     words per line. 520px gives the row template room to breathe. */
+  grid-template-columns: repeat(auto-fill, minmax(520px, 1fr));
   gap: var(--space-2);
   align-content: start;
   min-height: 0;
@@ -9267,6 +9441,472 @@ label .form-label__hint {
   opacity: 0.45;
 }
 
+/* ----- Best Available sticky strip --------------------------------------
+   Pinned above the pool body. Compact crimson-accented row showing the
+   highest-FV fighter still on the board so it stays visible even when the
+   user filters/sorts the pool itself. */
+.draft-best-available {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 8px var(--space-4);
+  margin: 0 0 var(--space-2);
+  background: linear-gradient(
+    90deg,
+    rgba(193, 59, 46, 0.14) 0%,
+    rgba(193, 59, 46, 0.03) 60%,
+    transparent 100%
+  );
+  border-top: 1px solid rgba(193, 59, 46, 0.30);
+  border-bottom: 1px solid rgba(193, 59, 46, 0.20);
+  /* The pool body scrolls; this strip should stay pinned at the top of
+     that scroll container. position:sticky relative to the scroll parent.
+     z-index keeps it above the rows during scroll. */
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  backdrop-filter: blur(4px);
+}
+.draft-best-available[hidden] { display: none; }
+
+.draft-best-available__label {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent-crimson);
+  white-space: nowrap;
+  flex-shrink: 0;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(193, 59, 46, 0.18);
+}
+.draft-best-available__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+  /* Visually a "row" but it's a div so the parent acts as the click target.
+     The fighter-modal delegated handler in initDraft fires on data-open-fighter. */
+}
+.draft-best-available__row:hover .draft-best-available__name {
+  color: var(--accent-crimson);
+}
+.draft-best-available__name-block {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.draft-best-available__name {
+  font-size: var(--text-body);
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.15s ease;
+}
+.draft-best-available__div {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  font-weight: 600;
+}
+.draft-best-available__fv {
+  font-family: var(--font-display);
+  font-size: 18px;
+  letter-spacing: 0.02em;
+  color: var(--accent-crimson);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.draft-best-available__fv-label {
+  font-family: var(--font-body);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-crimson);
+  opacity: 0.7;
+  margin-left: 2px;
+}
+
+/* ----- Roster needs widget ----------------------------------------------
+   Compact two-line summary above the slot grid: "Needs: ..." and
+   "Top fit: ...". Subtle background so it reads as informational rather
+   than competing with the pip grid below. */
+.draft-roster-needs {
+  padding: 8px var(--space-4);
+  background: rgba(193, 59, 46, 0.06);
+  border-top:    1px solid rgba(193, 59, 46, 0.20);
+  border-bottom: 1px solid rgba(193, 59, 46, 0.15);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.draft-roster-needs[hidden] { display: none; }
+.draft-roster-needs__line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: var(--text-caption);
+  line-height: 1.3;
+}
+.draft-roster-needs__label {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent-crimson);
+  flex-shrink: 0;
+  min-width: 50px;
+}
+.draft-roster-needs__text {
+  color: var(--text-secondary);
+  font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.draft-roster-needs__line--suggest .draft-roster-needs__text {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* ----- Name + value-badge line ------------------------------------------
+   Wraps the fighter name and the optional STEAL / VALUE / REACH chip on
+   the same baseline. The name shrinks/ellipsises if needed; the badge
+   stays fixed-width on the right. */
+.draft-pool-row__name-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.draft-pool-row__name-line .lineup-roster-row__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ----- Sub-line wrapper (division + form sparkline) -------------------- */
+.draft-pool-row__sub-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+/* ----- Form sparkline (W/L/D dots) -------------------------------------
+   5 small inline dots showing the fighter's most-recent fight outcomes,
+   newest on the left. Green = win, red = loss, gray = draw / no-contest.
+   Sits inline next to the division label so it doesn't add a new row. */
+.draft-form {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.draft-form__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+  /* Slight padding box via outline-on-hover so the dot scales up visually
+     when targeted, without changing layout. cursor: help to telegraph the
+     tooltip affordance. */
+  cursor: help;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.draft-form__dot:hover {
+  transform: scale(1.5);
+  box-shadow: 0 0 0 2px var(--bg-secondary);
+}
+.draft-form__dot--win  { background: #4ade80; }
+.draft-form__dot--loss { background: var(--accent-crimson); }
+.draft-form__dot--draw { background: var(--text-tertiary); opacity: 0.55; }
+.draft-form__dot--nc   { background: var(--text-tertiary); opacity: 0.35; }
+
+/* ----- Row preview card -----------------------------------------------
+   Larger body-level popover that appears after a ~350ms hover on a
+   fighter row. Photo + name + FV breakdown + recent form + next fight.
+   position:fixed so it escapes the pool's overflow clipping.
+   pointer-events:none so it never blocks the row's own hover/click. */
+.draft-row-preview {
+  position: fixed;
+  z-index: 9998;
+  width: 280px;
+  padding: var(--space-4);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  box-shadow: 0 16px 36px -8px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  font-variant-numeric: tabular-nums;
+}
+.draft-row-preview[hidden] { display: none; }
+
+.draft-row-preview__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.draft-row-preview__photo {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: top center;
+  background: var(--bg-secondary);
+  flex-shrink: 0;
+}
+.draft-row-preview__photo--placeholder { background: var(--bg-tertiary); }
+.draft-row-preview__heading {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.draft-row-preview__name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 18px;
+  letter-spacing: 0.02em;
+  color: var(--text-primary);
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.draft-row-preview__meta {
+  margin: 0;
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.draft-row-preview__fv {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 10px;
+  background: rgba(193, 59, 46, 0.10);
+  border: 1px solid rgba(193, 59, 46, 0.30);
+  border-radius: 6px;
+}
+.draft-row-preview__fv-score {
+  font-family: var(--font-display);
+  font-size: 22px;
+  color: var(--accent-crimson);
+  letter-spacing: 0.02em;
+}
+.draft-row-preview__fv-label {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent-crimson);
+}
+.draft-row-preview__fv-rank {
+  margin-left: auto;
+  font-size: var(--text-caption);
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.draft-row-preview__form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.draft-row-preview__section-label {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+  min-width: 64px;
+}
+
+.draft-row-preview__stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+}
+.draft-row-preview__stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px 4px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+}
+.draft-row-preview__stat-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+.draft-row-preview__stat-val {
+  font-family: var(--font-display);
+  font-size: 16px;
+  color: var(--text-primary);
+}
+
+.draft-row-preview__next {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.draft-row-preview__next-text {
+  font-size: var(--text-caption);
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+/* Body-level popover that appears when a form dot is hovered. Positioned
+   in JS (see setupFormDotHover). position:fixed so it escapes the pool's
+   overflow clipping. Small, dense, non-interactive — pointer-events:none
+   so it never intercepts the dot's hover state. */
+.draft-form-popover {
+  position: fixed;
+  z-index: 9999;
+  padding: 6px 10px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  box-shadow: 0 6px 18px -4px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+.draft-form-popover[hidden] { display: none; }
+
+/* ----- Trend chips ------------------------------------------------------
+   Narrative microstats: "🔥 3W streak", "📉 2L skid", "🆕 Debut". Live on
+   the sub-line next to the form sparkline. Tone variants tint the chip
+   background subtly so the eye can scan trends without reading every label. */
+.draft-trend-chips {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.draft-trend-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+.draft-trend-chip__icon {
+  font-size: 10px;
+  line-height: 1;
+}
+.draft-trend-chip--hot {
+  background: rgba(212, 168, 75, 0.12);
+  border-color: rgba(212, 168, 75, 0.30);
+  color: var(--accent-gold);
+}
+.draft-trend-chip--cold {
+  background: rgba(193, 59, 46, 0.10);
+  border-color: rgba(193, 59, 46, 0.28);
+  color: var(--accent-crimson);
+  opacity: 0.85;
+}
+.draft-trend-chip--new {
+  background: rgba(63, 184, 176, 0.12);
+  border-color: rgba(63, 184, 176, 0.35);
+  color: var(--accent-temporary);
+}
+
+/* ----- Value pick badges -------------------------------------------------
+   Compares a fighter's FV rank to the current overall pick number.
+   STEAL = elite value falling, VALUE = solid bargain, REACH = paying
+   above the slot. Compact uppercase chip on the name line. */
+.draft-value-badge {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+.draft-value-badge--steal {
+  /* Bright green — "you'd be a fool to pass this up" */
+  background: rgba(74, 222, 128, 0.16);
+  border-color: rgba(74, 222, 128, 0.45);
+  color: #4ade80;
+}
+.draft-value-badge--value {
+  /* Subtle gold — "solid pickup" */
+  background: var(--accent-gold-subtle);
+  border-color: rgba(212, 168, 75, 0.45);
+  color: var(--accent-gold);
+}
+.draft-value-badge--reach {
+  /* Subdued red-orange — "you're reaching, but not your business" */
+  background: rgba(193, 59, 46, 0.10);
+  border-color: rgba(193, 59, 46, 0.30);
+  color: var(--accent-crimson);
+  opacity: 0.85;
+}
+
+/* ----- Champion treatment ------------------------------------------------
+   Champions get a gold ring around the photo so they scan as elite even
+   in dense rows. Row background stays neutral — the ring alone does the
+   work without competing with the division-accent border. */
+.draft-pool-row--champion .lineup-roster-row__photo-wrap {
+  box-shadow: 0 0 0 2px rgba(212, 168, 75, 0.7);
+  border-radius: 50%;
+}
+
+/* Board cell champions — already styled by .draft-board__cell--champion;
+   layer in a faint gold inner-glow so champion picks pop against the
+   dense board grid. */
+.draft-board__cell--champion {
+  box-shadow: inset 0 0 0 1px rgba(212, 168, 75, 0.5);
+}
+.draft-board__cell--made.draft-board__cell--champion:hover {
+  box-shadow:
+    inset 0 0 0 1px rgba(212, 168, 75, 0.75),
+    0 4px 14px -2px rgba(212, 168, 75, 0.35);
+}
+
+/* Whole-team-tile champion already has a gold rank background; add a faint
+   ring around the photo so champion tiles in the new dense roster grid
+   read as elite at a glance too. */
+.whole-team-tile--champion .whole-team-tile__photo-wrap {
+  box-shadow: inset 0 0 0 2px rgba(212, 168, 75, 0.55);
+}
+
 /* ============================================================
    DRAFT BOARD (Sleeper-inspired)
    Each cell is a self-contained card with a photo, name, and
@@ -9347,6 +9987,20 @@ label .form-label__hint {
   box-shadow: inset 0 0 0 1px rgba(193, 59, 46, 0.55);
 }
 
+/* "On the clock" — applied to the active manager's column header AND every
+   cell in that column. The header gets a gold underline and brighter text;
+   the cells get a faint gold tint + a breathing left-border so the eye is
+   pulled to the whole column, not just the single active pick. */
+.draft-board__col-header--on-clock {
+  color: var(--accent-gold);
+  box-shadow: inset 0 -3px 0 0 var(--accent-gold);
+  animation: draft-col-header-breathe 2.4s ease-in-out infinite;
+}
+@keyframes draft-col-header-breathe {
+  0%, 100% { box-shadow: inset 0 -3px 0 0 var(--accent-gold); }
+  50%      { box-shadow: inset 0 -3px 0 0 var(--accent-gold), 0 0 16px -2px rgba(212, 168, 75, 0.55); }
+}
+
 /* Cells — each one is a card. Left border picks up --div-accent when the
    cell has a pick (showing weight class at a glance) and falls back to
    --team-accent for empty cells so columns are still traceable top to
@@ -9394,6 +10048,56 @@ label .form-label__hint {
   box-shadow: inset 0 0 0 1px rgba(193, 59, 46, 0.45);
 }
 
+/* ----- Pick reveal animation ------------------------------------------
+   Applied for ~900ms when a new pick lands on the board. The cell scales
+   up briefly with a satisfying overshoot (cubic-bezier > 1 ease), a
+   division-tinted ring ripples outward, and the photo crossfades in from
+   a slightly enlarged state so it feels like the fighter "lands" instead
+   of just appearing. */
+.draft-board__cell--just-picked {
+  animation: pick-reveal-cell 700ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  z-index: 5;
+}
+@keyframes pick-reveal-cell {
+  0%   { transform: scale(0.85); box-shadow: 0 0 0 0 var(--div-accent, var(--team-accent)); }
+  50%  { transform: scale(1.06); box-shadow: 0 0 0 10px transparent; }
+  100% { transform: scale(1);    box-shadow: 0 0 0 0 transparent; }
+}
+.draft-board__cell--just-picked .draft-board__cell-photo {
+  animation: pick-reveal-photo 800ms ease-out;
+}
+@keyframes pick-reveal-photo {
+  0%   { opacity: 0; transform: scale(1.25); filter: blur(2px); }
+  100% { opacity: 1; transform: scale(1);    filter: blur(0); }
+}
+
+/* Cells in the on-the-clock column get a subtle gold tint so the entire
+   column reads as active. Sits BELOW the --current outline (which marks
+   the single live pick) — so the column tints faintly and the current
+   cell still pops as the focus. Empty cells lose their dimming opacity
+   while their column is active so the column reads as live, not muted. */
+.draft-board__cell--on-clock-col {
+  background: linear-gradient(
+    180deg,
+    rgba(212, 168, 75, 0.10) 0%,
+    rgba(212, 168, 75, 0.04) 100%
+  );
+}
+.draft-board__cell--on-clock-col.draft-board__cell--empty { opacity: 0.85; }
+.draft-board__cell--on-clock-col.draft-board__cell--made {
+  /* Preserve the division tint but layer the column tint on top */
+  background:
+    linear-gradient(180deg, rgba(212, 168, 75, 0.10), rgba(212, 168, 75, 0.04)),
+    color-mix(in srgb, var(--div-accent, var(--bg-tertiary)) 55%, var(--bg-primary));
+}
+
+/* Active pick — gold ring + brighter background */
+.draft-board__cell--current.draft-board__cell--on-clock-col {
+  /* The --current outline already handles the visual focus; just bump the
+     tint so the gold reads more saturated on the single live pick. */
+  background: rgba(212, 168, 75, 0.30);
+}
+
 /* Lift on hover for clickable cells */
 .draft-board__cell--made:hover {
   transform: translateY(-1px);
@@ -9414,6 +10118,35 @@ label .form-label__hint {
   text-transform: uppercase;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
 }
+
+/* Retrospective STEAL / VALUE / REACH chip pinned to the top-left of a
+   board cell. Wraps the .draft-value-badge from the pool rows so the
+   visual language is consistent — same tones, same shape, just in a
+   smaller cell context. */
+.draft-board__cell-value-badge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 2;
+  pointer-events: none;
+  /* Slightly smaller than the pool-row variant so it doesn't dominate
+     the cell. */
+  font-size: 8px;
+  line-height: 1;
+}
+.draft-board__cell-value-badge .draft-value-badge {
+  font-size: 8px;
+  padding: 2px 5px;
+  letter-spacing: 0.06em;
+  /* Drop the white background so the chip blends with the cell's
+     division-tinted background; the colored border + colored text are
+     enough to identify the tier. */
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+}
+.draft-board__cell-value-badge .draft-value-badge--steal { color: #4ade80; border-color: rgba(74,  222, 128, 0.55); }
+.draft-board__cell-value-badge .draft-value-badge--value { color: var(--accent-gold);    border-color: rgba(212, 168, 75, 0.55); }
+.draft-board__cell-value-badge .draft-value-badge--reach { color: #fff;                  border-color: rgba(193, 59,  46, 0.55); background: rgba(193, 59, 46, 0.55); }
 
 /* Snake-order arrows. Each cell shows a small chevron in the gutter
    pointing toward where the next pick will land. Right for odd rounds,
@@ -11384,4 +12117,692 @@ label .form-label__hint {
   .oct-progress-fill { stroke-dashoffset: 60; }
   .oct-stat-label { opacity: 1; transform: none; }
   .oct-stat-value { fill: #F5F5F5; }
+}
+
+/* ========================================================================
+   PICK REACTIONS
+   Slack-style emoji reactions on board cells. Two parts:
+   - Counts row (always visible when reactions exist)
+   - Picker palette (revealed on cell hover)
+   ======================================================================== */
+.draft-react-bar {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: 6px;
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  pointer-events: none; /* let the cell button below receive clicks */
+  z-index: 3;
+}
+.draft-react-bar > * { pointer-events: auto; }
+
+.draft-react-counts {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.draft-react-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background: rgba(0, 0, 0, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #fff;
+  cursor: pointer;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  transition: background 0.12s ease, border-color 0.12s ease, transform 0.12s ease;
+}
+/* Pop only when freshly added — JS marks the chip with --fresh for ~500ms
+   so the animation runs once on add, not on every board re-render. */
+.draft-react-count--fresh {
+  animation: react-count-pop 280ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes react-count-pop {
+  0%   { transform: scale(0.4); opacity: 0.4; }
+  60%  { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.draft-react-count:hover {
+  transform: translateY(-1px) scale(1.05);
+  background: rgba(0, 0, 0, 0.9);
+}
+/* The user's own reactions get the crimson highlight + a brighter border
+   so they read as "selected" at a glance. */
+.draft-react-count--mine {
+  background: var(--accent-crimson);
+  border-color: rgba(255, 255, 255, 0.55);
+  box-shadow: 0 0 0 1px var(--accent-crimson);
+}
+.draft-react-count--mine:hover {
+  background: var(--accent-crimson-hover);
+}
+.draft-react-count__emoji { font-size: 14px; line-height: 1; }
+.draft-react-count__num   { opacity: 0.95; }
+
+/* Picker palette — hidden by default, fades in on cell hover. Sits to the
+   right of the counts so existing reactions stay visible while the user
+   considers adding a new one. */
+.draft-react-palette {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+  background: rgba(0, 0, 0, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  padding: 2px;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  pointer-events: none;
+}
+.draft-board__cell--made:hover .draft-react-palette {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+.draft-react-palette__btn {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  border-radius: 999px;
+  line-height: 1;
+  transition: background 0.12s ease, transform 0.12s ease;
+}
+.draft-react-palette__btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  transform: scale(1.15);
+}
+.draft-react-palette__btn--mine {
+  background: rgba(193, 59, 46, 0.45);
+}
+
+/* ========================================================================
+   PRESENCE DOTS
+   Green / gray dot showing whether a manager is currently connected to
+   the league's draft presence channel. Used in the board column header
+   AND on the pre-draft lobby tiles.
+   ======================================================================== */
+.draft-presence-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+  box-shadow: 0 0 0 1px var(--bg-secondary);
+  flex-shrink: 0;
+}
+.draft-presence-dot--on {
+  background: #4ade80;
+  /* Subtle pulse so "live" reads as actually live. */
+  animation: presence-pulse 2.5s ease-in-out infinite;
+}
+@keyframes presence-pulse {
+  0%, 100% { box-shadow: 0 0 0 1px var(--bg-secondary), 0 0 0 0 rgba(74, 222, 128, 0.45); }
+  50%      { box-shadow: 0 0 0 1px var(--bg-secondary), 0 0 0 4px rgba(74, 222, 128, 0); }
+}
+.draft-presence-dot--off {
+  background: var(--text-tertiary);
+  opacity: 0.5;
+}
+
+/* Lobby variant — positioned on the bottom-right of the avatar circle,
+   slightly larger so it reads on top of the avatar. */
+.draft-lobby-pick__avatar { position: relative; }
+.draft-lobby-pick__presence {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 12px;
+  height: 12px;
+  margin: 0;
+  box-shadow: 0 0 0 2px var(--bg-secondary);
+}
+.draft-lobby-pick__presence.draft-presence-dot--on {
+  animation-name: presence-pulse-lobby;
+}
+@keyframes presence-pulse-lobby {
+  0%, 100% { box-shadow: 0 0 0 2px var(--bg-secondary), 0 0 0 0 rgba(74, 222, 128, 0.45); }
+  50%      { box-shadow: 0 0 0 2px var(--bg-secondary), 0 0 0 6px rgba(74, 222, 128, 0); }
+}
+
+/* ========================================================================
+   FULLSCREEN DRAFT MODE
+   Toggled via the top-nav button or the floating exit pill. Hides the
+   top nav so the draft room fills the viewport. Esc also exits (handled
+   in draft.js). Preference persists to localStorage per league.
+   ======================================================================== */
+
+/* The top-nav copy of the toggle stays subtle until you hover it. */
+.draft-fullscreen-btn {
+  font-size: 16px;
+  line-height: 1;
+}
+
+/* Sound-toggle button. Same shape as the fullscreen toggle so they
+   read as a matched pair in the top nav. Slightly dimmed when muted
+   so the speaker glyph carries the on/off signal visually. */
+.draft-sound-btn {
+  font-size: 16px;
+  line-height: 1;
+  transition: opacity 0.15s ease;
+}
+.draft-sound-btn[aria-pressed="true"] {
+  opacity: 0.55;
+}
+
+/* "Start mock" gate banner — shown in ?mock=1 mode until the user
+   clicks Start. Sits below the top nav, above the draft status strip,
+   so it doesn't block the rest of the room (user can still queue
+   fighters, browse the pool, set auto-draft) before kicking off. */
+.draft-mock-start {
+  background: linear-gradient(
+    180deg,
+    rgba(193, 59, 46, 0.10) 0%,
+    transparent 100%
+  );
+  border-bottom: 1px solid rgba(193, 59, 46, 0.25);
+  padding: var(--space-5) var(--space-6);
+}
+.draft-mock-start[hidden] { display: none; }
+.draft-mock-start__inner {
+  max-width: 720px;
+  margin: 0 auto;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+}
+.draft-mock-start__eyebrow {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent-crimson);
+}
+.draft-mock-start__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(20px, 3vw, 28px);
+  letter-spacing: 0.02em;
+  color: var(--text-primary);
+  line-height: 1.1;
+}
+.draft-mock-start__body {
+  margin: 0;
+  font-size: var(--text-caption);
+  color: var(--text-secondary);
+  max-width: 520px;
+}
+.draft-mock-start__btn {
+  margin-top: var(--space-3);
+  padding: 10px 26px;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* MOCK badge + Restart button — only visible when draft.js is in
+   ?mock=1 mode. Crimson pill, uppercase, sits next to the "← League"
+   link so the user always knows they're in practice. */
+.draft-mock-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  background: var(--accent-crimson);
+  color: #fff;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  margin-left: var(--space-2);
+}
+.draft-mock-badge[hidden] { display: none; }
+
+.draft-mock-reset {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.draft-mock-reset:hover {
+  border-color: var(--accent-crimson);
+  color: var(--text-primary);
+}
+.draft-mock-reset[hidden] { display: none; }
+
+/* Active state */
+.draft-page--fullscreen .top-nav,
+.draft-page--fullscreen .draft-commish-tools {
+  display: none;
+}
+/* Banner is the personal "you're on the clock" alert — keep it visible
+   even in fullscreen, but tighten its top padding since the nav is gone. */
+.draft-page--fullscreen .draft-banner {
+  border-radius: 0;
+}
+
+/* Floating exit pill — only visible while fullscreen is on (the page-class
+   selector below flips its hidden attribute via JS, but the CSS positions
+   it cleanly in the top-right). */
+.draft-fullscreen-exit {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 350;
+  padding: 6px 12px;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  opacity: 0.65;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+.draft-fullscreen-exit:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.85);
+}
+.draft-fullscreen-exit[hidden] { display: none; }
+
+/* ========================================================================
+   PICK ACTIVITY FEED
+   Compact ticker living in the Draft Board panel header. Three most-recent
+   picks, each as a team-colored dot + "Team picked Fighter · 12s ago".
+   New entries fade in via the --new modifier; older entries stay static
+   so the eye doesn't get retrained on every render.
+   ======================================================================== */
+
+.draft-pick-feed {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  font-size: var(--text-caption);
+  color: var(--text-secondary);
+  min-width: 0;
+}
+.draft-pick-feed[hidden] { display: none; }
+
+.draft-pick-feed__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  max-width: 280px;
+  min-width: 0;
+}
+.draft-pick-feed__item--new {
+  animation: pick-feed-enter 500ms ease-out;
+}
+@keyframes pick-feed-enter {
+  0%   { transform: translateY(-6px); opacity: 0; }
+  100% { transform: translateY(0);    opacity: 1; }
+}
+.draft-pick-feed__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--team-accent, var(--accent-crimson));
+  flex-shrink: 0;
+}
+.draft-pick-feed__text {
+  font-size: var(--text-caption);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.draft-pick-feed__text strong {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.draft-pick-feed__ago {
+  color: var(--text-tertiary);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ========================================================================
+   CINEMATIC PRE-DRAFT LOBBY
+   Full-bleed overlay shown while the draft is scheduled but not yet
+   started. Dark gradient background, huge crimson countdown, league name
+   in display font, and a grid of draft-order tiles with team avatars.
+   Hidden once draft_started flips (page reloads on that transition).
+   ======================================================================== */
+
+.draft-lobby {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+  background:
+    radial-gradient(circle at 50% 0%, rgba(193, 59, 46, 0.18) 0%, transparent 60%),
+    radial-gradient(circle at 50% 100%, rgba(212, 168, 75, 0.10) 0%, transparent 50%),
+    var(--bg-primary);
+  /* Subtle ambient pulse so the screen feels alive while waiting. */
+  animation: draft-lobby-bg 8s ease-in-out infinite;
+  overflow-y: auto;
+}
+.draft-lobby[hidden] { display: none; }
+@keyframes draft-lobby-bg {
+  0%, 100% { background-position: 50% 0%, 50% 100%; }
+  50%      { background-position: 50% 5%, 50% 95%; }
+}
+
+.draft-lobby__inner {
+  max-width: 880px;
+  width: 100%;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  margin: auto;
+}
+
+.draft-lobby__eyebrow {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent-crimson);
+}
+.draft-lobby__league-name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(28px, 5vw, 48px);
+  letter-spacing: 0.02em;
+  color: var(--text-primary);
+  line-height: 1.05;
+}
+
+.draft-lobby__countdown {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-6) var(--space-4);
+  background: linear-gradient(
+    180deg,
+    rgba(193, 59, 46, 0.08) 0%,
+    transparent 100%
+  );
+  border-top:    1px solid rgba(193, 59, 46, 0.25);
+  border-bottom: 1px solid rgba(193, 59, 46, 0.15);
+}
+.draft-lobby__countdown-label {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+.draft-lobby__countdown-value {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(48px, 10vw, 96px);
+  letter-spacing: 0.02em;
+  color: var(--accent-crimson);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  /* Slow pulse on the number itself to draw the eye. */
+  animation: draft-lobby-countdown-pulse 2.5s ease-in-out infinite;
+}
+@keyframes draft-lobby-countdown-pulse {
+  0%, 100% { opacity: 1; text-shadow: 0 0 0 transparent; }
+  50%      { opacity: 0.92; text-shadow: 0 0 24px rgba(193, 59, 46, 0.55); }
+}
+.draft-lobby__scheduled {
+  margin: 0;
+  font-size: var(--text-body);
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.draft-lobby__order {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.draft-lobby__order-label {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+.draft-lobby__order-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-3);
+}
+@media (max-width: 700px) {
+  .draft-lobby__order-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* One tile per spot in the draft order. Pick number in the corner, big
+   circular avatar with team-accent background + initials, team name
+   underneath. The viewer's own tile gets a soft crimson outline. */
+.draft-lobby-pick {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-3);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+.draft-lobby-pick--mine {
+  border-color: rgba(193, 59, 46, 0.5);
+  box-shadow: inset 0 0 0 1px rgba(193, 59, 46, 0.35);
+}
+.draft-lobby-pick__num {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  font-family: var(--font-display);
+  font-size: 14px;
+  color: var(--text-tertiary);
+  letter-spacing: 0.04em;
+}
+.draft-lobby-pick__avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--team-accent, var(--accent-crimson));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 22px;
+  letter-spacing: 0.02em;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.draft-lobby-pick__name {
+  font-size: var(--text-caption);
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.draft-lobby__rules {
+  margin: 0;
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  letter-spacing: 0.04em;
+}
+
+/* "Enter draft room" CTA at the bottom of the lobby — dismisses the
+   overlay so the user can preview the room before the draft starts. */
+.draft-lobby__enter {
+  margin-top: var(--space-3);
+  align-self: center;
+  padding: 10px 24px;
+  background: transparent;
+  color: var(--text-primary);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.draft-lobby__enter:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+.draft-lobby__enter-hint {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+/* Floating "← Lobby" pill — shown after the user dismisses the lobby in
+   pre-draft so they can bounce back without refreshing. Same visual
+   language as the fullscreen-exit pill on the opposite side. */
+.draft-lobby-show {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 350;
+  padding: 6px 14px;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  opacity: 0.7;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+.draft-lobby-show:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.85);
+}
+.draft-lobby-show[hidden] { display: none; }
+
+/* ========================================================================
+   WHOLE ROSTER MODAL — draft variant
+   Single dense grid of slot cells (8 men's + 1 women's + N any-flex).
+   Each cell carries a small slot-type badge in the corner so the layout
+   stays compact while still communicating what slot each fighter fills.
+   Reuses .whole-team-tile for the actual tile look; adds the badge on top.
+   ======================================================================== */
+
+.draft-roster-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: var(--space-3);
+  max-width: 1300px;
+  margin: 0 auto;
+}
+@media (max-width: 1100px) {
+  .draft-roster-grid { grid-template-columns: repeat(6, 1fr); }
+}
+@media (max-width: 800px) {
+  .draft-roster-grid { grid-template-columns: repeat(4, 1fr); }
+}
+@media (max-width: 500px) {
+  .draft-roster-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* The slot badge — short label (FLY/BAN/.../W-F/ANY) pinned to the
+   top-right of the tile's photo. Sits where the starter star lives on
+   lineup tiles; draft tiles don't have starters so the corner is free. */
+.draft-roster-tile__slot-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 2px 6px;
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  z-index: 2;
+  pointer-events: none;
+}
+/* Slot-type tint — subtle accent so the eye can scan slot groups at a glance.
+   Men's stays neutral (most common case), women's gets a violet wash, any-flex
+   gets the brand crimson. Violet is hardcoded — only used here, no need to
+   add a design-system token for a single surface. */
+.draft-roster-tile__slot-badge--womens {
+  background: #6b46c1;
+}
+.draft-roster-tile__slot-badge--anyflex {
+  background: var(--accent-crimson);
+}
+
+/* Empty slot — dashed placeholder shaped like a real tile so the grid stays
+   uniform when picks are missing. Slot badge is anchored the same way as on
+   a filled tile so the user can still see what the empty slot is for. */
+.draft-roster-empty {
+  position: relative;
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  background: transparent;
+  opacity: 0.5;
+  aspect-ratio: 0.78;  /* roughly matches a filled tile's photo + 2 text rows */
+  min-height: 130px;
 }

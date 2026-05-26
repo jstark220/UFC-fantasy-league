@@ -56,6 +56,14 @@
       '<svg class="nav-tab__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
         '<path d="M5 21V4" />' +
         '<path d="M5 5h11l-2 3 2 3H5" />' +
+      '</svg>',
+    draftRoom:
+      // Play-in-circle — reads as "live event in progress." The play
+      // triangle gets a filled override so it pops clearly inside the
+      // outline circle, even at small sizes.
+      '<svg class="nav-tab__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+        '<circle cx="12" cy="12" r="9" />' +
+        '<path d="m10 8 6 4-6 4z" fill="currentColor" stroke="none" />' +
       '</svg>'
   };
 
@@ -94,7 +102,8 @@
     trades:     function (id) { return 'trades.html?id='      + encodeURIComponent(id); },
     lineup:     function (id) { return 'lineup.html?id='      + encodeURIComponent(id); },
     // score-event uses ?league= rather than ?id= for historical reasons.
-    scoreEvent: function (id) { return 'score-event.html?league=' + encodeURIComponent(id); }
+    scoreEvent: function (id) { return 'score-event.html?league=' + encodeURIComponent(id); },
+    draftRoom:  function (id) { return 'draft.html?id='       + encodeURIComponent(id); }
   };
   var TAB_LABEL = {
     leagueHome: 'League Home',
@@ -102,7 +111,8 @@
     freeAgency: 'Free Agency',
     trades:     'Trades',
     lineup:     'Roster',
-    scoreEvent: 'Score Event'
+    scoreEvent: 'Score Event',
+    draftRoom:  'Draft Room'
   };
   var DEFAULT_TABS = ['leagueHome', 'standings', 'freeAgency', 'trades', 'lineup'];
 

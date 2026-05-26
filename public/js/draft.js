@@ -15,9 +15,6 @@ const MENS_DIVISIONS = [
   'welterweight', 'middleweight', 'light_heavyweight', 'heavyweight'
 ];
 const WOMENS_DIVISIONS = ['strawweight', 'flyweight_w', 'bantamweight_w'];
-// All 11 weight classes in display order — every one gets its own slot
-// under the current construction rules.
-const ALL_DRAFT_DIVISIONS = MENS_DIVISIONS.concat(WOMENS_DIVISIONS);
 
 // Human-readable labels for display in the fighter pool and roster panel
 const DIVISION_LABELS = {
@@ -58,6 +55,698 @@ function divisionColor(primaryDivision) {
   return cssVar ? 'var(' + cssVar + ')' : 'var(--border-strong)';
 }
 
+// Look up a fighter's composite fantasy-value score via the shared module.
+// Returns 0 when the FV cache hasn't loaded yet, when the module isn't
+// present, or when this fighter has no fight history — keeping the sort
+// stable in every state instead of throwing.
+function fighterFvScore(fighter) {
+  if (typeof FantasyValue === 'undefined') return 0;
+  var pts = FantasyValue.pointsFor(fighter.id);
+  if (!pts) return 0;
+  return FantasyValue.computeFantasyValue(fighter, pts);
+}
+
+// Read one of the points-map metrics (avgPts / totalPts / recentPts) for a
+// fighter. Same fall-throughs as fighterFvScore so sorts stay deterministic
+// before the FV cache resolves.
+function fighterPtsValue(fighter, ptsKey) {
+  if (typeof FantasyValue === 'undefined') return 0;
+  var pts = FantasyValue.pointsFor(fighter.id);
+  if (!pts) return 0;
+  var v = pts[ptsKey];
+  return typeof v === 'number' ? v : 0;
+}
+
+// "Fights MMM DD vs Opponent" line shown under the division label when the
+// fighter has an upcoming booked fight. Same markup the lineup page uses
+// (lineup-roster-row__matchup + waiver-next-fight classes) so styling is
+// shared. Returns '' if the next-fight data hasn't loaded yet OR the
+// fighter has no booked next fight — both are normal states.
+function nextFightLine(fighter) {
+  if (typeof NextFight === 'undefined') return '';
+  var nf = fighterNextFight[fighter.id];
+  if (!nf) return '';
+  return (
+    '<span class="lineup-roster-row__matchup waiver-next-fight">' +
+      'Fights ' + escapeHtml(NextFight.formatShort(nf)) +
+    '</span>'
+  );
+}
+
+// Trend chips — narrative microstats that turn a fighter row from "name +
+// stats" into "name + story." Reads from the FantasyValue points map for
+// streak data; uses the fighter row directly for champion / sub-title
+// status. Returns at most 2 chips per fighter so rows stay scannable;
+// priority order: champion > sub-title > streak > debut > coming-off-loss.
+function trendChipsHtml(fighter) {
+  var chips = [];
+
+  // Champion + interim/BMF holders already get the gold rank badge + photo
+  // ring, so we DON'T emit a redundant "Champion" chip here. Streaks and
+  // debut status are the value-add chips that other surfaces don't have.
+
+  var pts = (typeof FantasyValue !== 'undefined' && FantasyValue.pointsFor)
+    ? FantasyValue.pointsFor(fighter.id) : null;
+
+  // Hot streak — 3+ wins gets the fire chip; 2-fight win streak is too
+  // common to be noteworthy, so we cap the streak chip at 3+.
+  if (pts && pts.winStreak >= 3) {
+    chips.push({
+      label: pts.winStreak + 'W streak',
+      icon:  '🔥',
+      tone:  'hot'
+    });
+  }
+
+  // Coming off a loss — useful negative signal, especially mid-late draft
+  // where managers chase value off cold streaks. Don't show alongside a
+  // win streak (they're mutually exclusive in the data anyway).
+  if (pts && pts.lossStreak >= 2) {
+    chips.push({
+      label: pts.lossStreak + 'L skid',
+      icon:  '📉',
+      tone:  'cold'
+    });
+  }
+
+  // UFC debut / no fight history. Only flag fighters who explicitly have
+  // zero fights in our data — distinct from "FV cache hasn't loaded yet"
+  // (in which case pts is null and we just skip the chip).
+  if (pts && pts.fightCount === 0) {
+    chips.push({
+      label: 'Debut',
+      icon:  '🆕',
+      tone:  'new'
+    });
+  }
+
+  if (chips.length === 0) return '';
+
+  // Cap at 2 so the row never gets crowded.
+  return '<span class="draft-trend-chips">' +
+    chips.slice(0, 2).map(function(c) {
+      return '<span class="draft-trend-chip draft-trend-chip--' + c.tone + '">' +
+        '<span class="draft-trend-chip__icon" aria-hidden="true">' + c.icon + '</span>' +
+        '<span class="draft-trend-chip__label">' + escapeHtml(c.label) + '</span>' +
+      '</span>';
+    }).join('') +
+  '</span>';
+}
+
+// One-time setup: auto-draft toggle. Wires the click handler, restores
+// prior choice from localStorage (per-league key), keeps the banner +
+// button label in sync, and fires maybeAutoPickNow() whenever the toggle
+// flips ON so the user doesn't have to wait for a turn-change event.
+function setupAutoDraftToggle() {
+  var btn    = document.getElementById('autoDraftToggle');
+  var banner = document.getElementById('autoDraftBanner');
+  if (!btn) return;
+
+  var storageKey = 'draft-autodraft:' + leagueId;
+
+  function paint() {
+    btn.classList.toggle('draft-autodraft-toggle--on', autoDraftOn);
+    btn.setAttribute('aria-pressed', autoDraftOn ? 'true' : 'false');
+    if (banner) banner.hidden = !autoDraftOn;
+  }
+
+  function setOn(next) {
+    autoDraftOn = !!next;
+    try { localStorage.setItem(storageKey, autoDraftOn ? '1' : '0'); } catch (_) { /* private mode */ }
+    paint();
+    // If the user just turned it on AND it's already their turn, fire
+    // immediately. maybeAutoPickNow handles the picking-already-in-flight
+    // and pause guards.
+    if (autoDraftOn) maybeAutoPickNow();
+  }
+
+  btn.addEventListener('click', function() { setOn(!autoDraftOn); });
+
+  // Restore prior choice — default off for new visitors so we never pick
+  // for someone without explicit consent.
+  var saved = null;
+  try { saved = localStorage.getItem(storageKey); } catch (_) { /* private mode */ }
+  autoDraftOn = (saved === '1');
+  paint();
+}
+
+// One-time setup: mock-mode chrome. Reveals the MOCK badge in the top
+// nav, wires the Start + Restart buttons, and shows the "Ready when you
+// are" banner until the user clicks Start. No-op outside mock mode so
+// the real draft is unaffected.
+//   Start  : user-initiated kickoff. Flips mockStarted=true, hides the
+//            banner, and fires the AI scheduler (which is a no-op if it
+//            happens to be the user's turn first).
+//   Restart: wipes the in-memory picks, cancels any pending AI timer,
+//            and re-fires the scheduler. mockStarted stays true so the
+//            mock just runs again without re-showing the banner.
+function setupMockChrome() {
+  var badge        = document.getElementById('draftMockBadge');
+  var reset        = document.getElementById('draftMockResetBtn');
+  var startBanner  = document.getElementById('draftMockStartBanner');
+  var startBtn     = document.getElementById('draftMockStartBtn');
+
+  if (!isMockMode) {
+    if (badge)       badge.hidden       = true;
+    if (reset)       reset.hidden       = true;
+    if (startBanner) startBanner.hidden = true;
+    return;
+  }
+
+  if (badge) badge.hidden = false;
+  // Restart visible only after the mock has actually started — before
+  // that there's nothing to restart from.
+  if (reset) {
+    reset.hidden = true;
+    reset.addEventListener('click', function() {
+      if (mockAiTimer) { clearTimeout(mockAiTimer); mockAiTimer = null; }
+      picks = [];
+      mockPickIdCounter   = 0;
+      pickClockResetAt    = Date.now();
+      picking             = false;
+      lastAnimatedPickId  = null;
+      wasMyTurn           = false;
+      lastClockBand       = 'none';
+      draftDoneSounded    = false;
+      league.draft_completed = false;
+      renderAll();
+      maybeScheduleNextAiPick();
+    });
+  }
+
+  if (startBanner) startBanner.hidden = false;
+  if (startBtn) {
+    startBtn.addEventListener('click', function() {
+      mockStarted = true;
+      if (startBanner) startBanner.hidden = true;
+      if (reset)       reset.hidden       = false;
+      // Re-render so the status strip / next-pick indicator reflect the
+      // active state (the room was rendered earlier but maybeAutoPickNow
+      // / scheduler haven't been allowed to do anything yet).
+      renderAll();
+      maybeScheduleNextAiPick();
+      // Auto-draft might be on and the user might be picker #1 — give it
+      // the same chance to fire as any normal turn-start moment.
+      maybeAutoPickNow();
+    });
+  }
+}
+
+// One-time setup: mute toggle for the synthesized draft sound effects.
+// Wires the speaker button in the top-nav, restores prior mute pref from
+// localStorage (handled inside DraftSounds), and keeps the icon in sync.
+function setupSoundToggle() {
+  var btn = document.getElementById('draftSoundBtn');
+  if (!btn || typeof DraftSounds === 'undefined') return;
+
+  function paint() {
+    var muted = DraftSounds.isMuted();
+    btn.textContent = muted ? '🔇' : '🔊';
+    btn.title       = muted ? 'Unmute draft sounds' : 'Mute draft sounds';
+    btn.setAttribute('aria-pressed', muted ? 'true' : 'false');
+  }
+
+  btn.addEventListener('click', function() {
+    DraftSounds.setMuted(!DraftSounds.isMuted());
+    paint();
+  });
+  paint();
+}
+
+// One-time setup: pre-draft lobby toggle. The cinematic lobby covers the
+// draft room by default during pre-draft, but users want to peek into the
+// room early (browse the pool, build their queue). Clicking "Enter draft
+// room" dismisses the overlay and reveals a floating "← Lobby" pill so
+// they can bounce back without refreshing.
+//
+// State is purely client-side and reset on reload — the lobby returns by
+// default for each new visit until the draft actually starts (at which
+// point subscribeToLobbyFlip reloads the page).
+function setupLobbyEnterButton() {
+  var lobby   = document.getElementById('draftLobby');
+  var enterBtn = document.getElementById('draftLobbyEnterBtn');
+  var showBtn  = document.getElementById('draftLobbyShowBtn');
+  if (!lobby || !enterBtn || !showBtn) return;
+
+  function inPreDraft() {
+    return league && !league.draft_started && league.draft_scheduled_at;
+  }
+
+  enterBtn.addEventListener('click', function() {
+    lobby.hidden = true;
+    // Only show the "Lobby" pill while we're still in pre-draft. If the
+    // draft started in the middle of the user reading the lobby (page
+    // would reload anyway), this is defensive.
+    showBtn.hidden = !inPreDraft();
+  });
+
+  showBtn.addEventListener('click', function() {
+    if (!inPreDraft()) { showBtn.hidden = true; return; }
+    // Re-render in case anything changed (presence, schedule) since the
+    // lobby was dismissed.
+    renderDraftLobby();
+    showBtn.hidden = true;
+  });
+}
+
+// One-time setup: fullscreen draft mode. Adds .draft-page--fullscreen
+// to the page root, persists the user's choice to localStorage so the
+// next visit lands in the same mode, and wires Esc to exit. Two toggle
+// buttons in the DOM:
+//   * #draftFullscreenBtn      — sits in the top nav, hidden in fullscreen
+//   * #draftFullscreenExitBtn  — floating pill, visible only in fullscreen
+// LocalStorage key includes leagueId so different leagues can remember
+// different fullscreen preferences.
+function setupFullscreenMode() {
+  var page = document.getElementById('pageContent');
+  if (!page) return;
+
+  var storageKey = 'draft-fullscreen:' + leagueId;
+  var toggleBtn  = document.getElementById('draftFullscreenBtn');
+  var exitBtn    = document.getElementById('draftFullscreenExitBtn');
+
+  function apply(on) {
+    page.classList.toggle('draft-page--fullscreen', !!on);
+    if (exitBtn) exitBtn.hidden = !on;
+    try { localStorage.setItem(storageKey, on ? '1' : '0'); } catch (_) { /* private mode */ }
+    // The room's computed height depends on what chrome is visible above
+    // it; rerun the sync helper from draft.html so the board doesn't
+    // stay at the previous height.
+    if (typeof window.syncDraftRoomHeight === 'function') window.syncDraftRoomHeight();
+  }
+
+  function isOn() {
+    return page.classList.contains('draft-page--fullscreen');
+  }
+
+  if (toggleBtn) toggleBtn.addEventListener('click', function() { apply(!isOn()); });
+  if (exitBtn)   exitBtn.addEventListener('click',   function() { apply(false);  });
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && isOn()) {
+      // Don't swallow Escape when a modal is open — those have their own
+      // close handlers and should win.
+      var modalOpen = document.querySelector(
+        '#viewAllOverlay, #wholeRosterModal, #fvBreakdownModal, .fight-card-modal-overlay'
+      );
+      if (modalOpen) return;
+      apply(false);
+    }
+  });
+
+  // Restore prior choice. Default is off (most users won't have a stored
+  // pref on first visit).
+  var saved = null;
+  try { saved = localStorage.getItem(storageKey); } catch (_) { /* private mode */ }
+  if (saved === '1') apply(true);
+}
+
+// One-time setup: delayed hover preview card for fighter rows. Pulls
+// data from FantasyValue + NextFight + fighterMap to assemble a richer
+// preview than what fits in the row, without forcing the user to open
+// the full fighter modal. Body-level + position:fixed so it escapes the
+// pool's overflow:auto and floats over the layout.
+//
+// Hover delay: 350ms — long enough that casually scrolling over rows
+// doesn't trigger constant popups, short enough that intentional hovers
+// feel responsive.
+function setupRowPreviewHover() {
+  if (document.getElementById('draftRowPreview')) return;
+
+  var preview = document.createElement('div');
+  preview.id        = 'draftRowPreview';
+  preview.className = 'draft-row-preview';
+  preview.hidden    = true;
+  document.body.appendChild(preview);
+
+  var hoverTimer = null;
+  var activeRow  = null;
+
+  function clearTimer() {
+    if (hoverTimer) { clearTimeout(hoverTimer); hoverTimer = null; }
+  }
+
+  function hide() {
+    clearTimer();
+    activeRow = null;
+    preview.hidden = true;
+  }
+
+  function position(row) {
+    var rect = row.getBoundingClientRect();
+    preview.hidden = false;
+    var pRect = preview.getBoundingClientRect();
+    // Default to the right of the row, vertically centered on the row.
+    var left = rect.right + 12;
+    var top  = rect.top + rect.height / 2 - pRect.height / 2;
+    // If right side runs off-screen, flip to the left of the row.
+    if (left + pRect.width > window.innerWidth - 12) {
+      left = rect.left - pRect.width - 12;
+    }
+    // Clamp vertically inside the viewport.
+    var pad = 12;
+    var maxTop = window.innerHeight - pRect.height - pad;
+    if (top < pad)    top = pad;
+    if (top > maxTop) top = maxTop;
+    preview.style.left = left + 'px';
+    preview.style.top  = top  + 'px';
+  }
+
+  function render(fighter) {
+    if (!fighter) return;
+    var rankLabel = fighter.is_champion
+      ? 'Champion'
+      : (fighter.current_rank ? '#' + fighter.current_rank : 'Unranked');
+    var divLabel = DIVISION_LABELS[fighter.primary_division] || fighter.primary_division || '';
+    var photoHtml = fighter.photo_url
+      ? '<img class="draft-row-preview__photo" src="' + escapeHtml(fighter.photo_url) + '" alt="" onerror="this.style.display=\'none\'">'
+      : '<div class="draft-row-preview__photo draft-row-preview__photo--placeholder"></div>';
+    var record = fighter.record_wins + '-' + fighter.record_losses +
+                 (fighter.record_draws ? '-' + fighter.record_draws : '');
+
+    // FV block — score, league rank, recent form. Falls through cleanly
+    // when FV hasn't loaded yet or the fighter has no fight history.
+    var fvHtml = '';
+    if (typeof FantasyValue !== 'undefined' && FantasyValue.scoreFor) {
+      var fv      = FantasyValue.scoreFor(fighter.id);
+      var rankInfo = FantasyValue.rankFor && FantasyValue.rankFor(fighter.id);
+      if (typeof fv === 'number') {
+        fvHtml +=
+          '<div class="draft-row-preview__fv">' +
+            '<span class="draft-row-preview__fv-score">' + fv.toFixed(1) + '</span>' +
+            '<span class="draft-row-preview__fv-label">FV</span>' +
+            (rankInfo && rankInfo.rank
+              ? '<span class="draft-row-preview__fv-rank">#' + rankInfo.rank + ' of ' + rankInfo.total + '</span>'
+              : '') +
+          '</div>';
+      }
+      // Form sparkline (same dots as on the row) plus a "Recent form" label
+      // so the preview reads as a complete summary on its own.
+      var pts = FantasyValue.pointsFor(fighter.id);
+      if (pts && pts.recentResults && pts.recentResults.length > 0) {
+        var dots = pts.recentResults.map(function(r) {
+          var result = typeof r === 'string' ? r : r.result;
+          var cls = 'draft-form__dot draft-form__dot--' +
+            (result === 'W' ? 'win' : result === 'L' ? 'loss' : result === 'D' ? 'draw' : 'nc');
+          return '<span class="' + cls + '" data-detail="' + escapeHtml(formatFormDetail(r) || '') + '"></span>';
+        }).join('');
+        fvHtml +=
+          '<div class="draft-row-preview__form">' +
+            '<span class="draft-row-preview__section-label">Recent form</span>' +
+            '<span class="draft-form">' + dots + '</span>' +
+          '</div>';
+      }
+      // Stats block — avg + total + last-year points
+      if (pts && pts.fightCount > 0) {
+        fvHtml +=
+          '<div class="draft-row-preview__stats">' +
+            '<div class="draft-row-preview__stat">' +
+              '<span class="draft-row-preview__stat-label">Avg</span>' +
+              '<span class="draft-row-preview__stat-val">' + pts.avgPts.toFixed(1) + '</span>' +
+            '</div>' +
+            '<div class="draft-row-preview__stat">' +
+              '<span class="draft-row-preview__stat-label">Last yr</span>' +
+              '<span class="draft-row-preview__stat-val">' + pts.recentPts.toFixed(1) + '</span>' +
+            '</div>' +
+            '<div class="draft-row-preview__stat">' +
+              '<span class="draft-row-preview__stat-label">Fights</span>' +
+              '<span class="draft-row-preview__stat-val">' + pts.fightCount + '</span>' +
+            '</div>' +
+          '</div>';
+      }
+    }
+
+    // Next fight, if booked
+    var nextHtml = '';
+    var nf       = fighterNextFight[fighter.id];
+    if (nf && typeof NextFight !== 'undefined') {
+      nextHtml =
+        '<div class="draft-row-preview__next">' +
+          '<span class="draft-row-preview__section-label">Next</span>' +
+          '<span class="draft-row-preview__next-text">' + escapeHtml(NextFight.formatShort(nf)) + '</span>' +
+        '</div>';
+    }
+
+    preview.innerHTML =
+      '<div class="draft-row-preview__header">' +
+        photoHtml +
+        '<div class="draft-row-preview__heading">' +
+          '<p class="draft-row-preview__name">' + escapeHtml(fighter.name) + '</p>' +
+          '<p class="draft-row-preview__meta">' +
+            escapeHtml(divLabel) + ' · ' + escapeHtml(rankLabel) + ' · ' + escapeHtml(record) +
+          '</p>' +
+        '</div>' +
+      '</div>' +
+      fvHtml +
+      nextHtml;
+  }
+
+  // Delegated mouseover — only fires on enter into a new row (mouseover
+  // bubbles so leaf-element hovers count too, but we dedup via activeRow).
+  document.addEventListener('mouseover', function(e) {
+    var row = e.target && e.target.closest ? e.target.closest('.lineup-roster-row') : null;
+    if (!row) return;
+
+    // Only treat draft surfaces as previewable (pool, view-all modal,
+    // my-roster). Skips lineup/waivers pages that share the row class.
+    var inDraftSurface = row.closest('#fighterPool, #viewAllOverlay, #myRoster');
+    if (!inDraftSurface) return;
+
+    // Look up the fighter id from any of the data attributes the row
+    // exposes (name button has data-open-fighter; queue/pick buttons
+    // carry their own ids).
+    var nameBtn = row.querySelector('[data-open-fighter]');
+    var fighterId = nameBtn ? nameBtn.getAttribute('data-open-fighter') : null;
+    if (!fighterId) return;
+
+    if (activeRow === row) return; // already previewing this row
+    clearTimer();
+    activeRow = row;
+    hoverTimer = setTimeout(function() {
+      var f = fighterMap && fighterMap[fighterId];
+      if (!f) return;
+      render(f);
+      position(row);
+    }, 350);
+  });
+
+  document.addEventListener('mouseout', function(e) {
+    var row = e.target && e.target.closest ? e.target.closest('.lineup-roster-row') : null;
+    if (!row) return;
+    // Moving to a related descendant of the same row? Stay open.
+    var next = e.relatedTarget && e.relatedTarget.closest
+      ? e.relatedTarget.closest('.lineup-roster-row') : null;
+    if (next === row) return;
+    hide();
+  });
+
+  // Defensive — any scroll inside the pool/modal moves rows underneath,
+  // so the popover would float over wrong rows. Just hide on scroll.
+  window.addEventListener('scroll', function() { hide(); }, { passive: true, capture: true });
+}
+
+// One-time setup: install a body-level popover element + delegated hover
+// handlers that show recent-fight detail on form-sparkline dot hover.
+// Body-level because the fighter pool scrolls (overflow:auto), which would
+// clip any popover rendered inside a row. Idempotent — safe to call more
+// than once.
+function setupFormDotHover() {
+  if (document.getElementById('draftFormPopover')) return;
+
+  var popover = document.createElement('div');
+  popover.id        = 'draftFormPopover';
+  popover.className = 'draft-form-popover';
+  popover.hidden    = true;
+  document.body.appendChild(popover);
+
+  function positionFor(dotEl) {
+    var rect = dotEl.getBoundingClientRect();
+    // Measure popover AFTER making it visible (display:none = no size).
+    popover.hidden = false;
+    var pRect      = popover.getBoundingClientRect();
+    // Center horizontally over the dot; perch ~8px above.
+    var left = rect.left + rect.width  / 2 - pRect.width  / 2;
+    var top  = rect.top  - pRect.height - 8;
+    // Clamp so we never run off-screen (especially the right edge with a
+    // long opponent name).
+    var pad  = 8;
+    var maxLeft = window.innerWidth  - pRect.width  - pad;
+    if (left < pad)     left = pad;
+    if (left > maxLeft) left = maxLeft;
+    // Flip below the dot if there's no room above (very tall popover edge
+    // case shouldn't happen, but defensive).
+    if (top < pad) top = rect.bottom + 8;
+    popover.style.left = left + 'px';
+    popover.style.top  = top  + 'px';
+  }
+
+  document.addEventListener('mouseover', function(e) {
+    var dot = e.target && e.target.closest ? e.target.closest('.draft-form__dot') : null;
+    if (!dot) return;
+    var detail = dot.getAttribute('data-detail');
+    if (!detail) return;
+    popover.textContent = detail;
+    positionFor(dot);
+  });
+
+  document.addEventListener('mouseout', function(e) {
+    var dot = e.target && e.target.closest ? e.target.closest('.draft-form__dot') : null;
+    if (!dot) return;
+    // Hide unless we're moving to ANOTHER dot — in which case the next
+    // mouseover will immediately reposition. Avoids a flicker between
+    // adjacent dots.
+    var next = e.relatedTarget && e.relatedTarget.closest
+      ? e.relatedTarget.closest('.draft-form__dot') : null;
+    if (next) return;
+    popover.hidden = true;
+  });
+
+  // Hide the popover on any scroll so it doesn't hang in mid-air over
+  // unrelated content. Cheap — passive listener.
+  window.addEventListener('scroll', function() { popover.hidden = true; }, { passive: true, capture: true });
+}
+
+// Form sparkline — 5 inline dots showing W/L/D for the fighter's most-recent
+// fights (newest on the LEFT, matching how UFC/Tapology display recent form).
+// Each dot is hoverable: data-detail carries a one-line summary ("Win vs
+// Pereira · Mar 14 · 28.5 pts") that the body-level popover handler reads
+// and positions. We resolve opponent ids via fighterMap (already populated
+// with all known fighters at init time) so no extra fetches are needed.
+function formSparkline(fighter) {
+  if (typeof FantasyValue === 'undefined' || !FantasyValue.pointsFor) return '';
+  var pts = FantasyValue.pointsFor(fighter.id);
+  if (!pts || !pts.recentResults || pts.recentResults.length === 0) return '';
+
+  var dots = '';
+  pts.recentResults.forEach(function(r) {
+    // Tolerate both the legacy string shape ("W") and the new object shape
+    // ({ result, date, opponentId, score }) — defensive in case stale cache
+    // entries exist mid-session.
+    var result = typeof r === 'string' ? r : r.result;
+    var cls = 'draft-form__dot draft-form__dot--' +
+      (result === 'W' ? 'win' : result === 'L' ? 'loss' : result === 'D' ? 'draw' : 'nc');
+
+    var detail = formatFormDetail(r);
+    var detailAttr = detail ? ' data-detail="' + escapeHtml(detail) + '"' : '';
+    dots += '<span class="' + cls + '" aria-label="' + escapeHtml(result) +
+            '"' + detailAttr + '></span>';
+  });
+  return '<span class="draft-form" title="Recent form (newest left)">' + dots + '</span>';
+}
+
+// Build the hover-popover text for one recentResults entry. Returns
+// something like "Win vs Pereira · Mar 14 · 28.5 pts" — opponent piece
+// gets dropped if we can't resolve the id, date drops if missing. Score
+// always shows when the entry has it because the FV math relies on it.
+function formatFormDetail(entry) {
+  if (typeof entry === 'string') return null; // legacy shape, no detail
+  if (!entry) return null;
+
+  var resultLabel = entry.result === 'W' ? 'Win'
+                  : entry.result === 'L' ? 'Loss'
+                  : entry.result === 'D' ? 'Draw'
+                  : 'No contest';
+
+  var opp = '';
+  if (entry.opponentId && fighterMap && fighterMap[entry.opponentId]) {
+    opp = ' vs ' + fighterMap[entry.opponentId].name;
+  }
+
+  var dateStr = '';
+  if (entry.date) {
+    var d = new Date(entry.date);
+    if (!isNaN(d.getTime())) {
+      dateStr = ' · ' + d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' });
+    }
+  }
+
+  var scoreStr = '';
+  if (typeof entry.score === 'number' && !isNaN(entry.score)) {
+    scoreStr = ' · ' + entry.score.toFixed(1) + ' pts';
+  }
+
+  return resultLabel + opp + dateStr + scoreStr;
+}
+
+// Core value-tier evaluator — given a fighter and the slot we're comparing
+// them against, returns { label, tone } or null. Shared by:
+//   * the pool/modal rows (compared against the CURRENT slot)
+//   * the draft board cells (compared against the slot the fighter was
+//     actually drafted at — i.e., retrospective verdict on the pick)
+//
+// Thresholds intentionally generous so the badges actually show up in
+// pilot-scale leagues. STEAL fires when a fighter's FV rank is at least
+// 10 slots better than the comparison slot, VALUE at 5+, REACH at 12+
+// worse. With a 120-pick draft and ~200 FV-ranked fighters, this should
+// give 3-6 badges visible at any moment instead of "basically never."
+function _valueBadgeFor(fighter, pickNum) {
+  if (!pickNum) return null;
+  if (typeof FantasyValue === 'undefined' || !FantasyValue.rankFor) return null;
+  var info = FantasyValue.rankFor(fighter.id);
+  if (!info || !info.rank) return null;
+  // delta < 0 = fighter ranks higher than the slot (a bargain)
+  // delta > 0 = fighter ranks below the slot (overpay)
+  var delta = info.rank - pickNum;
+  if (delta <= -10) return { label: 'STEAL', tone: 'steal' };
+  if (delta <=  -5) return { label: 'VALUE', tone: 'value' };
+  if (delta >=  12) return { label: 'REACH', tone: 'reach' };
+  return null;
+}
+
+// Pool-row badge — only meaningful for undrafted fighters during a live
+// draft. Compares each fighter's FV rank to where we are NOW in the draft.
+function valuePickBadge(fighter) {
+  if (picks.some(function(p) { return p.fighter_id === fighter.id; })) return null;
+  if (!league || !league.draft_started) return null;
+  var totalPicks = getTotalPicks();
+  if (picks.length >= totalPicks) return null;
+  return _valueBadgeFor(fighter, getCurrentPickNum());
+}
+
+// Board-cell badge — retrospective verdict on an already-made pick.
+// Compares the fighter's FV rank to the actual slot they were taken at.
+// No live-draft guards needed since picks always have a slot.
+function valuePickBadgeForPick(fighter, pickSlot) {
+  return _valueBadgeFor(fighter, pickSlot);
+}
+
+function valuePickBadgeHtml(fighter) {
+  var b = valuePickBadge(fighter);
+  if (!b) return '';
+  return '<span class="draft-value-badge draft-value-badge--' + b.tone + '" title="FV rank vs current pick">' +
+           escapeHtml(b.label) +
+         '</span>';
+}
+
+function valuePickBadgeForPickHtml(fighter, pickSlot) {
+  var b = valuePickBadgeForPick(fighter, pickSlot);
+  if (!b) return '';
+  return '<span class="draft-value-badge draft-value-badge--' + b.tone + '" title="FV rank vs the slot this pick was taken at">' +
+           escapeHtml(b.label) +
+         '</span>';
+}
+
+// Render the "league-rank | FV-score | FV" chip shown on each row.
+// Same markup the lineup page uses (lineup-roster-row__fv classes) so the
+// styling is shared and the draft inherits any future tweaks automatically.
+// Returns '' until FantasyValue resolves — the draft kicks off a re-render
+// when it does, so rows quietly fill in the chip then.
+function fighterFvChip(fighter) {
+  if (typeof FantasyValue === 'undefined' || !FantasyValue.scoreFor) return '';
+  var fvScore = FantasyValue.scoreFor(fighter.id);
+  if (typeof fvScore !== 'number') return '';
+  var fvRankInfo = FantasyValue.rankFor && FantasyValue.rankFor(fighter.id);
+  var rankStr    = (fvRankInfo && fvRankInfo.rank) ? '#' + fvRankInfo.rank : '—';
+  return (
+    '<span class="lineup-roster-row__fv" title="League rank · Fantasy Value score">' +
+      '<span class="lineup-roster-row__fv-rank">' + escapeHtml(rankStr) + '</span>' +
+      '<span class="lineup-roster-row__fv-divider" aria-hidden="true"></span>' +
+      '<span class="lineup-roster-row__fv-val">' + fvScore.toFixed(1) + '</span>' +
+      '<span class="lineup-roster-row__fv-label">FV</span>' +
+    '</span>'
+  );
+}
+
 // ========================================================================
 // TEAM ACCENT COLORS
 // Up to 8 managers per league, each gets a deterministic palette slot
@@ -83,7 +772,7 @@ let allFighters, fighterMap;
 let picks = [];
 let divisionFilter = 'all';
 let statusFilter   = 'all';
-let sortBy         = 'rank';
+let sortBy         = 'fantasy_value';
 let searchQuery = '';
 let picking = false; // blocks a second pick while a request is in flight
 let pickTimerInterval = null; // setInterval handle for the countdown
@@ -105,9 +794,94 @@ let pickClockResetAt = null;
 // View All modal — independent filter / sort state so the modal can be
 // browsed without disturbing the side panel's controls.
 let viewAllSearch   = '';
-let viewAllSort     = 'rank';
+let viewAllSort     = 'fantasy_value';
 let viewAllDivision = 'all';
 let viewAllStatus   = 'all';
+
+// Next-fight lookup: fighter_id → { event_date, opponent_name, ... }.
+// Populated asynchronously after the initial render; missing entries just
+// mean "no upcoming fight booked" and the row renders without the line.
+let fighterNextFight = {};
+
+// Set of league_member_ids currently connected to the presence channel
+// for this draft. Used to render a green/gray status dot next to each
+// manager on the board. Empty until the presence channel syncs.
+let presentMemberIds = new Set();
+let presenceChannel  = null;
+
+// Pick reactions: { pickId: { emoji: { userIds: Set, myReactionId: string|null } } }
+// Mirrors the draft_pick_reactions table. The board render reads this to
+// show count badges; the click handler reads it to decide insert vs delete.
+let pickReactions        = {};
+let pickReactionsLoaded  = false;
+// Disable the entire reactions UI when the load fails (most likely cause:
+// migration 004 hasn't been applied to this Supabase project yet). Lets
+// the rest of the draft surface render cleanly without flickering chips
+// that try to insert and immediately roll back on a missing-table error.
+let pickReactionsEnabled = true;
+
+// Fresh-add marker — "<pickId>:<emoji>" strings that should pop briefly on
+// the next render. Cleared automatically ~500ms after marking. Lets us run
+// the celebrate animation ONLY on actually-new chips, not every render
+// (which fires on every pick + every other reaction change).
+let freshReactionKeys = new Set();
+function _markFreshReaction(pickId, emoji) {
+  var key = pickId + ':' + emoji;
+  freshReactionKeys.add(key);
+  setTimeout(function() { freshReactionKeys.delete(key); }, 500);
+}
+
+// Supported reactions — keep the set small so the UI doesn't bloat. ESPN /
+// Yahoo top out around 4-6; we go with 4 that have natural meanings in
+// draft context: 🔥 hype / 👀 watching / 😱 shock / 💀 brutal pick.
+const PICK_REACTION_EMOJIS = ['🔥', '👀', '😱', '💀'];
+
+// Auto-draft toggle. When true, this client auto-picks the moment it
+// becomes the user's turn (no waiting for the clock). Independent from
+// the clock-expiry auto-pick, which fires for any picker regardless of
+// this toggle. Persisted per league so a user can have it on in one
+// league and off in another.
+let autoDraftOn = false;
+
+// Mock-draft mode. Activated by ?mock=1 in the URL. In this mode:
+//   * Picks live in memory only — no Supabase writes, no realtime.
+//   * Every non-user manager is on auto-pick, simulated with a short
+//     delay so the user can watch the board fill out.
+//   * Commish controls / presence / reactions / activity feed are
+//     suppressed since they're meaningless single-player.
+// Treated as read-once at init; mutations to URL afterward are ignored.
+const isMockMode = new URLSearchParams(window.location.search).get('mock') === '1';
+// Counter for synthetic pick ids in mock mode. Real draft uses Postgres
+// UUIDs; here we just need uniqueness inside one mock session.
+let mockPickIdCounter = 0;
+// Timer handle for the next scheduled AI pick. Cleared on user pick so
+// we don't double-schedule across renders.
+let mockAiTimer = null;
+// Manual gate — the mock doesn't pick anything (AI or user) until the
+// user clicks "Start mock." Lets them prep their queue first.
+let mockStarted = false;
+
+// Sound trigger state. Transition trackers so each sound fires once per
+// state change, not every render or every timer tick.
+//   wasMyTurn:     last-render value of isMyTurn(); flips false→true plays the
+//                  "your turn" chime.
+//   lastClockBand: last clock-urgency level we played a sound for. Bands
+//                  are 'none' / 'warn' (≤30s) / 'urgent' (≤10s) / 'expired'
+//                  (=0). Stays sticky so repeat ticks in the same band
+//                  don't re-play.
+//   draftDoneSounded: one-shot so the completion sound only plays once.
+let wasMyTurn        = false;
+let lastClockBand    = 'none';
+let draftDoneSounded = false;
+
+// Pick-reveal animation state.
+//   initialPicksLoaded: false until the first renderAll() finishes during
+//     initDraft, so the initial board paint doesn't animate every existing
+//     pick like it just landed.
+//   lastAnimatedPickId: dedup so the same pick doesn't trigger the reveal
+//     twice (own picks land via makePick AND realtime broadcast).
+let initialPicksLoaded   = false;
+let lastAnimatedPickId   = null;
 
 // ========================================================================
 // INIT
@@ -130,7 +904,7 @@ async function initDraft() {
   const [leagueRes, membersRes, fightersRes, picksRes] = await Promise.all([
     supabaseClient
       .from('leagues')
-      .select('id, name, draft_order, draft_started, draft_completed, draft_started_at, draft_scheduled_at, draft_paused_at, commissioner_id, roster_size, max_managers, pick_timer_seconds')
+      .select('id, name, draft_order, draft_started, draft_completed, draft_started_at, draft_scheduled_at, draft_paused_at, commissioner_id, roster_size, max_managers, pick_timer_seconds, scoring_config')
       .eq('id', leagueId)
       .single(),
     supabaseClient
@@ -159,6 +933,14 @@ async function initDraft() {
   allFighters = fightersRes.data || [];
   picks    = picksRes.data    || [];
 
+  // Wire the shared "? How it works" modal now that we have the league
+  // row. The trigger button is already in the DOM (top-nav); install()
+  // registers the content + attaches the click handler. We pass the
+  // league row we already loaded so league-primer doesn't re-fetch.
+  if (typeof LeaguePrimer !== 'undefined') {
+    LeaguePrimer.install(league);
+  }
+
   // Build the member-id lookup map up front; the lobby and live-draft views
   // both need it (lobby uses it to label the draft order list).
   memberMap = {};
@@ -171,7 +953,30 @@ async function initDraft() {
   if (!myMember) { window.location.href = 'dashboard.html'; return; }
   myMemberId = myMember.id;
 
+  // ---- Mock-draft bootstrap ------------------------------------------
+  // Treat the room as live-in-progress, but rooted in the user's actual
+  // league (so member names, team colors, FV scoring, and roster_size
+  // all match what the real draft will use). Picks start empty regardless
+  // of any real-draft state. Realtime subscriptions and DB writes are
+  // skipped further down via isMockMode guards.
+  if (isMockMode) {
+    league.draft_started   = true;
+    league.draft_completed = false;
+    league.draft_paused_at = null;
+    // Generate a draft order if the league doesn't have one yet — random
+    // shuffle of all members so the user gets a realistic snake. If the
+    // commissioner has already set an order, we honor it so the mock
+    // mirrors what the real draft will look like.
+    if (!league.draft_order || league.draft_order.length === 0) {
+      league.draft_order = members.map(function(m) { return m.id; }).sort(function() { return Math.random() - 0.5; });
+    }
+    // Wipe any real picks — mock is always a clean board.
+    picks = [];
+  }
+
   // No live draft AND no schedule → nothing to render here, bounce back.
+  // Mock mode forces draft_started above so this guard is naturally
+  // satisfied for mocks.
   if (!league.draft_started && !league.draft_scheduled_at) {
     window.location.href = 'league.html?id=' + leagueId;
     return;
@@ -192,39 +997,137 @@ async function initDraft() {
   // Awaited so the first render shows the queue panel populated.
   await loadQueue();
 
+  // Kick off the fantasy-value / points-map load in the background. Same
+  // module the waivers page uses — gives us per-fighter avgPts / totalPts /
+  // recentPts and a composite FV score so the draft pool can sort on the
+  // same options as free agency. Cached at the module level, so if the
+  // user just came from waivers this resolves instantly. Once it arrives
+  // we re-render the pool (and the View All modal if it's open) so the
+  // new sort metrics actually show.
+  if (typeof FantasyValue !== 'undefined') {
+    FantasyValue.ensureLoaded(leagueId, league.scoring_config).then(function() {
+      renderFighterPool();
+      renderBestAvailable();
+      if (document.getElementById('viewAllOverlay')) renderViewAllList();
+    }).catch(function() { /* ignore — sorts fall back to rank */ });
+  }
+
+  // Next-fight lookup — same NextFight module the waivers/lineup pages use.
+  // Loaded in the background so first paint isn't blocked. When it arrives
+  // we re-render so the "Fights MMM DD vs Opponent" line appears under each
+  // row. Missing fighters (no upcoming fight) render normally without it.
+  if (typeof NextFight !== 'undefined') {
+    var fighterIds = allFighters.map(function(f) { return f.id; });
+    NextFight.loadNextFights(fighterIds).then(function(map) {
+      fighterNextFight = map || {};
+      renderFighterPool();
+      if (document.getElementById('viewAllOverlay')) renderViewAllList();
+    }).catch(function() { /* ignore — rows just skip the next-fight line */ });
+  }
+
+  // Install the form-sparkline hover popover (body-level so it isn't
+  // clipped by the pool's overflow:auto). Idempotent / one-time setup.
+  setupFormDotHover();
+
+  // Row preview card — same delayed-hover pattern, richer content.
+  setupRowPreviewHover();
+
+  // Fullscreen draft mode — restores prior choice from localStorage so
+  // returning users land in the mode they left in. Wires the toggle button,
+  // floating exit button, and Esc key listener.
+  setupFullscreenMode();
+
+  // Pre-draft lobby "Enter draft room" / "Show lobby" toggle. Lets users
+  // peek into the room before draft starts (queue fighters, browse pool,
+  // etc.) without dismissing the lobby state permanently.
+  setupLobbyEnterButton();
+
+  // Auto-draft toggle — wires the button, restores localStorage state,
+  // and fires maybeAutoPickNow() on flip-on so the user doesn't have to
+  // wait for an external event to trigger the first auto-pick.
+  setupAutoDraftToggle();
+
+  // Draft sound effects — wire the mute toggle. The sound module itself
+  // is autoplay-policy-aware; first audible play requires a user click,
+  // which the act of clicking around the draft naturally provides.
+  setupSoundToggle();
+
+  // Reveal the MOCK badge and Restart button when we're in mock mode.
+  // No-op in real draft.
+  setupMockChrome();
+
   // Render all three panels. Pre-draft this still works: the board shows
   // empty slots labelled with manager names, the fighter pool shows every
   // fighter as available (no picks yet), and My Roster is empty.
   renderAll();
+  // Flip the flag AFTER the first render so subsequent renders (from new
+  // picks landing) can fire the reveal animation. The initial paint shouldn't
+  // animate the entire existing board.
+  initialPicksLoaded = true;
 
   // Pre-draft we only watch the leagues row (for the start flip + schedule
   // changes) and the personal queue. Live draft additionally subscribes to
   // incoming picks. Splitting these means we don't open a picks channel
   // for nothing during the lobby phase.
+  // Mock mode: zero subscriptions. Mock is single-player, in-memory, no
+  // realtime, no presence, no reactions. We DO load the queue (so the
+  // user's saved queue powers their own auto-pick during mock too).
   subscribeToQueue();
-  if (league.draft_started) {
-    subscribeToRealtime();
-    // Watch the leagues row in live draft too, so all clients see pause /
-    // resume / commish-revert state changes in real time. (Pre-draft uses
-    // subscribeToLobbyFlip for the start flip.)
-    subscribeToLeagueChanges();
-  } else {
-    subscribeToLobbyFlip();
-    startPredraftCountdown();
+  if (!isMockMode) {
+    if (league.draft_started) {
+      subscribeToRealtime();
+      // Watch the leagues row in live draft too, so all clients see pause /
+      // resume / commish-revert state changes in real time. (Pre-draft uses
+      // subscribeToLobbyFlip for the start flip.)
+      subscribeToLeagueChanges();
+      // Reactions only apply to picks that exist, so load + subscribe in
+      // live-draft mode. Migration 004 is required; loadPickReactions
+      // fails soft if the table doesn't exist yet.
+      loadPickReactions().then(function() { renderDraftBoard(); });
+      subscribeToReactions();
+    } else {
+      subscribeToLobbyFlip();
+      startPredraftCountdown();
+    }
+    // Presence channel runs in both pre-draft and live-draft phases — the
+    // lobby benefits from seeing who's already arrived just as much as the
+    // live room benefits from seeing who's still connected.
+    subscribeToPresence();
   }
 
   // Commissioner-only toolbar: reveal the Pause / Undo / Clear buttons if
   // the viewer is the commish (primary or co-) and the draft has actually
   // started. Pre-draft these actions don't make sense (nothing to pause /
-  // undo / clear yet).
-  if (league.draft_started && isCommish()) {
+  // undo / clear yet). Hidden in mock mode — they would mutate real DB.
+  if (!isMockMode && league.draft_started && isCommish()) {
     initCommishTools();
   }
+
+  // Final check: if it's already our turn on page load AND auto-draft was
+  // previously enabled (restored above from localStorage), fire the pick.
+  maybeAutoPickNow();
+
+  // Kick off the mock AI loop. If pick #1 belongs to an AI, this schedules
+  // it; if it belongs to the user, this is a no-op until they pick.
+  if (isMockMode) maybeScheduleNextAiPick();
 
   // One delegated listener: any element with data-open-fighter opens the
   // fighter modal regardless of which renderer emitted it. Avoids re-wiring
   // after every realtime pick re-render.
   document.addEventListener('click', function(e) {
+    // Reactions take priority — they're nested inside the pick cell, which
+    // ALSO has data-open-fighter on its inner button. Without this branch,
+    // clicking a reaction would open the fighter modal too.
+    var reactBtn = e.target.closest('[data-emoji][data-pick-id]');
+    if (reactBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      togglePickReaction(
+        reactBtn.getAttribute('data-pick-id'),
+        reactBtn.getAttribute('data-emoji')
+      );
+      return;
+    }
     var trigger = e.target.closest('[data-open-fighter]');
     if (!trigger) return;
     if (typeof showFighterModal === 'function') {
@@ -271,9 +1174,14 @@ async function initDraft() {
   var viewAllBtn = document.getElementById('viewAllBtn');
   if (viewAllBtn) viewAllBtn.addEventListener('click', openViewAll);
 
-  // Whole Roster button — opens the sectioned roster modal
+  // Whole Roster button — opens the sectioned roster modal for the current
+  // user. Wrap the call so the click event isn't passed as the memberId
+  // argument; otherwise showWholeRosterModal treats the event object as a
+  // truthy member id, can't find it in memberMap, and silently no-ops.
   var viewWholeRosterBtn = document.getElementById('viewWholeRosterBtn');
-  if (viewWholeRosterBtn) viewWholeRosterBtn.addEventListener('click', showWholeRosterModal);
+  if (viewWholeRosterBtn) viewWholeRosterBtn.addEventListener('click', function() {
+    showWholeRosterModal();
+  });
 
   // Reveal the page now that everything is ready
   // Clear the inline display:none so CSS's display:flex takes over.
@@ -319,26 +1227,39 @@ function isMyTurn() {
 // ========================================================================
 // ROSTER SLOT VALIDATION
 // Returns true if the fighter can legally be added to the manager's roster
-// given the current picks. Enforces the v1.2 roster construction rules:
-//   - ROSTER_SLOTS_PER_DIVISION slot(s) per weight class (8 men + 3 women)
-//   - ROSTER_FLEX_SLOTS any-division flex slots (overflow from any class)
-//   - Defaults today: 1 per class + 6 flex = 17 fighters per roster
+// given the current picks. Mirrors checkRosterConstruction() in waivers.js
+// (the canonical implementation) so the draft enforces identical rules:
+//   - 8 men's divisions, ROSTER_SLOTS_PER_DIVISION each
+//   - 1 Women's Flex slot pooled across all 3 women's divisions
+//   - ROSTER_FLEX_SLOTS any-division flex slots (overflow bucket)
+//   - Base total: ROSTER_SIZE_BASE (8 + 1 + 6 = 15 today)
 // ========================================================================
 function canPick(fighter, currentPickFighters) {
-  const divCounts = {};
+  // Per-division tallies + a separate women's-pool count, same shape as
+  // checkRosterConstruction(). Women's fighters never get their own slot —
+  // they share the Women's Flex.
+  const divCounts   = {};
+  let   womensTotal = 0;
   currentPickFighters.forEach(function(f) {
     divCounts[f.primary_division] = (divCounts[f.primary_division] || 0) + 1;
+    if (WOMENS_DIVISIONS_KEYS.indexOf(f.primary_division) !== -1) womensTotal++;
   });
 
-  // Tally how many fighters have already overflowed into any-flex slots
+  // Count any-flex overflow from men's divisions only (women's are pooled).
   let flexUsed = 0;
   Object.keys(divCounts).forEach(function(div) {
+    if (WOMENS_DIVISIONS_KEYS.indexOf(div) !== -1) return;
     flexUsed += Math.max(0, divCounts[div] - ROSTER_SLOTS_PER_DIVISION);
   });
+  // ...plus women's overflow beyond the single Women's Flex slot
+  flexUsed += Math.max(0, womensTotal - ROSTER_WOMENS_FLEX_SLOTS);
 
-  // Pickable if either this division still has room OR the flex bucket does
-  const divHasRoom  = (divCounts[fighter.primary_division] || 0) < ROSTER_SLOTS_PER_DIVISION;
-  const flexHasRoom = flexUsed < ROSTER_FLEX_SLOTS;
+  const isWomens     = WOMENS_DIVISIONS_KEYS.indexOf(fighter.primary_division) !== -1;
+  const anyFlexCap   = getAnyFlexSlots(league);
+  const divHasRoom   = isWomens
+    ? womensTotal < ROSTER_WOMENS_FLEX_SLOTS
+    : (divCounts[fighter.primary_division] || 0) < ROSTER_SLOTS_PER_DIVISION;
+  const flexHasRoom  = flexUsed < anyFlexCap;
   return divHasRoom || flexHasRoom;
 }
 
@@ -347,6 +1268,201 @@ function canPick(fighter, currentPickFighters) {
 // Inserts the pick into the rosters table. The Realtime event fires and
 // updates all connected clients including the picker's own screen.
 // ========================================================================
+// ========================================================================
+// AUTO-PICK
+// Pick selection used by both (a) clock-expiry auto-pick and (b) the
+// per-user auto-draft toggle. Strategy:
+//   1. Walk the personal queue in order — first entry that still exists
+//      AND isn't already drafted AND fits roster construction.
+//   2. Fall back to highest-FV undrafted fighter who fits.
+//   3. Last resort (queue empty + FV cache missing): any undrafted
+//      fighter who fits.
+// Always returns a legal pick (canPick=true) or null.
+// ========================================================================
+function selectAutoPickFighter() {
+  if (!isMyTurn()) return null;
+
+  var myFighters = getMyPickFighters();
+  var pickedIds  = new Set(picks.map(function(p) { return p.fighter_id; }));
+
+  // 1) Queue first — user's explicit preferences trump FV.
+  for (var i = 0; i < queue.length; i++) {
+    var qf = fighterMap[queue[i].fighter_id];
+    if (!qf) continue;
+    if (pickedIds.has(qf.id)) continue;
+    if (!canPick(qf, myFighters)) continue;
+    return qf;
+  }
+
+  // 2) Highest FV who fits. Build a sorted list once; walk until we find
+  //    a legal pick. canPick gating handles "no slot" cases (e.g., my
+  //    flyweight slot is full and I'd overflow flex with another flyweight).
+  if (typeof FantasyValue !== 'undefined' && FantasyValue.scoreFor) {
+    var scored = [];
+    for (var j = 0; j < allFighters.length; j++) {
+      var f  = allFighters[j];
+      if (pickedIds.has(f.id)) continue;
+      var fv = FantasyValue.scoreFor(f.id);
+      if (typeof fv !== 'number') continue;
+      scored.push({ f: f, fv: fv });
+    }
+    scored.sort(function(a, b) { return b.fv - a.fv; });
+    for (var k = 0; k < scored.length; k++) {
+      if (canPick(scored[k].f, myFighters)) return scored[k].f;
+    }
+  }
+
+  // 3) Last resort — any undrafted fighter who fits. Mostly for the case
+  //    where the user needs a slot fillable only by an FV-less new signee.
+  for (var m = 0; m < allFighters.length; m++) {
+    var any = allFighters[m];
+    if (pickedIds.has(any.id)) continue;
+    if (canPick(any, myFighters)) return any;
+  }
+  return null;
+}
+
+// One-shot auto-pick action. Re-runs the turn / pause / picking guards
+// inside makePick, so this is safe to call from multiple paths (timer
+// expiry, auto-draft toggle, turn-just-became-mine on realtime).
+async function autoPick() {
+  if (!isMyTurn() || picking) return;
+  if (league && league.draft_paused_at) return;
+  var pick = selectAutoPickFighter();
+  if (!pick) {
+    console.warn('[autopick] could not find a legal fighter to auto-pick');
+    return;
+  }
+  await makePick(pick);
+}
+
+// Called from any path that might transition into "it's now my turn" —
+// init, handleNewPick, handlePickDelete, auto-draft toggle flip. Fires
+// the auto-pick after a short delay so the user sees their turn arrive
+// before the pick lands (and renderAll finishes first).
+function maybeAutoPickNow() {
+  if (!autoDraftOn) return;
+  if (!isMyTurn() || picking) return;
+  if (league && league.draft_paused_at) return;
+
+  setTimeout(function() {
+    // Re-check inside the timeout — state may have flipped during the
+    // delay (someone else picked, draft paused, user toggled off, etc).
+    if (autoDraftOn && isMyTurn() && !picking && !(league && league.draft_paused_at)) {
+      autoPick();
+    }
+  }, 600);
+}
+
+// ========================================================================
+// MOCK DRAFT
+// Single-player practice mode (?mock=1). Picks live in memory; non-user
+// managers auto-pick best-available FV. The user picks via the normal
+// click handlers — makePick branches on isMockMode and short-circuits
+// the DB / realtime path. The AI loop schedules itself recursively after
+// every pick (user or AI) and stops once it lands on the user OR the
+// draft completes.
+// ========================================================================
+
+// Variant of selectAutoPickFighter that picks for ANY manager (not just
+// the viewer). Uses the same canPick + FV-best logic minus the queue
+// (only the viewer has a queue in mock mode).
+function selectAutoPickFighterFor(memberId) {
+  var theirFighters = picks
+    .filter(function(p) { return p.league_member_id === memberId; })
+    .map(function(p) { return fighterMap[p.fighter_id]; })
+    .filter(Boolean);
+
+  var pickedIds = new Set(picks.map(function(p) { return p.fighter_id; }));
+
+  // 1) Highest FV who fits this manager's roster construction.
+  if (typeof FantasyValue !== 'undefined' && FantasyValue.scoreFor) {
+    var scored = [];
+    for (var j = 0; j < allFighters.length; j++) {
+      var f = allFighters[j];
+      if (pickedIds.has(f.id)) continue;
+      var fv = FantasyValue.scoreFor(f.id);
+      if (typeof fv !== 'number') continue;
+      scored.push({ f: f, fv: fv });
+    }
+    scored.sort(function(a, b) { return b.fv - a.fv; });
+    for (var k = 0; k < scored.length; k++) {
+      if (canPick(scored[k].f, theirFighters)) return scored[k].f;
+    }
+  }
+
+  // 2) Last resort — any legal fighter regardless of FV (handles FV-less
+  //    fighters in case the cache is incomplete).
+  for (var m = 0; m < allFighters.length; m++) {
+    var any = allFighters[m];
+    if (pickedIds.has(any.id)) continue;
+    if (canPick(any, theirFighters)) return any;
+  }
+  return null;
+}
+
+// Insert a pick into the in-memory state without touching the DB. Used
+// for both user and AI picks in mock mode. Mirrors what makePick's
+// success path does in the real draft (sort by slot, anchor clock,
+// renderAll, animate, check for completion).
+function mockInsertPick(memberId, fighter) {
+  var pickNum  = getCurrentPickNum();
+  var round    = getPickInfo(pickNum).round;
+  mockPickIdCounter += 1;
+  var pick = {
+    id:               'mock_' + mockPickIdCounter,
+    league_id:        leagueId,
+    league_member_id: memberId,
+    fighter_id:       fighter.id,
+    draft_round:      round,
+    draft_pick:       pickNum,
+    created_at:       new Date().toISOString()
+  };
+  picks.push(pick);
+  picks.sort(function(a, b) { return a.draft_pick - b.draft_pick; });
+  pickClockResetAt = Date.now();
+  renderAll();
+  animatePickReveal(pick);
+  if (picks.length >= getTotalPicks()) {
+    handleDraftComplete();
+  } else {
+    maybeScheduleNextAiPick();
+  }
+}
+
+// If the next pick belongs to an AI manager, schedule it with a small
+// random delay (600-1500ms) so the user can watch the board progress.
+// No-op if the next pick is the user's, the draft is complete, or we're
+// not in mock mode. Always clears any previously-scheduled timer so we
+// don't double-fire across renders.
+function maybeScheduleNextAiPick() {
+  if (mockAiTimer) { clearTimeout(mockAiTimer); mockAiTimer = null; }
+  if (!isMockMode) return;
+  // Manual-start gate — no AI activity until the user clicks Start mock.
+  if (!mockStarted) return;
+  if (picks.length >= getTotalPicks()) return;
+
+  var pickNum = getCurrentPickNum();
+  var activeManagerId = getPickInfo(pickNum).activeManagerId;
+  if (activeManagerId === myMemberId) return;  // user's turn — wait for click
+
+  var delayMs = 600 + Math.random() * 900;
+  mockAiTimer = setTimeout(function() {
+    mockAiTimer = null;
+    // Re-check the active picker — between schedule and fire, the user
+    // could have hit "Reset" or navigated away.
+    if (!isMockMode) return;
+    if (picks.length >= getTotalPicks()) return;
+    if (getCurrentPickNum() !== pickNum) return;  // shouldn't happen, defensive
+    var fighter = selectAutoPickFighterFor(activeManagerId);
+    if (!fighter) {
+      console.warn('[mock] no legal pick found for manager', activeManagerId);
+      return;
+    }
+    mockInsertPick(activeManagerId, fighter);
+  }, delayMs);
+}
+
 async function makePick(fighter) {
   if (!isMyTurn() || picking) return;
 
@@ -359,6 +1475,17 @@ async function makePick(fighter) {
 
   const myPickFighters = getMyPickFighters();
   if (!canPick(fighter, myPickFighters)) return;
+
+  // ---- Mock mode short-circuit ----------------------------------------
+  // No DB, no realtime, no safety timeout — pick is applied to local
+  // state immediately and the AI loop kicks off the next non-user pick.
+  // Picks are blocked entirely until the user clicks Start mock so the
+  // "ready to start" banner can't be bypassed by clicking a fighter.
+  if (isMockMode) {
+    if (!mockStarted) return;
+    mockInsertPick(myMemberId, fighter);
+    return;
+  }
 
   // Lock immediately to prevent double-pick while the INSERT is in flight
   picking = true;
@@ -437,16 +1564,55 @@ async function makePick(fighter) {
   // post-insert refetch also fails. Using SELECT * here for the same
   // schema-tolerance reason as the error branch above.
   clearTimeout(safetyTimeout);
+
+  // OPTIMISTIC PLACEHOLDER. Add our just-inserted pick to local state
+  // immediately so picks.length advances even if the SELECT below races
+  // with Postgres replication lag and returns a stale snapshot that
+  // doesn't include the row we just wrote. Without this, the user can
+  // click Draft a second time on the same slot before realtime catches up,
+  // triggering a 23505 unique-key violation and the misleading "slot
+  // already taken" alert. The synthetic id ("__opt_<pickNum>") never
+  // collides with a real UUID; the realtime broadcast + handleNewPick's
+  // draft_pick dedup will replace it with the real row when it arrives.
+  const optimisticPick = {
+    id:               '__opt_' + pickNum,
+    league_id:        leagueId,
+    league_member_id: myMemberId,
+    fighter_id:       fighter.id,
+    draft_round:      round,
+    draft_pick:       pickNum,
+    created_at:       new Date().toISOString()
+  };
+  if (!picks.some(function(p) { return p.draft_pick === pickNum; })) {
+    picks.push(optimisticPick);
+    picks.sort(function(a, b) { return a.draft_pick - b.draft_pick; });
+  }
+
   const { data: freshPicks } = await supabaseClient
     .from('draft_picks')
     .select('*')
     .eq('league_id', leagueId)
     .order('draft_pick');
-  if (freshPicks) picks = freshPicks;
+  if (freshPicks) {
+    // Merge: take everything fresh, but preserve any LOCAL pick (including
+    // our optimistic placeholder) whose slot isn't yet reflected in the
+    // fresh data. The next SELECT or realtime broadcast will overwrite the
+    // placeholder by draft_pick — see handleNewPick.
+    const freshSlots = new Set(freshPicks.map(function(p) { return p.draft_pick; }));
+    const localOnly  = picks.filter(function(p) { return !freshSlots.has(p.draft_pick); });
+    picks = freshPicks.concat(localOnly).sort(function(a, b) { return a.draft_pick - b.draft_pick; });
+  }
+
   // Local pick-clock anchor — the timer should restart on every pick.
   pickClockResetAt = Date.now();
   picking = false;
   renderAll();
+  // Reveal animation for the pick we just inserted. Prefer the fresh row
+  // (real id, real created_at) if available; otherwise fall back to the
+  // optimistic placeholder. Either way animatePickReveal dedups by id so
+  // the realtime broadcast won't double-animate.
+  var myFreshPick = picks.find(function(p) { return p.draft_pick === pickNum; });
+  if (myFreshPick) animatePickReveal(myFreshPick);
 
   // Activity feed: draft_pick. Captures round + overall so the line reads
   // "Mike drafted Topuria (R3 · #21)". Best-effort — failures are logged
@@ -461,6 +1627,274 @@ async function makePick(fighter) {
   }
 
   if (picks.length >= getTotalPicks()) handleDraftComplete();
+}
+
+// ========================================================================
+// PICK REACTIONS
+// Slack-style emoji reactions on draft picks. Persistence: see migration
+// 004_draft_pick_reactions.sql. Counts roll up live via realtime so a
+// reaction added on one client appears on all others within ~100ms.
+// ========================================================================
+
+// Internal helper — add a reaction row to local state. Idempotent: a
+// duplicate row (same pick + user + emoji) is a no-op. The reaction id
+// is recorded only when it's the viewer's own reaction so the toggle
+// path knows what to delete without re-querying. Newly-added (transition
+// from no count → count) chips are marked fresh so the pop animation
+// fires only on actual additions.
+function _localAddReaction(row) {
+  if (!pickReactions[row.draft_pick_id]) pickReactions[row.draft_pick_id] = {};
+  var slot = pickReactions[row.draft_pick_id];
+  var wasNew = !slot[row.emoji] || slot[row.emoji].userIds.size === 0;
+  if (!slot[row.emoji]) slot[row.emoji] = { userIds: new Set(), myReactionId: null };
+  var alreadyHadUser = slot[row.emoji].userIds.has(row.user_id);
+  slot[row.emoji].userIds.add(row.user_id);
+  if (user && row.user_id === user.id) slot[row.emoji].myReactionId = row.id;
+  // Pop only when the chip transitions from "not visible" to "visible" OR
+  // when a new user joins an existing chip. Skip idempotent re-adds (the
+  // realtime broadcast for our own optimistic add lands here and we don't
+  // want a second pop).
+  if (wasNew || !alreadyHadUser) _markFreshReaction(row.draft_pick_id, row.emoji);
+}
+
+// Remove a reaction row from local state. Tolerates missing entries (the
+// row may have already been removed locally by an optimistic delete).
+function _localRemoveReaction(row) {
+  if (!pickReactions[row.draft_pick_id]) return;
+  var slot = pickReactions[row.draft_pick_id][row.emoji];
+  if (!slot) return;
+  slot.userIds.delete(row.user_id);
+  if (user && row.user_id === user.id) slot.myReactionId = null;
+  if (slot.userIds.size === 0) delete pickReactions[row.draft_pick_id][row.emoji];
+}
+
+async function loadPickReactions() {
+  // Pull every reaction in the league in one shot — the dataset is tiny
+  // (8 managers × 4 emojis × N picks = at most a few hundred rows per
+  // league, even for a fully reacted draft).
+  var res = await supabaseClient
+    .from('draft_pick_reactions')
+    .select('id, draft_pick_id, user_id, emoji')
+    .eq('league_id', leagueId);
+  if (res.error) {
+    // Most likely the migration hasn't been run yet. Disable the entire
+    // reactions UI rather than leaving clickable targets that all roll
+    // back with "table not found" errors. Visible warning in the console
+    // tells the developer to apply migration 004.
+    console.warn('[reactions] load failed (migration 004 not applied?):', res.error.message);
+    pickReactionsLoaded  = true;  // mark loaded so we don't keep retrying
+    pickReactionsEnabled = false; // suppress the UI everywhere
+    renderDraftBoard();
+    return;
+  }
+  pickReactions = {};
+  (res.data || []).forEach(_localAddReaction);
+  pickReactionsLoaded = true;
+}
+
+function subscribeToReactions() {
+  supabaseClient
+    .channel('draft_reactions_' + leagueId)
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'draft_pick_reactions',
+      filter: 'league_id=eq.' + leagueId
+    }, function(payload) {
+      if (payload.eventType === 'INSERT') {
+        _localAddReaction(payload.new);
+      } else if (payload.eventType === 'DELETE') {
+        _localRemoveReaction(payload.old);
+      }
+      renderDraftBoard();
+    })
+    .subscribe();
+}
+
+// Synthetic pick ids assigned by makePick before the real DB row has been
+// confirmed back to the client (see optimisticPick there). Reactions can't
+// be associated with these — the FK to draft_picks would fail — so the
+// reactions UI suppresses itself for picks in this transitional state and
+// togglePickReaction bails early if called.
+function isOptimisticPickId(id) {
+  return typeof id === 'string' && id.indexOf('__opt_') === 0;
+}
+
+// Toggle the current user's reaction on a pick. Click an emoji you already
+// reacted with → DELETE that row. Click one you haven't → INSERT a new row.
+//
+// DELETE filters by the composite (draft_pick_id, user_id, emoji) rather
+// than by id so we can toggle off even when our local id is still the
+// optimistic placeholder (realtime hasn't delivered the real row yet).
+// INSERT trusts a successful return — we DON'T do .select().single() and
+// roll back on missing data, because RLS read-after-write returning null
+// would otherwise cause the reaction to flash on then immediately off.
+// Realtime will deliver the real row with its id; until then the toggle
+// path keys off the composite columns regardless.
+async function togglePickReaction(pickId, emoji) {
+  if (!user || !leagueId) return;
+  // Reactions are disabled when the underlying table is missing (most
+  // likely cause: migration 004 hasn't been applied to this project).
+  // The render path already hides the bar in that state; this is the
+  // defensive guard for the click delegation.
+  if (!pickReactionsEnabled) return;
+  // Optimistic pick ids aren't valid foreign keys yet — the INSERT would
+  // fail with 23503 and we'd visibly roll back the optimistic add. Skip
+  // until the pick reconciles. The render also suppresses the bar in
+  // this state so the user shouldn't see clickable targets anyway.
+  if (isOptimisticPickId(pickId)) return;
+  var slot = pickReactions[pickId] && pickReactions[pickId][emoji];
+  var existing = slot && (slot.userIds.has(user.id));
+
+  if (existing) {
+    // Optimistic local removal — realtime broadcast will arrive later and
+    // is a no-op via _localRemoveReaction's tolerance.
+    _localRemoveReaction({ draft_pick_id: pickId, user_id: user.id, emoji: emoji });
+    renderDraftBoard();
+    var del = await supabaseClient
+      .from('draft_pick_reactions')
+      .delete()
+      .eq('draft_pick_id', pickId)
+      .eq('user_id',       user.id)
+      .eq('emoji',         emoji);
+    if (del.error) {
+      console.warn('[reactions] delete failed:', del.error.message);
+      // Roll back the optimistic removal by reloading from the DB.
+      await loadPickReactions();
+      renderDraftBoard();
+    }
+    return;
+  }
+
+  // Optimistic add. The id placeholder gets replaced when realtime delivers
+  // the real row (see handler in subscribeToReactions). We don't .select()
+  // back from the INSERT because RLS read filtering could return empty data
+  // even when the insert succeeded, which the old code treated as a failure
+  // and rolled back — causing the just-added reaction to flicker off.
+  var optimistic = {
+    id:            '__opt_react_' + pickId + '_' + emoji,
+    draft_pick_id: pickId,
+    user_id:       user.id,
+    emoji:         emoji
+  };
+  _localAddReaction(optimistic);
+  renderDraftBoard();
+
+  var ins = await supabaseClient
+    .from('draft_pick_reactions')
+    .insert({ league_id: leagueId, draft_pick_id: pickId, user_id: user.id, emoji: emoji });
+
+  if (ins.error) {
+    // Unique-key violation (23505) means the row already exists in the DB —
+    // probably because realtime delivered our own pre-existing reaction
+    // before we knew about it locally. Treat as success: keep the local
+    // optimistic state, realtime will reconcile the id shortly.
+    if (ins.error.code === '23505') return;
+    console.warn('[reactions] insert failed:', ins.error.message);
+    _localRemoveReaction(optimistic);
+    renderDraftBoard();
+  }
+}
+
+// Render the reactions overlay for one board cell — existing reactions
+// with counts on the bottom-left, plus a "+" picker button on hover that
+// reveals the emoji palette. Returns inline HTML (no event wiring; clicks
+// are caught by a delegated handler attached once in initDraft).
+function renderPickReactionsBar(pickId) {
+  var bucket = pickReactions[pickId] || {};
+  var entries = [];
+  PICK_REACTION_EMOJIS.forEach(function(em) {
+    var slot = bucket[em];
+    if (slot && slot.userIds.size > 0) {
+      var mine = !!slot.myReactionId;
+      entries.push({ emoji: em, count: slot.userIds.size, mine: mine });
+    }
+  });
+
+  // Hidden picker palette — revealed on cell hover via CSS. The "+" toggle
+  // is just an entry point; the actual click target is each emoji.
+  var palette = '';
+  PICK_REACTION_EMOJIS.forEach(function(em) {
+    var mine = bucket[em] && bucket[em].myReactionId;
+    palette += '<button class="draft-react-palette__btn' + (mine ? ' draft-react-palette__btn--mine' : '') +
+                '" data-pick-id="' + escapeHtml(pickId) + '" data-emoji="' + escapeHtml(em) +
+                '" aria-label="React with ' + em + '" type="button">' + em + '</button>';
+  });
+
+  var countsHtml = entries.map(function(e) {
+    var fresh   = freshReactionKeys.has(pickId + ':' + e.emoji);
+    var classes = 'draft-react-count' +
+                  (e.mine  ? ' draft-react-count--mine'  : '') +
+                  (fresh   ? ' draft-react-count--fresh' : '');
+    return '<button class="' + classes +
+           '" data-pick-id="' + escapeHtml(pickId) + '" data-emoji="' + escapeHtml(e.emoji) +
+           '" aria-label="Toggle ' + e.emoji + ' reaction" type="button">' +
+             '<span class="draft-react-count__emoji">' + e.emoji + '</span>' +
+             '<span class="draft-react-count__num">' + e.count + '</span>' +
+           '</button>';
+  }).join('');
+
+  return (
+    '<div class="draft-react-bar">' +
+      '<div class="draft-react-counts">' + countsHtml + '</div>' +
+      '<div class="draft-react-palette" aria-hidden="false">' + palette + '</div>' +
+    '</div>'
+  );
+}
+
+// ========================================================================
+// PRESENCE
+// Supabase Realtime presence channel — each connected client tracks
+// themselves with their league_member_id, and every other client receives
+// a `sync` event with the full roster of currently-present members. The
+// board renderer reads `presentMemberIds` to paint each column header
+// with a green (online) or gray (offline) dot.
+//
+// Connect from anywhere — pre-draft lobby and live draft both benefit.
+// ========================================================================
+function subscribeToPresence() {
+  // Idempotent — don't open a second channel if init runs twice (e.g.,
+  // hot reload during development).
+  if (presenceChannel) return;
+
+  // Channel name is shared across all clients in the league but distinct
+  // from the picks channel so the two don't share rate limits.
+  presenceChannel = supabaseClient.channel('draft_presence_' + leagueId, {
+    config: { presence: { key: myMemberId } }
+  });
+
+  presenceChannel
+    .on('presence', { event: 'sync' }, function() {
+      // state is { memberId: [{ ...metadata... }, ...] }. We only care
+      // about which member ids are represented, not the per-tab metadata.
+      var state = presenceChannel.presenceState();
+      presentMemberIds = new Set(Object.keys(state));
+      renderDraftBoard();
+      renderDraftLobby();
+    })
+    .on('presence', { event: 'join' }, function() {
+      var state = presenceChannel.presenceState();
+      presentMemberIds = new Set(Object.keys(state));
+      renderDraftBoard();
+      renderDraftLobby();
+    })
+    .on('presence', { event: 'leave' }, function() {
+      var state = presenceChannel.presenceState();
+      presentMemberIds = new Set(Object.keys(state));
+      renderDraftBoard();
+      renderDraftLobby();
+    })
+    .subscribe(async function(status) {
+      // Announce our own presence once the channel is fully subscribed.
+      // Calling track before SUBSCRIBED is a no-op so the timing matters.
+      if (status === 'SUBSCRIBED') {
+        await presenceChannel.track({
+          member_id:    myMemberId,
+          user_id:      user && user.id,
+          connected_at: Date.now()
+        });
+      }
+    });
 }
 
 // ========================================================================
@@ -502,6 +1936,53 @@ function handlePickDelete(payload) {
   // picked and our pick got reverted, we want to be able to pick again.
   picking = false;
   renderAll();
+  // A commissioner undo can push the active slot back to us. If we have
+  // auto-draft on, we'd want it to re-fire.
+  maybeAutoPickNow();
+}
+
+// ========================================================================
+// PICK REVEAL ANIMATION
+// Triggers when a fresh pick lands — locates the cell in the board grid,
+// flashes the reveal animation (cell scale + glow + photo fade-in), and
+// if the pick belongs to the current viewer, spawns a confetti burst at
+// the cell's center. Dedups via lastAnimatedPickId so own picks (which
+// arrive via both makePick's SELECT path AND realtime broadcast) only
+// animate once.
+// ========================================================================
+function animatePickReveal(pick) {
+  if (!initialPicksLoaded) return;
+  if (!pick || !pick.id) return;
+  if (lastAnimatedPickId === pick.id) return;
+  lastAnimatedPickId = pick.id;
+
+  // Sound effects ride on the same dedup as the cell animation, so own
+  // picks (which fire via both makePick + realtime) don't double up.
+  if (typeof DraftSounds !== 'undefined') {
+    if (pick.league_member_id === myMemberId) DraftSounds.yourPickMade();
+    else                                       DraftSounds.pickMade();
+  }
+
+  // The board re-renders synchronously inside renderAll() before we get
+  // here, so the new cell is already in the DOM. We tag each board cell
+  // with the pick number it represents to avoid fragile nth-child math.
+  // (Adding the attribute happens in renderDraftBoard below.)
+  var cell = document.querySelector('.draft-board__cell[data-pick-num="' + pick.draft_pick + '"]');
+  if (!cell) return;
+
+  // Re-applying the same class doesn't restart a CSS animation; toggling
+  // off → forcing a reflow → toggling on does. The reflow read of
+  // offsetWidth is the standard trick.
+  cell.classList.remove('draft-board__cell--just-picked');
+  // eslint-disable-next-line no-unused-expressions
+  cell.offsetWidth;
+  cell.classList.add('draft-board__cell--just-picked');
+  setTimeout(function() {
+    cell.classList.remove('draft-board__cell--just-picked');
+  }, 900);
+
+  // No extra celebration effect — the cell scale-up + photo crossfade
+  // above is sufficient feedback for own picks. Keeping the room calm.
 }
 
 function handleNewPick(payload) {
@@ -509,6 +1990,12 @@ function handleNewPick(payload) {
 
   // Guard against duplicate events (Realtime can occasionally fire twice)
   if (picks.find(function(p) { return p.id === newPick.id; })) return;
+
+  // Dedup by slot too — replaces any optimistic placeholder makePick added
+  // before realtime delivered the real row. Without this, both the
+  // placeholder (id "__opt_N") and the real row (real UUID) would land in
+  // picks and getCurrentPickNum() would skip ahead by one.
+  picks = picks.filter(function(p) { return p.draft_pick !== newPick.draft_pick; });
 
   picks.push(newPick);
   // Keep sorted by pick number so getCurrentPickNum() stays correct
@@ -522,9 +2009,15 @@ function handleNewPick(payload) {
   picking = false;
 
   renderAll();
+  // Reveal animation for the pick that just landed via realtime.
+  animatePickReveal(newPick);
 
   if (picks.length >= getTotalPicks()) {
     handleDraftComplete();
+  } else {
+    // Turn may have just transitioned to us — if auto-draft is on, fire
+    // a pick after a brief delay so the user sees their turn arrive first.
+    maybeAutoPickNow();
   }
 }
 
@@ -532,14 +2025,27 @@ function handleNewPick(payload) {
 // DRAFT COMPLETE
 // ========================================================================
 async function handleDraftComplete() {
-  // Persist the completed flag so league.html shows the right state
-  await supabaseClient
-    .from('leagues')
-    .update({ draft_completed: true })
-    .eq('id', leagueId);
+  // Mock mode: don't touch the real league row. We still want the local
+  // "Draft Complete" UI state + the arpeggio so the user sees the mock
+  // finished, but the DB stays untouched.
+  if (!isMockMode) {
+    // Persist the completed flag so league.html shows the right state
+    await supabaseClient
+      .from('leagues')
+      .update({ draft_completed: true })
+      .eq('id', leagueId);
+  }
 
   league.draft_completed = true;
   renderHeader();
+
+  // One-shot completion arpeggio. Guarded so the sound doesn't replay if
+  // handleDraftComplete fires more than once (e.g., from the realtime
+  // path after the local makePick has already triggered it).
+  if (!draftDoneSounded && typeof DraftSounds !== 'undefined') {
+    DraftSounds.draftDone();
+    draftDoneSounded = true;
+  }
 }
 
 // ========================================================================
@@ -549,12 +2055,173 @@ async function handleDraftComplete() {
 function renderAll() {
   renderHeader();
   renderFighterPool();
+  renderBestAvailable();
   renderDraftBoard();
   renderMyRoster();
+  renderRosterNeeds();
   renderQueue();
+  renderNextPickIndicator();
+  renderPickActivityFeed();
   // If the View All modal is open, refresh it too so newly drafted fighters
   // disappear from its list in real time.
   if (document.getElementById('viewAllOverlay')) renderViewAllList();
+}
+
+// ========================================================================
+// NEXT-PICK INDICATOR
+// "Your next pick: 4.3 · in 5 picks · ~7:30" — always visible in the
+// status strip while the draft is live and it's not currently your turn.
+// Lets the user keep tabs on their slot without scanning the board.
+// ========================================================================
+function renderNextPickIndicator() {
+  var el      = document.getElementById('draftNextPick');
+  var valueEl = document.getElementById('draftNextPickValue');
+  if (!el || !valueEl) return;
+
+  var totalPicks = getTotalPicks();
+  if (!league || !league.draft_started || picks.length >= totalPicks) {
+    el.hidden = true; return;
+  }
+
+  // Find my next pick number — the smallest pick >= current pick whose
+  // active manager is me. Scan up to totalPicks; if I have no more picks
+  // (already maxed out) hide the strip.
+  var current = getCurrentPickNum();
+  var myNextPick = null;
+  for (var p = current; p <= totalPicks; p++) {
+    if (getPickInfo(p).activeManagerId === myMemberId) { myNextPick = p; break; }
+  }
+  if (myNextPick === null) { el.hidden = true; return; }
+
+  var picksUntil = myNextPick - current;
+  var n          = league.draft_order.length;
+  var round      = Math.ceil(myNextPick / n);
+  var posInRound = ((myNextPick - 1) % n) + 1;
+  var pickLabel  = round + '.' + posInRound;
+
+  // It's my pick RIGHT NOW — the personal banner + status strip already
+  // shout this; the strip would be redundant noise. Hide it.
+  if (picksUntil === 0) { el.hidden = true; return; }
+
+  // ETA: each pick uses up to pick_timer_seconds. This is a worst-case
+  // estimate (picks often resolve faster) but it's what users intuit.
+  var perPickSec = league.pick_timer_seconds || 90;
+  var etaSec     = picksUntil * perPickSec;
+  var etaStr     = formatEta(etaSec);
+
+  el.hidden = false;
+  valueEl.innerHTML =
+    '<span class="draft-next-pick__num">' + escapeHtml(pickLabel) + '</span>' +
+    '<span class="draft-next-pick__sep">·</span>' +
+    '<span class="draft-next-pick__count">in ' + picksUntil + ' pick' + (picksUntil === 1 ? '' : 's') + '</span>' +
+    '<span class="draft-next-pick__sep">·</span>' +
+    '<span class="draft-next-pick__eta">~' + escapeHtml(etaStr) + '</span>';
+}
+
+// ========================================================================
+// PICK ACTIVITY FEED
+// Compact ticker above the board showing the 3 most-recent picks as
+// "[team-dot] Team picked Fighter · 0:12 ago". Each entry fades in when
+// it first appears so a new pick reads as a fresh arrival, not as a
+// static list. Time-ago refreshes every 30s via a long-lived interval.
+// ========================================================================
+let feedTimestampInterval = null;
+// Track which pick IDs the feed has already rendered so the next render
+// can add the fade-in class only to newly-arrived entries.
+let renderedFeedPickIds   = new Set();
+
+function renderPickActivityFeed() {
+  var el = document.getElementById('draftPickFeed');
+  if (!el) return;
+  if (!league || !league.draft_started || picks.length === 0) {
+    el.hidden = true;
+    return;
+  }
+
+  // Last 3 picks, most recent first. picks is already sorted ascending by
+  // draft_pick (see handleNewPick + initial load), so slice from the tail
+  // and reverse.
+  var recent = picks.slice(-3).reverse();
+
+  var html = '';
+  recent.forEach(function(p) {
+    var fighter   = fighterMap[p.fighter_id];
+    var fighterName = fighter ? fighter.name : 'Unknown';
+    var member    = memberMap[p.league_member_id];
+    var teamName  = member ? member.team_name : '?';
+    var accent    = teamColor(p.league_member_id);
+    var isNew     = !renderedFeedPickIds.has(p.id);
+    var ago       = relativeTimeAgo(p.created_at);
+    html +=
+      '<span class="draft-pick-feed__item' + (isNew ? ' draft-pick-feed__item--new' : '') + '" data-pick-id="' + escapeHtml(p.id) + '">' +
+        '<span class="draft-pick-feed__dot" style="--team-accent: ' + accent + '" aria-hidden="true"></span>' +
+        '<span class="draft-pick-feed__text">' +
+          '<strong>' + escapeHtml(teamName) + '</strong> picked ' +
+          '<strong>' + escapeHtml(fighterName) + '</strong>' +
+          (ago ? ' <span class="draft-pick-feed__ago">· ' + escapeHtml(ago) + '</span>' : '') +
+        '</span>' +
+      '</span>';
+  });
+  el.innerHTML = html;
+  el.hidden    = false;
+
+  // Refresh the rendered-id set so subsequent renders don't re-fade existing
+  // entries. Trim to the last few picks worth so the set doesn't grow
+  // unbounded across a long draft.
+  recent.forEach(function(p) { renderedFeedPickIds.add(p.id); });
+  if (renderedFeedPickIds.size > 50) {
+    // Cheap reset — we only need the recent few anyway
+    renderedFeedPickIds = new Set(recent.map(function(p) { return p.id; }));
+  }
+
+  // Lazy-start the time-ago refresh interval the first time we render. No
+  // teardown — the page stays mounted for the life of the draft, and the
+  // interval cost is negligible.
+  if (!feedTimestampInterval) {
+    feedTimestampInterval = setInterval(function() {
+      // Only touch the .draft-pick-feed__ago spans so we don't flash the
+      // whole feed (and lose the fade-in animations on existing entries).
+      var nodes = document.querySelectorAll('.draft-pick-feed__item');
+      nodes.forEach(function(node) {
+        var pickId = node.getAttribute('data-pick-id');
+        var pick   = picks.find(function(p) { return String(p.id) === pickId; });
+        if (!pick) return;
+        var agoEl = node.querySelector('.draft-pick-feed__ago');
+        var ago   = relativeTimeAgo(pick.created_at);
+        if (agoEl && ago) agoEl.textContent = '· ' + ago;
+      });
+    }, 30000);
+  }
+}
+
+// "just now" / "0:42 ago" / "3m ago" / "1h ago". Returns null if the
+// timestamp is missing or unparseable so callers can drop the suffix
+// cleanly. Compact units keep the feed reads tight.
+function relativeTimeAgo(iso) {
+  if (!iso) return null;
+  var diffMs = Date.now() - new Date(iso).getTime();
+  if (isNaN(diffMs) || diffMs < 0) return null;
+  var sec = Math.floor(diffMs / 1000);
+  if (sec < 5)    return 'just now';
+  if (sec < 60)   return sec + 's ago';
+  var min = Math.floor(sec / 60);
+  if (min < 60)   return min + 'm ago';
+  var hr  = Math.floor(min / 60);
+  return hr + 'h ago';
+}
+
+// "5:30" / "12:45" / "1h 5m" formatter for the next-pick ETA. Stays
+// compact regardless of magnitude so the indicator doesn't reflow.
+function formatEta(totalSec) {
+  if (totalSec < 60)    return totalSec + 's';
+  if (totalSec < 3600)  {
+    var m = Math.floor(totalSec / 60);
+    var s = totalSec % 60;
+    return m + ':' + (s < 10 ? '0' : '') + s;
+  }
+  var h  = Math.floor(totalSec / 3600);
+  var mm = Math.floor((totalSec % 3600) / 60);
+  return h + 'h ' + mm + 'm';
 }
 
 // ========================================================================
@@ -580,14 +2247,21 @@ function renderHeader() {
   // <span class="draft-status__pre"> is the target the predraft countdown
   // interval updates every second; we re-render the surrounding markup
   // only when renderHeader runs (initial load + lobby state changes).
+  // Also render the full-bleed cinematic lobby overlay on top of the
+  // draft room — it dominates the screen until the draft actually starts.
   if (!league.draft_started && league.draft_scheduled_at) {
     turnInfoEl.innerHTML =
       '<span class="draft-status__pre">' + escapeHtml(formatCountdown(league.draft_scheduled_at)) + '</span>' +
       ' · Draft starts ' + escapeHtml(formatScheduledLocal(league.draft_scheduled_at));
     pickCounterEl.textContent = '0 / ' + totalPicks + ' picks';
     stopPickTimer();
+    renderDraftLobby();
     return;
   }
+  // Past pre-draft → ensure the lobby is hidden (handles the realtime
+  // start-flip race where renderHeader runs before the page reload).
+  var lobbyEl = document.getElementById('draftLobby');
+  if (lobbyEl) lobbyEl.hidden = true;
 
   if (league.draft_completed || picks.length >= totalPicks) {
     turnInfoEl.innerHTML = '<span class="draft-status__complete">Draft Complete</span>';
@@ -627,6 +2301,19 @@ function renderHeader() {
   }
 
   pickCounterEl.textContent = 'Pick ' + currentPickNum + ' of ' + totalPicks;
+
+  // Your-turn chime fires on the rising edge only — flag transition from
+  // "not my turn" → "my turn". Guarded by initialPicksLoaded so the first
+  // render after page load doesn't play the chime even when you happen to
+  // already be on the clock.
+  var nowMyTurn = activeManagerId === myMemberId;
+  if (initialPicksLoaded && nowMyTurn && !wasMyTurn && typeof DraftSounds !== 'undefined') {
+    DraftSounds.yourTurn();
+  }
+  wasMyTurn = nowMyTurn;
+  // Reset the clock-band tracker on every new pick so warning sounds
+  // re-arm for the next picker.
+  lastClockBand = 'none';
 
   // Restart the pick clock anchored to the current pick's start time.
   startPickTimer();
@@ -734,21 +2421,51 @@ function startPickTimer() {
 
     valueEl.textContent = formatMmSs(remaining);
 
+    // Drive the conic-gradient progress ring via a CSS custom property.
+    // 1.0 = full ring, 0.0 = empty. Sub-second precision so the ring
+    // sweeps smoothly even though the text only updates per integer second.
+    const progress = Math.max(0, Math.min(1, (totalSec - elapsedSec) / totalSec));
+    containerEl.style.setProperty('--timer-progress', progress.toFixed(3));
+
     // Color states — gold/yellow at 30s, crimson at 10s, "EXPIRED" at 0.
     containerEl.classList.remove('draft-timer--low', 'draft-timer--critical', 'draft-timer--expired');
     if (remaining === 0)        containerEl.classList.add('draft-timer--expired');
     else if (remaining <= 10)   containerEl.classList.add('draft-timer--critical');
     else if (remaining <= 30)   containerEl.classList.add('draft-timer--low');
 
-    // Once expired we leave the badge showing 0:00 and stop ticking.
-    // Auto-pick is intentionally not implemented here — that's a separate
-    // follow-up that needs roster-construction validation + write race
-    // handling.
-    if (remaining === 0) stopPickTimer();
+    // Clock-band sound transitions — play once on entry into each band
+    // (warn/urgent/expired). lastClockBand resets in renderHeader on each
+    // new pick so the warnings re-arm for the next picker.
+    var band = remaining === 0    ? 'expired'
+             : remaining <= 10    ? 'urgent'
+             : remaining <= 30    ? 'warn'
+             :                      'none';
+    if (band !== lastClockBand && typeof DraftSounds !== 'undefined') {
+      if      (band === 'warn')    DraftSounds.clockWarn();
+      else if (band === 'urgent')  DraftSounds.clockUrgent();
+      else if (band === 'expired') DraftSounds.clockExpired();
+      lastClockBand = band;
+    }
+
+    // Clock expired — stop ticking and fire auto-pick. The active picker's
+    // own client is responsible for placing the pick. Other clients see
+    // the same expiry but isMyTurn() returns false for them, so they no-op.
+    // If the active picker is offline, the pick stalls until they return
+    // OR the commissioner intervenes — acceptable for friends-and-family
+    // scale. selectAutoPickFighter handles canPick gating + queue/FV fallback.
+    if (remaining === 0) {
+      stopPickTimer();
+      if (isMyTurn() && !picking && !(league && league.draft_paused_at)) {
+        autoPick();
+      }
+    }
   }
 
   tick(); // paint immediately so users don't see "--" for a second
-  pickTimerInterval = setInterval(tick, 1000);
+  // 200ms interval — the integer seconds (text) only changes ~every 5 ticks,
+  // but the conic-gradient progress ring sweeps smoothly between integer
+  // marks instead of jumping in ~1% chunks once per second.
+  pickTimerInterval = setInterval(tick, 200);
 }
 
 function stopPickTimer() {
@@ -806,22 +2523,30 @@ function renderFighterPool() {
     fighters = fighters.filter(function(f) { return f.name.toLowerCase().includes(q); });
   }
 
-  // Sort a copy so the underlying allFighters array order stays stable
+  // Sort a copy so the underlying allFighters array order stays stable.
+  // Rank is the tiebreaker for every points-based sort: champion first,
+  // then ranked, then unranked (999). Mirrors the free-agency sort exactly.
   fighters = fighters.slice().sort(function(a, b) {
-    if (sortBy === 'rank') {
-      var ra = a.is_champion ? 0 : (a.current_rank || 999);
-      var rb = b.is_champion ? 0 : (b.current_rank || 999);
-      return ra - rb;
+    var rankA = a.is_champion ? 0 : (a.current_rank || 999);
+    var rankB = b.is_champion ? 0 : (b.current_rank || 999);
+
+    if (sortBy === 'rank') return rankA - rankB;
+
+    if (sortBy === 'fantasy_value') {
+      var fva = fighterFvScore(a);
+      var fvb = fighterFvScore(b);
+      if (fvb !== fva) return fvb - fva;
+      return rankA - rankB;
     }
-    if (sortBy === 'record') {
-      // Most wins first, fewest losses as tiebreaker
-      if (b.record_wins !== a.record_wins) return b.record_wins - a.record_wins;
-      return a.record_losses - b.record_losses;
-    }
-    // 'points_year' and 'points_proj': data isn't tracked yet; fall back to rank
-    var ra2 = a.is_champion ? 0 : (a.current_rank || 999);
-    var rb2 = b.is_champion ? 0 : (b.current_rank || 999);
-    return ra2 - rb2;
+
+    // avg_pts / total_pts / recent_pts all read from the same points map
+    var ptsKey = sortBy === 'total_pts'  ? 'totalPts'
+               : sortBy === 'recent_pts' ? 'recentPts'
+               : 'avgPts';
+    var pa = fighterPtsValue(a, ptsKey);
+    var pb = fighterPtsValue(b, ptsKey);
+    if (pb !== pa) return pb - pa;
+    return rankA - rankB;
   });
 
   const poolEl = document.getElementById('fighterPool');
@@ -854,6 +2579,10 @@ function renderFighterPool() {
       : '';
 
     let rowMods = ' draft-pool-row';
+    // Champions get a row-level modifier so the gold-treatment CSS can light
+    // up the whole row — photo border, glow on hover, subtle gradient. Same
+    // pattern the whole-team-tile uses for its champion accent.
+    if (f.is_champion) rowMods += ' draft-pool-row--champion';
     let titleAttr = '';
     let pickBtn   = '';
     if (myTurn && valid) {
@@ -887,11 +2616,20 @@ function renderFighterPool() {
         '<div class="lineup-roster-row__photo-wrap">' + photoHtml + '</div>' +
         '<span class="lineup-roster-row__rank ' + rankClass + '">' + escapeHtml(rankLabel) + (typeof subBadge === 'string' ? subBadge : '') + '</span>' +
         '<div class="lineup-roster-row__info">' +
-          '<button class="lineup-roster-row__name" data-open-fighter="' + f.id + '">' +
-            escapeHtml(f.name) +
-          '</button>' +
-          '<span class="lineup-roster-row__division draft-pool-row__division">' + escapeHtml(divLabel) + '</span>' +
+          '<div class="draft-pool-row__name-line">' +
+            '<button class="lineup-roster-row__name" data-open-fighter="' + f.id + '">' +
+              escapeHtml(f.name) +
+            '</button>' +
+            valuePickBadgeHtml(f) +
+          '</div>' +
+          '<div class="draft-pool-row__sub-line">' +
+            '<span class="lineup-roster-row__division draft-pool-row__division">' + escapeHtml(divLabel) + '</span>' +
+            formSparkline(f) +
+            trendChipsHtml(f) +
+          '</div>' +
+          nextFightLine(f) +
         '</div>' +
+        fighterFvChip(f) +
         '<span class="lineup-roster-row__record">' + record + '</span>' +
         queueBtn +
         pickBtn +
@@ -917,6 +2655,70 @@ function renderFighterPool() {
       else                     addToQueue(fighterId);
     });
   });
+}
+
+// ========================================================================
+// BEST AVAILABLE STRIP
+// Pinned to the top of the fighter pool: the highest-FV fighter still on
+// the board, always visible regardless of the user's active filter or
+// search. Removes the "did I miss someone elite?" anxiety mid-draft.
+// Hidden until FV cache loads + the draft is past pre-draft phase.
+// ========================================================================
+function renderBestAvailable() {
+  var el = document.getElementById('bestAvailable');
+  if (!el) return;
+
+  // No-op pre-draft (slot info isn't meaningful yet) or once drafting is done.
+  var totalPicks = getTotalPicks();
+  if (!league || !league.draft_started || picks.length >= totalPicks) {
+    el.hidden = true;
+    return;
+  }
+
+  // FV data hasn't resolved yet — hide rather than show a placeholder, since
+  // the strip's whole value is "this is the BEST available right now."
+  if (typeof FantasyValue === 'undefined' || !FantasyValue.scoreFor) {
+    el.hidden = true;
+    return;
+  }
+
+  // Best undrafted fighter by FV score. We don't filter by active fighters
+  // or by the user's roster construction — this is purely "elite still on
+  // the board." If you're up next, your own canPick() check still applies
+  // when you click Draft.
+  var pickedIds = new Set(picks.map(function(p) { return p.fighter_id; }));
+  var best = null;
+  var bestFv = -Infinity;
+  for (var i = 0; i < allFighters.length; i++) {
+    var f = allFighters[i];
+    if (pickedIds.has(f.id)) continue;
+    var fv = FantasyValue.scoreFor(f.id);
+    if (typeof fv !== 'number') continue;
+    if (fv > bestFv) { bestFv = fv; best = f; }
+  }
+  if (!best) { el.hidden = true; return; }
+
+  var rankLabel = best.is_champion ? 'C' : (best.current_rank ? '#' + best.current_rank : 'NR');
+  var rankClass = best.is_champion ? 'rank-champion' : (best.current_rank ? 'rank-ranked' : 'rank-unranked');
+  var divLabel  = DIVISION_LABELS[best.primary_division] || best.primary_division || '';
+  var photoHtml = best.photo_url
+    ? '<img class="lineup-roster-row__photo" src="' + escapeHtml(best.photo_url) + '" alt="" onerror="this.style.display=\'none\'">'
+    : '';
+
+  // Build a row visually similar to the pool rows so the strip feels native,
+  // but with a "BEST AVAILABLE" eyebrow on the left so it doesn't blend in.
+  el.hidden    = false;
+  el.innerHTML =
+    '<span class="draft-best-available__label">Best available</span>' +
+    '<div class="draft-best-available__row" data-open-fighter="' + best.id + '">' +
+      '<div class="lineup-roster-row__photo-wrap">' + photoHtml + '</div>' +
+      '<span class="lineup-roster-row__rank ' + rankClass + '">' + escapeHtml(rankLabel) + '</span>' +
+      '<div class="draft-best-available__name-block">' +
+        '<span class="draft-best-available__name">' + escapeHtml(best.name) + '</span>' +
+        '<span class="draft-best-available__div">' + escapeHtml(divLabel) + '</span>' +
+      '</div>' +
+      '<span class="draft-best-available__fv">' + bestFv.toFixed(1) + ' <span class="draft-best-available__fv-label">FV</span></span>' +
+    '</div>';
 }
 
 // ========================================================================
@@ -949,10 +2751,11 @@ function openViewAll() {
       '<div class="view-all-modal__controls">' +
         '<input type="text" id="viewAllSearchInput" class="waiver-search" placeholder="Search fighters...">' +
         '<select id="viewAllSortInput" class="waiver-filter">' +
+          '<option value="fantasy_value">Sort: Fantasy Value</option>' +
+          '<option value="avg_pts">Sort: Avg Points</option>' +
+          '<option value="total_pts">Sort: Total Points</option>' +
+          '<option value="recent_pts">Sort: Points (Last Year)</option>' +
           '<option value="rank">Sort: Rank</option>' +
-          '<option value="record">Sort: Record</option>' +
-          '<option value="points_year">Sort: Points (Year)</option>' +
-          '<option value="points_proj">Sort: Projected Pts</option>' +
         '</select>' +
         '<select id="viewAllDivisionInput" class="waiver-filter">' + divOptions + '</select>' +
         '<select id="viewAllStatusInput" class="waiver-filter">' +
@@ -1045,18 +2848,25 @@ function renderViewAllList() {
   }
 
   fighters = fighters.slice().sort(function(a, b) {
-    if (viewAllSort === 'rank') {
-      var ra = a.is_champion ? 0 : (a.current_rank || 999);
-      var rb = b.is_champion ? 0 : (b.current_rank || 999);
-      return ra - rb;
+    var rankA = a.is_champion ? 0 : (a.current_rank || 999);
+    var rankB = b.is_champion ? 0 : (b.current_rank || 999);
+
+    if (viewAllSort === 'rank') return rankA - rankB;
+
+    if (viewAllSort === 'fantasy_value') {
+      var fva = fighterFvScore(a);
+      var fvb = fighterFvScore(b);
+      if (fvb !== fva) return fvb - fva;
+      return rankA - rankB;
     }
-    if (viewAllSort === 'record') {
-      if (b.record_wins !== a.record_wins) return b.record_wins - a.record_wins;
-      return a.record_losses - b.record_losses;
-    }
-    var ra2 = a.is_champion ? 0 : (a.current_rank || 999);
-    var rb2 = b.is_champion ? 0 : (b.current_rank || 999);
-    return ra2 - rb2;
+
+    var ptsKey = viewAllSort === 'total_pts'  ? 'totalPts'
+               : viewAllSort === 'recent_pts' ? 'recentPts'
+               : 'avgPts';
+    var pa = fighterPtsValue(a, ptsKey);
+    var pb = fighterPtsValue(b, ptsKey);
+    if (pb !== pa) return pb - pa;
+    return rankA - rankB;
   });
 
   if (count) {
@@ -1099,15 +2909,41 @@ function renderViewAllList() {
       pickBtn = '<button class="btn-secondary lineup-row-btn" disabled>No slot</button>';
     }
 
+    // Queue toggle — parity with the side panel so the user can queue
+    // fighters while browsing in the modal without having to close it.
+    // Reuses the .draft-queue-btn class so the global click handler we
+    // wire below behaves the same as in the pool.
+    var inQueue       = isQueued(f.id);
+    var queueBtnLabel = inQueue ? 'Queued &#x2715;' : '+ Queue';
+    var queueBtnClass = inQueue
+      ? 'btn-ghost lineup-row-btn draft-queue-btn draft-queue-btn--queued'
+      : 'btn-ghost lineup-row-btn draft-queue-btn';
+    var queueBtn = '<button class="' + queueBtnClass + '" data-queue-fighter-id="' + f.id + '">' +
+                     queueBtnLabel +
+                   '</button>';
+
+    var rowClass = 'lineup-roster-row';
+    if (f.is_champion) rowClass += ' draft-pool-row--champion';
+
     html +=
-      '<div class="lineup-roster-row">' +
+      '<div class="' + rowClass + '">' +
         '<div class="lineup-roster-row__photo-wrap">' + photoHtml + '</div>' +
         '<span class="lineup-roster-row__rank ' + rankClass + '">' + rankLabel + (typeof subBadge === 'string' ? subBadge : '') + '</span>' +
         '<div class="lineup-roster-row__info">' +
-          '<button class="lineup-roster-row__name" data-open-fighter="' + f.id + '">' + escapeHtml(f.name) + '</button>' +
-          '<span class="lineup-roster-row__division">' + escapeHtml(divLabel) + '</span>' +
+          '<div class="draft-pool-row__name-line">' +
+            '<button class="lineup-roster-row__name" data-open-fighter="' + f.id + '">' + escapeHtml(f.name) + '</button>' +
+            valuePickBadgeHtml(f) +
+          '</div>' +
+          '<div class="draft-pool-row__sub-line">' +
+            '<span class="lineup-roster-row__division">' + escapeHtml(divLabel) + '</span>' +
+            formSparkline(f) +
+            trendChipsHtml(f) +
+          '</div>' +
+          nextFightLine(f) +
         '</div>' +
+        fighterFvChip(f) +
         '<span class="lineup-roster-row__record">' + record + '</span>' +
+        queueBtn +
         pickBtn +
       '</div>';
   });
@@ -1124,6 +2960,16 @@ function renderViewAllList() {
         // Close the modal so the user sees the live board update
         closeViewAll();
       }
+    });
+  });
+
+  // Wire queue toggle buttons inside the modal. Same add-or-remove semantics
+  // as the side panel; the modal stays open so the user can keep queueing.
+  body.querySelectorAll('.draft-queue-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var fighterId = btn.getAttribute('data-queue-fighter-id');
+      if (isQueued(fighterId)) removeFromQueue(fighterId);
+      else                     addToQueue(fighterId);
     });
   });
 }
@@ -1165,6 +3011,13 @@ function renderDraftBoard() {
   //     fighter modal via the existing data-open-fighter delegate)
   let html = '<div class="draft-board"><table class="draft-board__table"><thead><tr>';
 
+  // Identify which manager is "on the clock" — used to highlight their entire
+  // column so the eye reads the active team at a glance, not just the single
+  // current cell. Only meaningful while the draft is live and unpaused.
+  const onClockManagerId = (league.draft_started && !league.draft_paused_at && picks.length < totalPicks)
+    ? getPickInfo(currentPickNum).activeManagerId
+    : null;
+
   league.draft_order.forEach(function(memberId) {
     const member = memberMap[memberId];
     const isMe   = memberId === myMemberId;
@@ -1172,12 +3025,22 @@ function renderDraftBoard() {
     // header's bottom border, the column's pick cells via CSS inheritance)
     // can reference the same color via var(--team-accent).
     const accent = teamColor(memberId);
+    let headerClass = 'draft-board__col-header';
+    if (isMe)                            headerClass += ' draft-board__col-header--mine';
+    if (memberId === onClockManagerId)   headerClass += ' draft-board__col-header--on-clock';
+    // Presence dot — green when this member is currently connected to the
+    // presence channel, gray otherwise. We always render the dot (gray as
+    // default) so the column doesn't reflow when presence transitions.
+    var isPresent  = presentMemberIds.has(memberId);
+    var presenceCls = 'draft-presence-dot draft-presence-dot--' + (isPresent ? 'on' : 'off');
+    var presenceTitle = isPresent ? 'Connected' : 'Offline';
     // data-open-team-roster makes the header clickable; the document-level
     // delegated handler in initDraft opens the per-team roster modal.
-    html += '<th class="draft-board__col-header' + (isMe ? ' draft-board__col-header--mine' : '') +
-            '" style="--team-accent: ' + accent + '"' +
+    html += '<th class="' + headerClass + '"' +
+            ' style="--team-accent: ' + accent + '"' +
             ' data-open-team-roster="' + escapeHtml(memberId) + '"' +
             ' title="View this team\'s roster">';
+    html += '<span class="' + presenceCls + '" aria-label="' + presenceTitle + '" title="' + presenceTitle + '"></span>';
     html += escapeHtml(member ? member.team_name : '?');
     html += '</th>';
   });
@@ -1212,7 +3075,8 @@ function renderDraftBoard() {
       }
 
       let cellClass = 'draft-board__cell';
-      if (isMe)             cellClass += ' draft-board__cell--mine';
+      if (isMe)                              cellClass += ' draft-board__cell--mine';
+      if (memberId === onClockManagerId)     cellClass += ' draft-board__cell--on-clock-col';
       if (pickMap[pickNum]) cellClass += ' draft-board__cell--made' + tierClass;
       else if (isCurrent)   cellClass += ' draft-board__cell--current';
       else                  cellClass += ' draft-board__cell--empty';
@@ -1229,7 +3093,7 @@ function renderDraftBoard() {
       if (fighter) {
         cellStyle += '; --div-accent: ' + divisionColor(fighter.primary_division);
       }
-      html += '<td class="' + cellClass + '" style="' + cellStyle + '">';
+      html += '<td class="' + cellClass + '" style="' + cellStyle + '" data-pick-num="' + pickNum + '">';
       // "round.position" label in the top-right of every cell. Snake-aware:
       // round 2 reads 2.1, 2.2, ... right-to-left, matching pick order.
       // Suppressed on the on-the-clock cell so it doesn't compete visually
@@ -1264,6 +3128,18 @@ function renderDraftBoard() {
           ? '<img class="draft-board__cell-photo" src="' + escapeHtml(fighter.photo_url) + '" alt="" onerror="this.style.visibility=\'hidden\'">'
           : '<div class="draft-board__cell-photo draft-board__cell-photo--placeholder"></div>';
 
+        // Look up the actual draft_picks row to get its UUID — reactions
+        // are keyed on draft_pick_id, not on the (league, pick_num) pair.
+        // The pickMap value above is the fighter id; we need the pick row id.
+        const pickRow = picks.find(function(p) { return p.draft_pick === pickNum; });
+        const pickId  = pickRow ? pickRow.id : null;
+
+        // Retrospective value badge — STEAL/VALUE/REACH chip showing how
+        // the fighter's FV rank compared to the slot they were taken at.
+        // Pinned to the top-left of the cell so it doesn't compete with
+        // the pick number (top-right) or the reactions bar (bottom).
+        const boardValueBadge = valuePickBadgeForPickHtml(fighter, pickNum);
+
         html +=
           '<button class="draft-board__pick" data-open-fighter="' + pickMap[pickNum] + '">' +
             photoHtml +
@@ -1271,7 +3147,11 @@ function renderDraftBoard() {
               '<span class="draft-board__pick-name">' + escapeHtml(fighter.name) + '</span>' +
               '<span class="draft-board__pick-meta">' + escapeHtml(divLabel) + ' · ' + rankLabel + '</span>' +
             '</div>' +
-          '</button>';
+          '</button>' +
+          (boardValueBadge
+            ? '<span class="draft-board__cell-value-badge">' + boardValueBadge + '</span>'
+            : '') +
+          (pickReactionsEnabled && pickId && !isOptimisticPickId(pickId) ? renderPickReactionsBar(pickId) : '');
       } else if (isCurrent) {
         html += '<span class="draft-board__on-clock">On the clock</span>';
       }
@@ -1299,15 +3179,21 @@ function renderDraftBoard() {
 function renderMyRoster() {
   const myPickFighters = getMyPickFighters();
 
-  // Group fighters into the slot category they'd actually occupy. Each
-  // weight class holds up to ROSTER_SLOTS_PER_DIVISION; overflow goes to
-  // the Any-Division Flex bucket (up to ROSTER_FLEX_SLOTS).
+  // Slot assignment — same shape as checkRosterConstruction() in waivers.js.
+  // Each men's division gets up to ROSTER_SLOTS_PER_DIVISION; all women's
+  // divisions share a single Women's Flex slot; the rest spills into the
+  // Any-Division Flex bucket (capped at ROSTER_FLEX_SLOTS).
   const inDiv = {};
-  ALL_DRAFT_DIVISIONS.forEach(function(d) { inDiv[d] = []; });
-  const anyFlex = [];
+  MENS_DIVISIONS.forEach(function(d) { inDiv[d] = []; });
+  const womensFlex = [];
+  const anyFlex    = [];
 
   myPickFighters.forEach(function(f) {
-    if (inDiv[f.primary_division] && inDiv[f.primary_division].length < ROSTER_SLOTS_PER_DIVISION) {
+    var isWomens = WOMENS_DIVISIONS_KEYS.indexOf(f.primary_division) !== -1;
+    if (isWomens) {
+      if (womensFlex.length < ROSTER_WOMENS_FLEX_SLOTS) womensFlex.push(f);
+      else anyFlex.push(f);
+    } else if (inDiv[f.primary_division] && inDiv[f.primary_division].length < ROSTER_SLOTS_PER_DIVISION) {
       inDiv[f.primary_division].push(f);
     } else if (inDiv[f.primary_division] !== undefined) {
       anyFlex.push(f);
@@ -1315,19 +3201,34 @@ function renderMyRoster() {
   });
 
   document.getElementById('myPickCount').textContent = myPickFighters.length;
+  // Keep the "/ N" total in sync with the league's actual roster size so the
+  // header reads correctly when the commissioner has tuned it.
+  var totalEl = document.getElementById('myRosterTotal');
+  if (totalEl) totalEl.textContent = (league && league.roster_size) || ROSTER_SIZE_BASE;
 
   let html = '<div class="draft-slots">';
 
-  ALL_DRAFT_DIVISIONS.forEach(function(div) {
+  // 8 men's-division rows
+  MENS_DIVISIONS.forEach(function(div) {
     html += '<div class="draft-slots__row">';
     html += '<span class="draft-slots__label">' + escapeHtml(DIVISION_LABELS[div]) + '</span>';
     html += '<span class="draft-slots__pips">' + renderPips(inDiv[div], ROSTER_SLOTS_PER_DIVISION) + '</span>';
     html += '</div>';
   });
 
+  // Single Women's Flex row (pools all 3 women's divisions)
+  html += '<div class="draft-slots__row">';
+  html += '<span class="draft-slots__label">Women\'s Flex</span>';
+  html += '<span class="draft-slots__pips">' + renderPips(womensFlex, ROSTER_WOMENS_FLEX_SLOTS) + '</span>';
+  html += '</div>';
+
+  // Any-flex pip count scales with the league's roster_size — see
+  // getAnyFlexSlots(). Default leagues land on 6; custom leagues
+  // (e.g., roster_size = 20) get 11 pips.
+  var anyFlexCapDisplay = getAnyFlexSlots(league);
   html += '<div class="draft-slots__row">';
   html += '<span class="draft-slots__label">Any-Division Flex</span>';
-  html += '<span class="draft-slots__pips">' + renderPips(anyFlex.slice(0, ROSTER_FLEX_SLOTS), ROSTER_FLEX_SLOTS) + '</span>';
+  html += '<span class="draft-slots__pips">' + renderPips(anyFlex.slice(0, anyFlexCapDisplay), anyFlexCapDisplay) + '</span>';
   html += '</div>';
 
   html += '</div>';
@@ -1354,8 +3255,9 @@ function renderMyRoster() {
       const photoHtml = f.photo_url
         ? '<img class="lineup-roster-row__photo" src="' + escapeHtml(f.photo_url) + '" alt="' + escapeHtml(f.name) + '" onerror="this.style.display=\'none\'">'
         : '';
+      const champClass = f.is_champion ? ' draft-pool-row--champion' : '';
       html +=
-        '<div class="lineup-roster-row draft-my-pick">' +
+        '<div class="lineup-roster-row draft-my-pick' + champClass + '">' +
           '<span class="draft-my-pick__num">' + (idx + 1) + '</span>' +
           '<div class="lineup-roster-row__photo-wrap">' + photoHtml + '</div>' +
           '<span class="lineup-roster-row__rank ' + rankClass + '">' + rankLabel + (typeof subBadge === 'string' ? subBadge : '') + '</span>' +
@@ -1371,6 +3273,98 @@ function renderMyRoster() {
   html += '</div>';
 
   document.getElementById('myRoster').innerHTML = html;
+}
+
+// ========================================================================
+// ROSTER NEEDS WIDGET
+// Compact "Still need: ..." summary above the slot grid, plus a "Top
+// remaining" smart suggestion: the highest-FV fighter who'd actually fit
+// into one of the unfilled slot categories. The pip grid below gives a
+// visual read of slot fullness; this widget gives a textual read AND a
+// data-driven next-pick nudge.
+// ========================================================================
+function renderRosterNeeds() {
+  var el = document.getElementById('rosterNeeds');
+  if (!el) return;
+  if (!league || !league.draft_started) { el.hidden = true; return; }
+
+  // Reuse the same slot assignment renderMyRoster does so the two views
+  // never disagree about what's full and what isn't.
+  var myFighters = getMyPickFighters();
+  var inDiv      = {};
+  MENS_DIVISIONS.forEach(function(d) { inDiv[d] = []; });
+  var womensFlex = [];
+  var anyFlex    = [];
+  myFighters.forEach(function(f) {
+    var isWomens = WOMENS_DIVISIONS_KEYS.indexOf(f.primary_division) !== -1;
+    if (isWomens) {
+      if (womensFlex.length < ROSTER_WOMENS_FLEX_SLOTS) womensFlex.push(f);
+      else anyFlex.push(f);
+    } else if (inDiv[f.primary_division] && inDiv[f.primary_division].length < ROSTER_SLOTS_PER_DIVISION) {
+      inDiv[f.primary_division].push(f);
+    } else if (inDiv[f.primary_division] !== undefined) {
+      anyFlex.push(f);
+    }
+  });
+
+  // Unfilled per category. Men's divisions are listed individually because
+  // each one is a distinct hole; women's flex and any-flex are pooled
+  // because they're each a single conceptual slot type. Any-flex cap
+  // adapts to league.roster_size via getAnyFlexSlots().
+  var unfilledMens = MENS_DIVISIONS.filter(function(d) { return inDiv[d].length < ROSTER_SLOTS_PER_DIVISION; });
+  var womensNeed   = Math.max(0, ROSTER_WOMENS_FLEX_SLOTS - womensFlex.length);
+  var anyFlexNeed  = Math.max(0, getAnyFlexSlots(league)  - anyFlex.length);
+
+  if (unfilledMens.length === 0 && womensNeed === 0 && anyFlexNeed === 0) {
+    // Roster's construction-complete — no more "needs" to surface.
+    el.hidden = true;
+    return;
+  }
+
+  // Build the "Still need" line. Use the short slot label (FLY, BAN, ...)
+  // for compactness — long division names would wrap on narrow panels.
+  var parts = [];
+  if (unfilledMens.length > 0) {
+    parts.push(unfilledMens.length + ' men\'s (' + unfilledMens.map(shortSlotLabel).join(', ') + ')');
+  }
+  if (womensNeed  > 0) parts.push(womensNeed  + ' women\'s flex');
+  if (anyFlexNeed > 0) parts.push(anyFlexNeed + ' any-flex');
+
+  // Smart suggestion. Walk the FV-ranked list (highest first) and return
+  // the first undrafted fighter who'd be a legal pick on the user's
+  // current roster — same canPick() rules as the Draft button.
+  var suggestion = '';
+  if (typeof FantasyValue !== 'undefined' && FantasyValue.scoreFor) {
+    var pickedIds  = new Set(picks.map(function(p) { return p.fighter_id; }));
+    // Pull FV-scored fighters, sort by FV desc, find first that fits.
+    var scored = [];
+    for (var i = 0; i < allFighters.length; i++) {
+      var f = allFighters[i];
+      if (pickedIds.has(f.id)) continue;
+      var s = FantasyValue.scoreFor(f.id);
+      if (typeof s === 'number') scored.push({ f: f, s: s });
+    }
+    scored.sort(function(a, b) { return b.s - a.s; });
+    for (var j = 0; j < scored.length; j++) {
+      if (canPick(scored[j].f, myFighters)) {
+        suggestion = scored[j].f.name + ' (' + scored[j].s.toFixed(1) + ' FV)';
+        break;
+      }
+    }
+  }
+
+  el.hidden = false;
+  el.innerHTML =
+    '<div class="draft-roster-needs__line">' +
+      '<span class="draft-roster-needs__label">Needs</span>' +
+      '<span class="draft-roster-needs__text">' + escapeHtml(parts.join(' · ')) + '</span>' +
+    '</div>' +
+    (suggestion
+      ? '<div class="draft-roster-needs__line draft-roster-needs__line--suggest">' +
+          '<span class="draft-roster-needs__label">Top fit</span>' +
+          '<span class="draft-roster-needs__text">' + escapeHtml(suggestion) + '</span>' +
+        '</div>'
+      : '');
 }
 
 // ========================================================================
@@ -1395,32 +3389,64 @@ function showWholeRosterModal(memberId) {
     .map(function(p) { return fighterMap[p.fighter_id]; })
     .filter(Boolean);
 
-  // Group by slot (same logic as renderMyRoster). Each weight class holds
-  // up to ROSTER_SLOTS_PER_DIVISION; overflow goes to Any-Division Flex.
-  var inDiv   = {};
-  ALL_DRAFT_DIVISIONS.forEach(function(d) { inDiv[d] = []; });
-  var anyFlex = [];
+  // Group by slot (mirrors renderMyRoster + checkRosterConstruction): each
+  // men's division gets one slot, all women's divisions share a single
+  // Women's Flex slot, overflow goes to Any-Division Flex.
+  var inDiv      = {};
+  MENS_DIVISIONS.forEach(function(d) { inDiv[d] = []; });
+  var womensFlex = [];
+  var anyFlex    = [];
 
   fighters.forEach(function(f) {
-    if (inDiv[f.primary_division] && inDiv[f.primary_division].length < ROSTER_SLOTS_PER_DIVISION) {
+    var isWomens = WOMENS_DIVISIONS_KEYS.indexOf(f.primary_division) !== -1;
+    if (isWomens) {
+      if (womensFlex.length < ROSTER_WOMENS_FLEX_SLOTS) womensFlex.push(f);
+      else anyFlex.push(f);
+    } else if (inDiv[f.primary_division] && inDiv[f.primary_division].length < ROSTER_SLOTS_PER_DIVISION) {
       inDiv[f.primary_division].push(f);
     } else if (inDiv[f.primary_division] !== undefined) {
       anyFlex.push(f);
     }
   });
 
-  // Always render every weight-class section + the flex section, even when
-  // empty — empty placeholders communicate which slots still need to be
-  // filled during the draft.
-  var sectionsHtml = '';
-  ALL_DRAFT_DIVISIONS.forEach(function(div) {
-    sectionsHtml += renderWholeRosterSection(DIVISION_LABELS[div], inDiv[div], {});
+  // Build a single ordered list of slot entries — 8 men's, 1 women's flex,
+  // then enough any-flex slots to fit both the league's configured size
+  // AND the actual picks (so overflow never gets silently truncated).
+  // getAnyFlexSlots() handles the per-league math; the max-with-anyFlex.length
+  // guard keeps post-draft trade/waiver inflation visible.
+  var rosterTotal      = (league && league.roster_size) || ROSTER_SIZE_BASE;
+  var anyFlexSlotCount = Math.max(getAnyFlexSlots(league), anyFlex.length);
+
+  var slotEntries = [];
+  MENS_DIVISIONS.forEach(function(div) {
+    slotEntries.push({
+      slotLabel: shortSlotLabel(div),
+      tint:      null,
+      fighter:   inDiv[div][0] || null
+    });
   });
-  sectionsHtml += renderWholeRosterSection('Any-Division Flex', anyFlex.slice(0, ROSTER_FLEX_SLOTS), { showDivision: true });
+  for (var w = 0; w < ROSTER_WOMENS_FLEX_SLOTS; w++) {
+    slotEntries.push({
+      slotLabel:    'W-F',
+      tint:         'womens',
+      showDivision: true,
+      fighter:      womensFlex[w] || null
+    });
+  }
+  for (var a = 0; a < anyFlexSlotCount; a++) {
+    slotEntries.push({
+      slotLabel:    'ANY',
+      tint:         'anyflex',
+      showDivision: true,
+      fighter:      anyFlex[a] || null
+    });
+  }
+
+  var cellsHtml = slotEntries.map(renderRosterCell).join('');
 
   var eyebrowText = isMyRoster ? 'Whole Roster' : 'Team Roster';
   var titleText   = (isMyRoster ? 'My Picks' : escapeHtml(targetMember.team_name)) +
-                    ' &middot; ' + fighters.length + ' / ' + ROSTER_SIZE_BASE;
+                    ' &middot; ' + fighters.length + ' / ' + rosterTotal;
 
   var modal = document.createElement('div');
   modal.id = 'wholeRosterModal';
@@ -1435,7 +3461,7 @@ function showWholeRosterModal(memberId) {
         '<button class="fight-card-modal__close" id="closeWholeRosterBtn" aria-label="Close">&times;</button>' +
       '</div>' +
       '<div class="fight-card-modal__body whole-team-modal__body">' +
-        '<div class="whole-team-sections">' + sectionsHtml + '</div>' +
+        '<div class="draft-roster-grid">' + cellsHtml + '</div>' +
       '</div>' +
     '</div>';
 
@@ -1466,48 +3492,64 @@ function handleWholeRosterEscape(e) {
   if (e.key === 'Escape') closeWholeRosterModal();
 }
 
-// One section column = weight class label + up to 2 fighter tiles below.
-// Pads to 2 slots with dashed empty placeholders so sections with one
-// (or zero) drafted fighters still read as balanced.
-function renderWholeRosterSection(label, fighters, opts) {
-  opts = opts || {};
-  var slotCount = 2;
-  var tilesHtml = fighters.map(function(f) { return renderWholeRosterTile(f, opts); }).join('');
-  for (var i = fighters.length; i < slotCount; i++) {
-    tilesHtml += '<div class="whole-team-tile-empty" aria-hidden="true"></div>';
+// Short slot label shown in the badge corner — keeps the layout dense while
+// still telling the user which slot a tile occupies. Mirrors the abbreviations
+// used informally elsewhere (FLY/BAN/.../LHW/HW); women's flex and any-flex
+// get their own keys since they aren't divisions per se.
+function shortSlotLabel(division) {
+  switch (division) {
+    case 'flyweight':         return 'FLY';
+    case 'bantamweight':      return 'BAN';
+    case 'featherweight':     return 'FEA';
+    case 'lightweight':       return 'LIG';
+    case 'welterweight':      return 'WEL';
+    case 'middleweight':      return 'MID';
+    case 'light_heavyweight': return 'LHW';
+    case 'heavyweight':       return 'HW';
+    default:                  return '';
   }
-  return (
-    '<div class="whole-team-section">' +
-      '<p class="whole-team-section__label">' + escapeHtml(label) + '</p>' +
-      '<div class="whole-team-section__tiles">' + tilesHtml + '</div>' +
-    '</div>'
-  );
 }
 
-// One tile = photo + rank badge + name (and optional division for flex sections).
-function renderWholeRosterTile(fighter, opts) {
-  opts = opts || {};
-  var rankLabel = fighter.is_champion ? 'C' : (fighter.current_rank ? '#' + fighter.current_rank : 'NR');
-  // Strip the "Men's "/"Women's " prefix when the division does show — the
-  // section header already establishes that context.
-  var rawDiv  = DIVISION_LABELS[fighter.primary_division] || fighter.primary_division || '';
-  var divLabel = rawDiv.replace(/^Men's\s+/, '').replace(/^Women's\s+/, '');
-  var photoHtml = fighter.photo_url
-    ? '<img class="whole-team-tile__photo" src="' + escapeHtml(fighter.photo_url) + '" alt="" onerror="this.style.display=\'none\'">'
+// One cell in the dense roster grid. Either a filled tile (with the same
+// .whole-team-tile look the lineup modal uses) plus a slot-type badge in the
+// top-right corner, or a dashed empty placeholder carrying the same badge
+// so the user can still read what slot is unfilled.
+function renderRosterCell(entry) {
+  var badgeClass = 'draft-roster-tile__slot-badge';
+  if (entry.tint === 'womens')  badgeClass += ' draft-roster-tile__slot-badge--womens';
+  if (entry.tint === 'anyflex') badgeClass += ' draft-roster-tile__slot-badge--anyflex';
+  var badgeHtml = '<span class="' + badgeClass + '">' + escapeHtml(entry.slotLabel) + '</span>';
+
+  if (!entry.fighter) {
+    return (
+      '<div class="draft-roster-empty" aria-hidden="true">' +
+        badgeHtml +
+      '</div>'
+    );
+  }
+
+  var f          = entry.fighter;
+  var rankLabel  = f.is_champion ? 'C' : (f.current_rank ? '#' + f.current_rank : 'NR');
+  var rawDiv     = DIVISION_LABELS[f.primary_division] || f.primary_division || '';
+  // Strip the gender prefix — the slot badge already telegraphs it.
+  var divLabel   = rawDiv.replace(/^Men's\s+/, '').replace(/^Women's\s+/, '');
+  var photoHtml  = f.photo_url
+    ? '<img class="whole-team-tile__photo" src="' + escapeHtml(f.photo_url) + '" alt="" onerror="this.style.display=\'none\'">'
     : '<div class="whole-team-tile__photo-placeholder"></div>';
 
   var classes = 'whole-team-tile';
-  if (fighter.is_champion) classes += ' whole-team-tile--champion';
+  if (f.is_champion) classes += ' whole-team-tile--champion';
 
   return (
-    '<button class="' + classes + '" data-roster-tile-id="' + fighter.id + '" type="button">' +
+    '<button class="' + classes + '" data-roster-tile-id="' + f.id + '" type="button">' +
       '<div class="whole-team-tile__photo-wrap">' +
         photoHtml +
         '<span class="whole-team-tile__rank">' + escapeHtml(rankLabel) + '</span>' +
+        badgeHtml +
       '</div>' +
       '<div class="whole-team-tile__info">' +
-        '<p class="whole-team-tile__name" title="' + escapeHtml(fighter.name) + '">' + escapeHtml(fighter.name) + '</p>' +
-        (opts.showDivision
+        '<p class="whole-team-tile__name" title="' + escapeHtml(f.name) + '">' + escapeHtml(f.name) + '</p>' +
+        (entry.showDivision
           ? '<p class="whole-team-tile__div">' + escapeHtml(divLabel) + '</p>'
           : '') +
       '</div>' +
@@ -1635,6 +3677,9 @@ async function addToQueue(fighterId) {
   queue.push({ fighter_id: fighterId, position: nextPos });
   renderFighterPool();
   renderQueue();
+  // Keep the View All modal button label in sync when the queue was toggled
+  // from inside the modal. No-op if the modal isn't open.
+  if (document.getElementById('viewAllOverlay')) renderViewAllList();
 }
 
 async function removeFromQueue(fighterId) {
@@ -1650,6 +3695,7 @@ async function removeFromQueue(fighterId) {
   queue = queue.filter(function(q) { return q.fighter_id !== fighterId; });
   renderFighterPool();
   renderQueue();
+  if (document.getElementById('viewAllOverlay')) renderViewAllList();
 }
 
 // Move a queue entry up (delta -1) or down (delta +1). Does this by
@@ -1838,14 +3884,82 @@ let predraftCountdownInterval = null;
 function startPredraftCountdown() {
   stopPredraftCountdown();
   predraftCountdownInterval = setInterval(function() {
-    const el = document.querySelector('.draft-status__pre');
-    if (!el) {
-      // turnInfo moved past pre-draft state; nothing more to update.
+    const el       = document.querySelector('.draft-status__pre');
+    const lobbyEl  = document.getElementById('draftLobbyCountdown');
+    // turnInfo moved past pre-draft state AND the lobby is gone too →
+    // nothing more to update, stop ticking.
+    if (!el && !lobbyEl) {
       stopPredraftCountdown();
       return;
     }
-    el.textContent = formatCountdown(league.draft_scheduled_at);
+    const text = formatCountdown(league.draft_scheduled_at);
+    if (el)      el.textContent      = text;
+    if (lobbyEl) lobbyEl.textContent = text;
   }, 1000);
+}
+
+// ========================================================================
+// CINEMATIC PRE-DRAFT LOBBY
+// Full-bleed overlay shown while the draft is scheduled but not yet
+// started. Big countdown, league name, draft order with team avatars.
+// The countdown text is updated by startPredraftCountdown so we don't
+// need a second interval here. Re-renders idempotently on every header
+// pass — cheap because the DOM is small (8 avatars + some text).
+// ========================================================================
+function renderDraftLobby() {
+  var el = document.getElementById('draftLobby');
+  if (!el || !league) return;
+
+  // Populate header bits
+  var nameEl = document.getElementById('draftLobbyLeagueName');
+  if (nameEl) nameEl.textContent = league.name || 'Draft Room';
+
+  var countdownEl = document.getElementById('draftLobbyCountdown');
+  if (countdownEl) countdownEl.textContent = formatCountdown(league.draft_scheduled_at);
+
+  var schedEl = document.getElementById('draftLobbyScheduled');
+  if (schedEl) schedEl.textContent = formatScheduledLocal(league.draft_scheduled_at);
+
+  // "8 managers · 17 rounds · 90s per pick" — rules summary footer
+  var rulesEl = document.getElementById('draftLobbyRules');
+  if (rulesEl) {
+    var n          = (league.draft_order && league.draft_order.length) || 0;
+    var rounds     = league.roster_size || ROSTER_SIZE_BASE;
+    var perPickSec = league.pick_timer_seconds || 90;
+    rulesEl.textContent =
+      n + ' manager' + (n === 1 ? '' : 's') + ' · ' +
+      rounds + ' rounds · ' +
+      perPickSec + 's per pick';
+  }
+
+  // Draft-order grid. Each tile = pick number · initials avatar (team
+  // accent) · team name. League.draft_order is the authoritative source —
+  // members may include people not on the order list (rare, but possible
+  // if commissioner added someone after locking the order).
+  var orderEl = document.getElementById('draftLobbyOrder');
+  if (orderEl) {
+    var html = '';
+    (league.draft_order || []).forEach(function(memberId, idx) {
+      var member = memberMap[memberId];
+      var name   = member ? member.team_name : '?';
+      var accent = teamColor(memberId);
+      var isMe   = memberId === myMemberId;
+      var initials = (name || '?').split(/\s+/).map(function(w) { return w[0]; }).join('').slice(0, 2).toUpperCase();
+      var isPresent = presentMemberIds.has(memberId);
+      var presenceCls = 'draft-presence-dot draft-presence-dot--' + (isPresent ? 'on' : 'off');
+      html +=
+        '<div class="draft-lobby-pick' + (isMe ? ' draft-lobby-pick--mine' : '') + '" style="--team-accent: ' + accent + '">' +
+          '<span class="draft-lobby-pick__num">' + (idx + 1) + '</span>' +
+          '<span class="draft-lobby-pick__avatar">' + escapeHtml(initials) +
+            '<span class="' + presenceCls + ' draft-lobby-pick__presence" title="' + (isPresent ? 'Connected' : 'Offline') + '"></span>' +
+          '</span>' +
+          '<span class="draft-lobby-pick__name">' + escapeHtml(name) + '</span>' +
+        '</div>';
+    });
+    orderEl.innerHTML = html;
+  }
+
+  el.hidden = false;
 }
 
 function stopPredraftCountdown() {

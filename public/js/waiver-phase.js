@@ -27,8 +27,24 @@
 //   * Base size: 17.  Event-week expansion adds +3 to 20.
 var ROSTER_SLOTS_PER_DIVISION = 1;  // applies to MEN'S divisions only
 var ROSTER_WOMENS_FLEX_SLOTS  = 1;  // single shared slot across all three women's divisions
-var ROSTER_FLEX_SLOTS         = 6;  // any-division flex
+var ROSTER_FLEX_SLOTS         = 6;  // any-division flex — DEFAULT only; per-league cap is computed below
 var ROSTER_SIZE_BASE          = 15; // 8 men's + 1 women's-flex + 6 any-flex
+// Hardcoded so waiver-phase.js doesn't depend on draft.js's MENS_DIVISIONS array.
+// Used by getAnyFlexSlots to derive the any-flex cap from a league's roster_size.
+var MENS_DIVISION_COUNT       = 8;
+
+// Per-league any-flex cap. Men's (8 slots) + Women's Flex (1 slot) are
+// construction-fixed; everything else in roster_size becomes Any-Division
+// Flex capacity. So roster_size = 15 → 6 any-flex, roster_size = 20 → 11.
+// Falls back to ROSTER_FLEX_SLOTS (6) when no league row is provided —
+// useful in surfaces that compute caps before the league has loaded.
+function getAnyFlexSlots(league) {
+  if (league && typeof league.roster_size === 'number') {
+    var fixed = MENS_DIVISION_COUNT * ROSTER_SLOTS_PER_DIVISION + ROSTER_WOMENS_FLEX_SLOTS;
+    return Math.max(0, league.roster_size - fixed);
+  }
+  return ROSTER_FLEX_SLOTS;
+}
 
 // Division keys grouped by sex — used by construction-check + slot
 // assignment to pool women's divisions into a single shared slot.

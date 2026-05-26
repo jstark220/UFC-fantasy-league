@@ -200,7 +200,7 @@ async function initCreateLeague() {
     const seasonStart      = document.getElementById('seasonStart').value || null;
     const seasonEnd        = document.getElementById('seasonEnd').value   || null;
     const maxManagers      = parseInt(document.getElementById('maxManagers').value, 10) || 8;
-    const rosterSize       = parseInt(document.getElementById('rosterSize').value, 10) || 20;
+    const rosterSize       = parseInt(document.getElementById('rosterSize').value, 10) || 15;
     const startersPerEvent = parseInt(document.getElementById('startersPerEvent').value, 10) || 3;
     // Pick timer — clamp to the same 30–600 range the DB enforces, falling
     // back to the PRD default if the field is somehow blank or outside range.

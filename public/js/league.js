@@ -145,25 +145,23 @@ async function initLeague() {
   }
 
   // ---- Render nav tabs in the page header ----
-  // Tabs visible depend on draft phase. The Draft Room CTA during the draft
-  // window is a special standalone button (keeps the original red filled
-  // styling — it's a temporary call-to-action, not a persistent nav tab).
-  var tabs = ['leagueHome', 'standings'];
+  // Tabs visible depend on draft phase. Draft Room is a first-class tab
+  // in the strip while the draft is live (between start and completion);
+  // it disappears once draft_completed flips, since the room is no longer
+  // a useful destination at that point.
+  var tabs = ['leagueHome'];
+  if (league.draft_started && !league.draft_completed) {
+    tabs.push('draftRoom');
+  }
+  tabs.push('standings');
   if (league.draft_started) {
     tabs.push('freeAgency', 'trades');
     if (league.draft_completed) tabs.push('lineup');
   }
   if (isCommissioner && league.draft_started) tabs.push('scoreEvent');
 
-  var navHtml = '';
-  if (league.draft_started && !league.draft_completed) {
-    navHtml += '<a href="draft.html?id=' + leagueId + '" class="btn-primary">Draft Room</a>';
-  }
-  // Draft Room CTA stays as a separate btn-primary alongside the nav strip.
-  // Empty wrapper div hosts LeagueNav so badges can re-render async without
-  // disturbing the Draft Room button.
   var headerEl = document.getElementById('headerActions');
-  headerEl.innerHTML = navHtml + '<div id="leagueNavStrip"></div>';
+  headerEl.innerHTML = '<div id="leagueNavStrip"></div>';
   LeagueNav.renderInto('leagueNavStrip', {
     leagueId: leagueId,
     memberId: myMemberId,
@@ -250,7 +248,10 @@ function renderDraftSection() {
   if (leagueData.draft_started) {
     el.innerHTML =
       '<p class="draft-status-note">Draft is currently in progress.</p>' +
-      '<a href="draft.html?id=' + leagueIdRef + '" class="btn-primary">Enter Draft Room</a>';
+      '<div class="draft-actions">' +
+        '<a href="draft.html?id=' + leagueIdRef + '" class="btn-primary">Enter Draft Room</a>' +
+        '<a href="draft.html?id=' + leagueIdRef + '&mock=1" class="btn-ghost">Mock Draft</a>' +
+      '</div>';
     return;
   }
 
@@ -273,9 +274,19 @@ function renderDraftSection() {
         '<p class="draft-schedule__label">Draft starts</p>' +
         '<p class="draft-schedule__when" id="draftScheduleWhen">' + escapeHtml(formatScheduledLocal(leagueData.draft_scheduled_at)) + '</p>' +
         '<p class="draft-schedule__countdown" id="draftScheduleCountdown">' + escapeHtml(formatCountdown(leagueData.draft_scheduled_at)) + '</p>' +
-        '<a href="draft.html?id=' + leagueIdRef + '" class="btn-secondary draft-schedule__enter">Enter Draft Room</a>' +
+        '<div class="draft-schedule__actions">' +
+          '<a href="draft.html?id=' + leagueIdRef + '" class="btn-secondary draft-schedule__enter">Enter Draft Room</a>' +
+          '<a href="draft.html?id=' + leagueIdRef + '&mock=1" class="btn-ghost draft-schedule__mock">Mock Draft</a>' +
+        '</div>' +
       '</div>'
     : '';
+
+  // Mock-draft link shown to every member in pre-draft, regardless of
+  // schedule state. It's the primary entry point for practicing — handy
+  // when no schedule is set yet so commish/members can't otherwise click
+  // into the draft surface at all.
+  const mockLink =
+    '<a href="draft.html?id=' + leagueIdRef + '&mock=1" class="btn-ghost league-mock-link">Mock Draft</a>';
 
   if (isCommissioner) {
     // Commissioner controls: set draft order, then set draft time. The
@@ -288,6 +299,7 @@ function renderDraftSection() {
       '<div class="draft-actions">' +
         '<button class="btn-secondary" id="setOrderBtn">Set Draft Order</button>' +
         '<button class="btn-primary" id="setTimeBtn"' + timeBtnDisabled + '>' + timeBtnLabel + '</button>' +
+        (isScheduled ? '' : mockLink) +
       '</div>';
 
     document.getElementById('setOrderBtn').addEventListener('click', openDraftOrderModal);
@@ -301,7 +313,10 @@ function renderDraftSection() {
     el.innerHTML =
       '<p class="draft-status-note">' + waitMsg + '</p>' +
       '<div id="draftOrderPreview">' + orderHtml + '</div>' +
-      scheduledHtml;
+      scheduledHtml +
+      // Non-commish member without a schedule has no other CTA — the
+      // Mock Draft link is their only entry into the draft surface.
+      (isScheduled ? '' : '<div class="draft-actions">' + mockLink + '</div>');
   }
 
   // If a schedule exists, kick off the live countdown so seconds tick.

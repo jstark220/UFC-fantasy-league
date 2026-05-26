@@ -2267,8 +2267,13 @@ function checkRosterConstruction(fighters, opts) {
   var bonus = (opts.useExpansion && typeof getEventBonusSize === 'function')
     ? getEventBonusSize(opts.event, league && league.scoring_config)
     : (opts.useExpansion ? (ROSTER_SIZE_EXPANDED - ROSTER_SIZE_BASE) : 0);
-  var flexLimit   = ROSTER_FLEX_SLOTS + bonus;
-  var totalLimit  = ROSTER_SIZE_BASE  + bonus;
+  // Any-flex cap + total cap both follow the commissioner's roster_size
+  // (via getAnyFlexSlots) rather than the v1.2 baseline. Event-week
+  // expansion adds the same +bonus to both.
+  var baseAnyFlex = typeof getAnyFlexSlots === 'function' ? getAnyFlexSlots(league) : ROSTER_FLEX_SLOTS;
+  var baseTotal   = (league && typeof league.roster_size === 'number') ? league.roster_size : ROSTER_SIZE_BASE;
+  var flexLimit   = baseAnyFlex + bonus;
+  var totalLimit  = baseTotal   + bonus;
 
   if (fighters.length > totalLimit) {
     return 'Roster cannot exceed ' + totalLimit + ' fighters' +

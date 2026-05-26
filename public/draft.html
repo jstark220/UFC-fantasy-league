@@ -18,6 +18,46 @@
 </head>
 <body>
 
+  <!-- Cinematic pre-draft lobby — full-bleed overlay shown while the draft
+       is scheduled but not yet started. League name, huge countdown, and
+       the draft order with team avatars. Hidden once draft_started flips
+       (the page reloads on that transition, see subscribeToLobbyFlip).
+       Populated by renderDraftLobby(); ticks every second via the existing
+       startPredraftCountdown helper. -->
+  <div class="draft-lobby" id="draftLobby" hidden>
+    <div class="draft-lobby__inner">
+      <p class="draft-lobby__eyebrow">League draft</p>
+      <h1 class="draft-lobby__league-name" id="draftLobbyLeagueName">—</h1>
+      <div class="draft-lobby__countdown">
+        <p class="draft-lobby__countdown-label">Starts in</p>
+        <p class="draft-lobby__countdown-value" id="draftLobbyCountdown">—</p>
+        <p class="draft-lobby__scheduled" id="draftLobbyScheduled">—</p>
+      </div>
+      <div class="draft-lobby__order">
+        <p class="draft-lobby__order-label">Draft Order</p>
+        <div class="draft-lobby__order-grid" id="draftLobbyOrder"></div>
+      </div>
+      <p class="draft-lobby__rules" id="draftLobbyRules">—</p>
+      <!-- Peek into the draft room before the draft starts. Doesn't change
+           any state — just dismisses the overlay so the user can see the
+           empty board, browse the fighter pool, queue picks, etc. The
+           lobby returns on next page load if the draft still hasn't started. -->
+      <button class="draft-lobby__enter" id="draftLobbyEnterBtn" type="button">
+        Enter draft room
+        <span class="draft-lobby__enter-hint">Preview the board · pre-draft</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Floating "exit fullscreen" pill — only visible while the page is in
+       fullscreen draft mode (the top-nav copy of this button is hidden then). -->
+  <button class="draft-fullscreen-exit" id="draftFullscreenExitBtn" type="button" hidden>Exit fullscreen · Esc</button>
+
+  <!-- Floating "Show lobby" pill — visible only when the lobby has been
+       dismissed during pre-draft so the user can return to the cinematic
+       lobby without refreshing. Wired in draft.js (setupLobbyEnterButton). -->
+  <button class="draft-lobby-show" id="draftLobbyShowBtn" type="button" hidden>← Lobby</button>
+
   <div class="draft-page" id="pageContent" style="display: none;">
 
     <!-- Slim top nav, same as the rest of the app -->
@@ -27,12 +67,45 @@
       </a>
       <div class="top-nav__links">
         <a href="#" class="btn-ghost" id="leagueLink">← League</a>
+        <!-- MOCK badge — only visible when draft.js detects ?mock=1.
+             Toggled by setupMockChrome() in draft.js. Kept as a static
+             element so it doesn't depend on async render timing. -->
+        <span class="draft-mock-badge" id="draftMockBadge" hidden>MOCK DRAFT</span>
+        <button class="draft-mock-reset" id="draftMockResetBtn" type="button" hidden title="Restart this mock with the same draft order">Restart mock</button>
+        <!-- "? How it works" — shared primer modal used across the app.
+             Content registered + click wired by LeaguePrimer.install() in
+             draft.js once the league row is available. -->
+        <button id="pageHelpTrigger" class="page-help-trigger" type="button" aria-label="How Knockdown Fantasy works">
+          <span class="page-help-trigger__icon" aria-hidden="true">?</span>
+          <span class="page-help-trigger__label">How it works</span>
+        </button>
       </div>
       <div class="top-nav__actions">
+        <!-- Sound toggle: mute/unmute the synthesized draft sound effects.
+             Wired by setupSoundToggle() in draft.js; mute state persists
+             in localStorage across pages. -->
+        <button class="btn-ghost draft-sound-btn" id="draftSoundBtn" type="button" title="Toggle draft sounds" aria-label="Toggle draft sounds">🔊</button>
+        <!-- Fullscreen toggle: hides the top nav + commish toolbar so the
+             draft room fills the viewport. Preference persists in
+             localStorage. Esc exits. Wired by draft.js. -->
+        <button class="btn-ghost draft-fullscreen-btn" id="draftFullscreenBtn" title="Fullscreen draft (Esc to exit)" aria-label="Toggle fullscreen draft mode">⛶</button>
         <button class="btn-theme" onclick="toggleTheme()" aria-label="Toggle theme">☾</button>
         <button id="globalLogoutBtn" class="btn-ghost" onclick="logOut()">Log out</button>
       </div>
     </nav>
+
+    <!-- Mock-draft "Start mock" gate. Shown only in ?mock=1 mode until
+         the user clicks Start. Wired by setupMockChrome() in draft.js;
+         dismissing flips the mockStarted flag, hides this banner, and
+         kicks off the AI auto-pick loop. -->
+    <div class="draft-mock-start" id="draftMockStartBanner" hidden>
+      <div class="draft-mock-start__inner">
+        <p class="draft-mock-start__eyebrow">Mock draft</p>
+        <h2 class="draft-mock-start__title">Ready when you are</h2>
+        <p class="draft-mock-start__body">Queue your top picks and review the pool first. Bots auto-pick once you start.</p>
+        <button class="btn-primary draft-mock-start__btn" id="draftMockStartBtn" type="button">Start mock</button>
+      </div>
+    </div>
 
     <!-- Personal turn banner. Tall and loud when it's your pick;
          smaller "up in N picks" indicator otherwise. Hidden during
@@ -49,7 +122,16 @@
       <div class="draft-status__inner">
         <p class="draft-status__turn" id="turnInfo">Loading draft...</p>
         <div class="draft-status__right">
-          <div class="draft-timer" id="draftTimer" hidden>
+          <!-- Always-visible "your next pick" indicator: pick number,
+               how many picks until your turn, and an ETA based on the
+               league's pick timer. Hidden pre-draft / when it's already
+               your turn / when the draft is done. Updates as picks land. -->
+          <div class="draft-next-pick" id="draftNextPick" hidden>
+            <span class="draft-next-pick__label">Your next pick</span>
+            <span class="draft-next-pick__value" id="draftNextPickValue">—</span>
+          </div>
+          <div class="draft-timer" id="draftTimer" hidden style="--timer-progress: 1">
+            <span class="draft-timer__ring" aria-hidden="true"></span>
             <span class="draft-timer__label">Pick clock</span>
             <span class="draft-timer__value" id="draftTimerValue">--</span>
           </div>
@@ -83,8 +165,12 @@
 
       <!-- TOP: snake draft board (full width) -->
       <div class="draft-panel panel-board waiver-tab--active">
-        <div class="draft-panel__header">
+        <div class="draft-panel__header draft-panel__header--with-action">
           <p class="section-label">Draft Board</p>
+          <!-- Pick activity feed: last 3 picks ticker. Populated by
+               renderPickActivityFeed(); auto-hides pre-draft and when no
+               picks yet. Relative timestamps refresh on a 30s interval. -->
+          <div class="draft-pick-feed" id="draftPickFeed" hidden></div>
         </div>
         <div class="draft-panel__body" id="draftBoard"></div>
       </div>
@@ -106,10 +192,11 @@
           <div class="draft-panel__controls">
             <input type="text" id="fighterSearch" class="waiver-search" placeholder="Search fighters...">
             <select id="sortBy" class="waiver-filter">
+              <option value="fantasy_value">Sort: Fantasy Value</option>
+              <option value="avg_pts">Sort: Avg Points</option>
+              <option value="total_pts">Sort: Total Points</option>
+              <option value="recent_pts">Sort: Points (Last Year)</option>
               <option value="rank">Sort: Rank</option>
-              <option value="record">Sort: Record</option>
-              <option value="points_year">Sort: Points (Year)</option>
-              <option value="points_proj">Sort: Projected Pts</option>
             </select>
             <select id="divisionFilter" class="waiver-filter">
               <option value="all">All Divisions</option>
@@ -122,6 +209,11 @@
               <option value="unranked">Unranked</option>
             </select>
           </div>
+          <!-- Best Available sticky strip: the highest-FV fighter who's still
+               on the board, always visible regardless of the current filter.
+               Populated by renderBestAvailable() in draft.js. Hidden during
+               pre-draft / when the FV cache hasn't loaded yet. -->
+          <div class="draft-best-available" id="bestAvailable" hidden></div>
           <div class="draft-panel__body" id="fighterPool"></div>
         </div>
 
@@ -139,17 +231,38 @@
               My Queue
               <span class="section-label__count">(<span id="queueCount">0</span>)</span>
             </p>
-            <span class="draft-panel__hint" id="queueHint">Empty</span>
+            <div class="draft-queue-header-actions">
+              <span class="draft-panel__hint" id="queueHint">Empty</span>
+              <!-- Auto-draft toggle: when on, this client auto-picks the
+                   moment it becomes your turn. Falls back to highest-FV
+                   fighter when the queue is empty. Persisted per league
+                   in localStorage. Wired by setupAutoDraftToggle(). -->
+              <button class="draft-autodraft-toggle" id="autoDraftToggle" type="button" aria-pressed="false">
+                <span class="draft-autodraft-toggle__dot" aria-hidden="true"></span>
+                <span class="draft-autodraft-toggle__label">Auto-draft</span>
+              </button>
+            </div>
+          </div>
+          <!-- "Auto-draft is on" banner — only shown while the toggle is
+               active. Reassures the user the system is picking for them. -->
+          <div class="draft-autodraft-banner" id="autoDraftBanner" hidden>
+            <span class="draft-autodraft-banner__icon" aria-hidden="true">⚡</span>
+            <span>Auto-draft is on. We'll pick from your queue, then highest FV.</span>
           </div>
           <div class="draft-panel__body draft-panel__body--queue" id="queueList"></div>
 
           <div class="draft-panel__header draft-panel__header--with-action">
             <p class="section-label">
               My Roster
-              <span class="section-label__count">(<span id="myPickCount">0</span> / 20)</span>
+              <span class="section-label__count">(<span id="myPickCount">0</span> / <span id="myRosterTotal">15</span>)</span>
             </p>
             <button class="btn-ghost draft-view-all-btn" id="viewWholeRosterBtn">Whole roster &rarr;</button>
           </div>
+          <!-- Roster-needs widget: "Still need: 2 men's, 6 any-flex" plus a
+               smart suggestion for the highest-FV fighter who'd fill an
+               unfilled slot. Populated by renderRosterNeeds(); auto-hides
+               once the roster is full or before the draft starts. -->
+          <div class="draft-roster-needs" id="rosterNeeds" hidden></div>
           <div class="draft-panel__body" id="myRoster"></div>
 
         </div>
@@ -177,6 +290,14 @@
   <script src="js/activity.js"></script>
   <script src="js/waiver-phase.js"></script>
   <script src="js/custom-dropdown.js"></script>
+  <script src="js/draft-sounds.js"></script>
+  <!-- Shared "? How it works" primer. page-help-modal must load before
+       league-primer (which depends on PageHelp). league-primer's autoInit
+       no-ops on this page because we don't expose #leagueName; draft.js
+       calls LeaguePrimer.install(league) directly with the row it already
+       has, so there's no duplicate league fetch. -->
+  <script src="js/page-help-modal.js"></script>
+  <script src="js/league-primer.js"></script>
   <script src="js/draft.js"></script>
 
   <script>

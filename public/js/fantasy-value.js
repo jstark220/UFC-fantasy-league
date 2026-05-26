@@ -65,10 +65,15 @@
 
         map[fighterId].totalPts   += score.total;
         map[fighterId].fightCount += 1;
+        // opponentId — the other side of the fight, captured here so the
+        // surfaced recentResults entries can show who the W/L was against
+        // without consumers having to re-query fight_results.
+        var opponentId = isA ? fight.fighter_b_id : fight.fighter_a_id;
         map[fighterId]._fights.push({
           score: score.total, date: eventDate,
           isWin: isWin, isDraw: isDraw, isLoss: isLoss,
-          oppRank: oppRank
+          oppRank: oppRank,
+          opponentId: opponentId
         });
         if (isRecent) {
           map[fighterId].recentPts        += score.total;
@@ -151,6 +156,22 @@
       e.sosAvg           = Math.round(sosAvg * 100) / 100;
       e.sosFightCount    = sosFights.length;
       e.goodFightCount   = goodFights;
+
+      // Preserve a slim outcomes array (last-5, most recent first) so
+      // consumers can render a form sparkline with hover details without
+      // re-querying every fight_results row. Each entry carries enough to
+      // build "Win vs Smith · Mar 14 · 28.5 pts" downstream — opponentId
+      // is resolved to a name by whichever surface is rendering (since
+      // the consumer already has a fighter lookup table).
+      e.recentResults = e._fights.slice(0, 5).map(function(f) {
+        return {
+          result:     f.isWin ? 'W' : f.isLoss ? 'L' : f.isDraw ? 'D' : 'N',
+          date:       f.date ? f.date.toISOString() : null,
+          opponentId: f.opponentId || null,
+          score:      f.score
+        };
+      });
+
       delete e._fights;
 
       e.totalPts  = Math.round(e.totalPts  * 10) / 10;

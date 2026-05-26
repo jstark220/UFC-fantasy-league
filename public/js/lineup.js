@@ -1143,8 +1143,11 @@ function renderRosterList() {
   // Women's Flex — single shared slot across all three women's divisions.
   html += renderSlotSection("Women's Flex", groups['womens_flex'], ROSTER_WOMENS_FLEX_SLOTS, ctx, 'womens_flex');
 
-  // Any-division flex section — the big spillover bucket
-  html += renderSlotSection('Any-Division Flex', groups['any_flex'], ROSTER_FLEX_SLOTS, ctx, 'any_flex');
+  // Any-division flex section — the big spillover bucket. Cap follows
+  // league.roster_size (via getAnyFlexSlots) so a custom league with
+  // more roster spots gets more flex slots displayed.
+  var anyFlexCap = typeof getAnyFlexSlots === 'function' ? getAnyFlexSlots(league) : ROSTER_FLEX_SLOTS;
+  html += renderSlotSection('Any-Division Flex', groups['any_flex'], anyFlexCap, ctx, 'any_flex');
 
   // Temporary Extended Roster Flex — visible only while the +3 expansion is
   // active (Thu 3am ET event-week → Sun 3am ET after event). These fighters
@@ -1256,9 +1259,10 @@ function detectRosterImbalance(roster) {
     shortages.push("Women's Flex (" + womensTotal + ' of ' + ROSTER_WOMENS_FLEX_SLOTS + ')');
   }
 
-  if (anyFlexDemand > ROSTER_FLEX_SLOTS) {
+  var imbalanceAnyFlexCap = typeof getAnyFlexSlots === 'function' ? getAnyFlexSlots(league) : ROSTER_FLEX_SLOTS;
+  if (anyFlexDemand > imbalanceAnyFlexCap) {
     excesses.push(
-      'Any-Division Flex needs ' + anyFlexDemand + ' slots but only has ' + ROSTER_FLEX_SLOTS + ' — ' +
+      'Any-Division Flex needs ' + anyFlexDemand + ' slots but only has ' + imbalanceAnyFlexCap + ' — ' +
       'too many fighters in ' + sources.join(', ')
     );
   }
@@ -1439,7 +1443,7 @@ function renderRosterRow(fighter, ctx, slotType) {
   // row, not anything event-scoped — so we don't gate on isLocked.
   var flexSwapExists = ctx.flexDivisions.indexOf(fighter.primary_division) !== -1;
   var flexEligible = slotType !== 'any_flex' &&
-    (ctx.flexCount < ROSTER_FLEX_SLOTS || flexSwapExists);
+    (ctx.flexCount < (typeof getAnyFlexSlots === 'function' ? getAnyFlexSlots(league) : ROSTER_FLEX_SLOTS) || flexSwapExists);
   var flexBtn = (!isViewMode && flexEligible)
     ? '<button class="lineup-flex-btn" data-flex-id="' + fighter.id + '" title="Move to Any-Division Flex">&rarr; Flex</button>'
     : '';
@@ -1718,7 +1722,8 @@ function showMoveToFlexModal(fighterId) {
     .filter(function(item) { return item.slotType === 'any_flex'; })
     .map(function(item) { return item.fighter; });
 
-  const flexOpen = allFlexFighters.length < ROSTER_FLEX_SLOTS;
+  const anyFlexCapForMove = typeof getAnyFlexSlots === 'function' ? getAnyFlexSlots(league) : ROSTER_FLEX_SLOTS;
+  const flexOpen          = allFlexFighters.length < anyFlexCapForMove;
 
   // When flex is full, valid swap partners are fighters in the mover's
   // own weight class — only those can cleanly take the mover's vacated slot.
@@ -1733,7 +1738,7 @@ function showMoveToFlexModal(fighterId) {
 
   let swapOptionsHtml = '';
   if (!flexOpen) {
-    var swapDesc = 'All ' + ROSTER_FLEX_SLOTS + ' flex slots are taken. ' +
+    var swapDesc = 'All ' + anyFlexCapForMove + ' flex slots are taken. ' +
                    'Choose who to swap out (must share your weight class so they can take your slot):';
     swapOptionsHtml =
       '<p class="move-flex-body-text">' + swapDesc + '</p>' +

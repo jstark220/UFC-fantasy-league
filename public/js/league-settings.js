@@ -150,7 +150,7 @@ async function initSettings() {
   document.getElementById('inputFormat').value      = league.format || 'season';
   document.getElementById('inputDraftFormat').value = league.draft_format || 'snake';
   document.getElementById('inputMaxManagers').value = league.max_managers || 8;
-  document.getElementById('inputRosterSize').value  = league.roster_size  || 20;
+  document.getElementById('inputRosterSize').value  = league.roster_size  || 15;
   document.getElementById('inputPickTimer').value   = league.pick_timer_seconds || 90;
 
   if (league.season_start_date) {
