@@ -145,6 +145,30 @@
         });
       }
 
+      // Section 1b: league-context nav tabs (League Home / Standings /
+      // Free Agency / Trades / Roster / Score Event). The strip lives in
+      // .league-header__actions and is hidden on mobile via CSS because
+      // 5–6 tabs at 96px each would overflow. We surface them here so
+      // the drawer is the canonical way to navigate between league pages
+      // on a phone. Tabs are nested inside a .nav-tabs container.
+      var leagueTabsContainer = document.querySelector('.league-header__actions .nav-tabs');
+      if (leagueTabsContainer) {
+        var tabChildren = Array.prototype.slice.call(leagueTabsContainer.children);
+        if (tabChildren.length) {
+          // Light divider before the league-nav block if we already
+          // appended something above
+          if (container.children.length > 0) {
+            var divider = document.createElement('div');
+            divider.className = 'mobile-drawer__divider';
+            container.appendChild(divider);
+          }
+          tabChildren.forEach(function (el) {
+            var clone = cloneAsDrawerItem(el);
+            if (clone) container.appendChild(clone);
+          });
+        }
+      }
+
       // Section 2: actions (theme toggle stays in nav header on mobile,
       // but log out / sign up / log in should go in the drawer)
       var actionsContainer = nav.querySelector('.top-nav__actions');
@@ -187,7 +211,11 @@
       if (tag !== 'a' && tag !== 'button') return null;
 
       var clone = el.cloneNode(true);
-      clone.className = 'mobile-drawer__item';
+      // Preserve the active-tab signal from .nav-tab--active so the
+      // drawer can highlight the user's current page in the menu.
+      var wasActive = el.classList && el.classList.contains('nav-tab--active');
+      clone.className = 'mobile-drawer__item' +
+        (wasActive ? ' mobile-drawer__item--active' : '');
 
       if (tag === 'button') {
         // Strip inline onclick from the clone so it doesn't double-fire

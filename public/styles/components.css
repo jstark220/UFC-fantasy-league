@@ -4619,6 +4619,51 @@ body {
   padding: var(--space-3) var(--space-6) var(--space-6);
 }
 
+/* ----- FIGHT CARD MODAL — mobile redesign -----
+   Make it a true fullscreen sheet on phones: the body scrolls cleanly,
+   the header pads down to a slimmer strip, and the fight rows (already
+   stacked to single column elsewhere in this stylesheet) get the full
+   viewport width to breathe. */
+@media (max-width: 720px) {
+  .fight-card-modal-overlay {
+    padding: 0;
+    align-items: stretch;
+    justify-content: stretch;
+  }
+
+  .fight-card-modal {
+    max-width: 100%;
+    width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+    border: none;
+  }
+
+  .fight-card-modal__header {
+    padding: var(--space-4);
+    align-items: flex-start;
+  }
+  .fight-card-modal__title {
+    font-size: 1.4rem;
+    line-height: 1.05;
+  }
+  .fight-card-modal__eyebrow {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+  }
+  .fight-card-modal__close {
+    width: 36px;
+    height: 36px;
+    font-size: 1.25rem;
+    flex-shrink: 0;
+  }
+
+  .fight-card-modal__body {
+    padding: var(--space-3) var(--space-4) var(--space-5);
+  }
+}
+
 /* ----- Whole team modal — sectioned by weight class ----- */
 
 /* Override fight-card-modal's 540px cap — the team grid needs the room. */
@@ -4794,6 +4839,34 @@ body {
 }
 @media (max-width: 700px) {
   .whole-team-sections { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ----- WHOLE TEAM MODAL — mobile redesign -----
+   At 390px the 2-column section grid crushed each tile to ~70px — too
+   tight to read the photo + rank + name. Mobile gets a single-column
+   section stack (full-width per division), with 2 fighter tiles per row
+   inside each section. The modal chrome (fullscreen, header) is already
+   handled by the .fight-card-modal mobile block above since the modal
+   uses both classes. */
+@media (max-width: 720px) {
+  .whole-team-modal__body {
+    padding: var(--space-3) var(--space-4) var(--space-5);
+  }
+  .whole-team-sections {
+    grid-template-columns: 1fr;
+    gap: var(--space-5) 0;
+    max-width: 100%;
+  }
+  /* 2 fighter tiles per row at full mobile width — ~160px each, big
+     enough to read the photo + rank corner + score badge. */
+  .whole-team-section__tiles {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-2);
+  }
+  .whole-team-section__label {
+    font-size: 11px;
+    padding-bottom: 6px;
+  }
 }
 
 .whole-team-section {
@@ -6233,6 +6306,36 @@ body {
   margin: var(--space-3) var(--space-5);
 }
 
+/* Style for league nav-tabs cloned into the drawer. The original .nav-tab
+   class is stripped by mobile-nav.js when it clones, but the inner SVG
+   icon and label spans keep their classes. Give them comfortable inline
+   spacing so the icon + label read as a unit. */
+.mobile-drawer__item .nav-tab__icon-wrap {
+  margin-right: var(--space-3);
+  flex-shrink: 0;
+  position: relative;
+}
+.mobile-drawer__item .nav-tab__icon {
+  width: 20px;
+  height: 20px;
+  color: var(--text-secondary);
+}
+.mobile-drawer__item .nav-tab__label {
+  font-size: 1rem;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+  line-height: 1.2;
+}
+/* Active league tab gets a subtle crimson accent in the drawer */
+.mobile-drawer__item--active {
+  color: var(--accent-crimson);
+  font-weight: 600;
+}
+.mobile-drawer__item--active .nav-tab__icon {
+  color: var(--accent-crimson);
+}
+
 /* ========================================================================
    RESPONSIVE ADJUSTMENTS
    ======================================================================== */
@@ -6250,6 +6353,12 @@ body {
      them. Keep the theme toggle visible so users can flip light/dark
      without opening the menu. */
   .top-nav__actions > *:not(.btn-theme) { display: none; }
+
+  /* Hide the league nav strip (League Home / Standings / Free Agency /
+     Trades / Roster / Score Event) on mobile. With 5–6 tabs at 96px+
+     each it overflows hard at 390px. mobile-nav.js mirrors these into
+     the drawer so they remain reachable. */
+  .league-header__actions { display: none; }
 
   /* Keep the back link visible inline (no need to open the drawer to
      go back). Every member-area page puts the back link first inside
@@ -7082,6 +7191,89 @@ body {
 
 .fighter-modal__body .fight-history-table thead th {
   background: var(--bg-tertiary);
+}
+
+/* ----- FIGHTER MODAL — mobile redesign -----
+   The desktop layout (200px fighter card next to a 3rem name + bio +
+   action chips) packs into a 760px box. On a 390px viewport the card
+   alone eats half the width and the bio cramps to ~120px. Mobile gets
+   a full-bleed sheet: hero stacks vertically (card → name → bio →
+   CTAs), stats row tightens, and the fight history scrolls below. */
+@media (max-width: 720px) {
+  .fighter-modal-overlay {
+    padding: 0;
+    align-items: stretch;
+    justify-content: stretch;
+  }
+
+  .fighter-modal {
+    max-width: 100%;
+    max-height: 100dvh;
+    width: 100%;
+    height: 100dvh;
+    border-radius: 0;
+    border: none;
+  }
+
+  /* Hero: vertical stack, card centered above the bio */
+  .fighter-modal__hero {
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    text-align: center;
+    gap: var(--space-3);
+    padding: var(--space-6) var(--space-4) var(--space-4);
+  }
+
+  /* Compact fighter card inside the modal hero */
+  .fighter-modal__hero > .fighter-card {
+    width: 160px;
+    min-height: 240px;
+  }
+  .fighter-modal__hero > .fighter-card .fighter-card__photo-wrap {
+    flex: 0 0 140px;
+  }
+
+  /* Hero info centered + reset desktop padding */
+  .fighter-modal__hero-info {
+    align-items: center;
+    text-align: center;
+    padding: 0;
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .fighter-modal__name {
+    font-size: 2.25rem;
+    line-height: 1.05;
+  }
+  .fighter-modal__cta-row {
+    justify-content: center;
+    align-self: center;
+    margin-top: var(--space-2);
+  }
+
+  /* Stats row: tighter padding, shrink display number so 4 tiles fit */
+  .fighter-modal__stat {
+    padding: var(--space-3) 4px;
+  }
+  .fighter-modal__stat-val {
+    font-size: 1.35rem;
+  }
+  .fighter-modal__stat-label {
+    font-size: 8px;
+    letter-spacing: 0.06em;
+  }
+  .fighter-modal__stat-sub {
+    font-size: 9px;
+  }
+
+  /* Close button: bigger touch target */
+  .fighter-modal__close {
+    padding: 8px 12px;
+    font-size: 1.3rem;
+    top: var(--space-3);
+    right: var(--space-3);
+  }
 }
 
 /* ========================================================================
