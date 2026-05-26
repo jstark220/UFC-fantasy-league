@@ -4662,6 +4662,15 @@ body {
   .fight-card-modal__body {
     padding: var(--space-3) var(--space-4) var(--space-5);
   }
+
+  /* Drop the "Polymarket" suffix inside odds chips on mobile so the
+     chip is just "65% •" — the brand-name was pushing chips past the
+     right edge inside fight-card / fighter modals. The chart title
+     and other detail surfaces still know it's Polymarket-sourced. */
+  .fight-odds__brand { display: none; }
+  .fight-odds {
+    padding-right: 8px;
+  }
 }
 
 /* ----- Whole team modal — sectioned by weight class ----- */
@@ -4842,30 +4851,56 @@ body {
 }
 
 /* ----- WHOLE TEAM MODAL — mobile redesign -----
-   At 390px the 2-column section grid crushed each tile to ~70px — too
-   tight to read the photo + rank + name. Mobile gets a single-column
-   section stack (full-width per division), with 2 fighter tiles per row
-   inside each section. The modal chrome (fullscreen, header) is already
-   handled by the .fight-card-modal mobile block above since the modal
-   uses both classes. */
+   Each weight class section becomes a visually-grouped card with a
+   subtle background fill, crimson eyebrow label, and a tight tile
+   grid inside. Reads as an organized roster overview rather than a
+   sparse list of disconnected tiles. */
 @media (max-width: 720px) {
   .whole-team-modal__body {
     padding: var(--space-3) var(--space-4) var(--space-5);
   }
   .whole-team-sections {
     grid-template-columns: 1fr;
-    gap: var(--space-5) 0;
+    gap: var(--space-3) 0;
     max-width: 100%;
   }
-  /* 2 fighter tiles per row at full mobile width — ~160px each, big
-     enough to read the photo + rank corner + score badge. */
-  .whole-team-section__tiles {
-    grid-template-columns: repeat(2, 1fr);
+
+  /* Section as a card: tinted background, hairline border, rounded
+     corners so each weight class reads as its own grouped block. */
+  .whole-team-section {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    padding: var(--space-3) var(--space-3) var(--space-3);
     gap: var(--space-2);
   }
+
+  /* Section label: crimson eyebrow, separated from tiles by a hairline.
+     Sits flush with the card edges via negative margin so the divider
+     spans the full card width. */
   .whole-team-section__label {
-    font-size: 11px;
-    padding-bottom: 6px;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--accent-crimson);
+    margin: 0 calc(var(--space-3) * -1) 0;
+    padding: 0 var(--space-3) var(--space-2);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  /* 2 tiles per row inside each section, tight gaps so the section
+     reads as a single unit rather than separated tiles. */
+  .whole-team-section__tiles {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+    margin-top: var(--space-2);
+  }
+
+  /* Slightly tighter tile padding so the section feels denser. */
+  .whole-team-tile {
+    border-radius: 6px;
+  }
+  .whole-team-tile-empty {
+    border-radius: 6px;
   }
 }
 
@@ -6357,8 +6392,15 @@ body {
   /* Hide the league nav strip (League Home / Standings / Free Agency /
      Trades / Roster / Score Event) on mobile. With 5–6 tabs at 96px+
      each it overflows hard at 390px. mobile-nav.js mirrors these into
-     the drawer so they remain reachable. */
-  .league-header__actions { display: none; }
+     the drawer so they remain reachable.
+
+     Specificity bumped via the .league-header parent chain because
+     other rules later in the file (page-help, settings header variants)
+     could otherwise outweigh this in the cascade. Also nuke the inner
+     .nav-tabs strip directly as belt + suspenders against any rule
+     that resets display on the container. */
+  .league-header .league-header__actions { display: none !important; }
+  .league-header .nav-tabs { display: none !important; }
 
   /* Keep the back link visible inline (no need to open the drawer to
      go back). Every member-area page puts the back link first inside
@@ -7215,26 +7257,50 @@ body {
     border: none;
   }
 
-  /* Hero: vertical stack, card centered above the bio */
+  /* Hero: vertical stack. The fighter card takes the full width of the
+     modal at the top — no crunched name/bio sitting beside a thumbnail.
+     Below the card comes the nickname / name / country / CTA row, all
+     centered. */
   .fighter-modal__hero {
     flex-direction: column;
-    align-items: center;
+    align-items: stretch;
     justify-content: flex-start;
     text-align: center;
-    gap: var(--space-3);
-    padding: var(--space-6) var(--space-4) var(--space-4);
+    gap: var(--space-4);
+    padding: var(--space-5) var(--space-4) var(--space-4);
   }
 
-  /* Compact fighter card inside the modal hero */
+  /* Fighter card spans the modal width at the top */
   .fighter-modal__hero > .fighter-card {
-    width: 160px;
-    min-height: 240px;
+    width: 100%;
+    max-width: 360px;
+    min-height: 0;
+    margin: 0 auto;
+    align-self: center;
   }
+  /* Photo area scales with the wider card; aspect ratio 4/3 keeps it
+     a band rather than a portrait so the modal doesn't feel top-heavy. */
   .fighter-modal__hero > .fighter-card .fighter-card__photo-wrap {
-    flex: 0 0 140px;
+    flex: 0 0 auto;
+    aspect-ratio: 4 / 3;
+  }
+  /* Smaller fighter-card body text so record + W/L/D/score tiles fit
+     comfortably on one line at the wider card width. */
+  .fighter-modal__hero > .fighter-card .fighter-card__name {
+    font-size: 1.05rem;
+  }
+  .fighter-modal__hero > .fighter-card .fighter-card__record,
+  .fighter-modal__hero > .fighter-card .fighter-card__division {
+    font-size: 11px;
+  }
+  .fighter-modal__hero > .fighter-card .fighter-card__pts-val {
+    font-size: 14px;
+  }
+  .fighter-modal__hero > .fighter-card .fighter-card__pts-label {
+    font-size: 8px;
   }
 
-  /* Hero info centered + reset desktop padding */
+  /* Bio info sits beneath the card, centered */
   .fighter-modal__hero-info {
     align-items: center;
     text-align: center;
@@ -7243,7 +7309,7 @@ body {
     justify-content: flex-start;
   }
   .fighter-modal__name {
-    font-size: 2.25rem;
+    font-size: 2rem;
     line-height: 1.05;
   }
   .fighter-modal__cta-row {
@@ -7252,19 +7318,23 @@ body {
     margin-top: var(--space-2);
   }
 
-  /* Stats row: tighter padding, shrink display number so 4 tiles fit */
+  /* Career stats row (Pro Record / Finishes / UFC Fights / Fantasy Value)
+     — smaller value, shorter label so all 4 tiles fit on one line at
+     390px without wrapping. */
   .fighter-modal__stat {
-    padding: var(--space-3) 4px;
+    padding: var(--space-3) 2px;
+    min-width: 0;
   }
   .fighter-modal__stat-val {
-    font-size: 1.35rem;
+    font-size: 1.15rem;
+    letter-spacing: 0.01em;
   }
   .fighter-modal__stat-label {
-    font-size: 8px;
-    letter-spacing: 0.06em;
+    font-size: 7.5px;
+    letter-spacing: 0.04em;
   }
   .fighter-modal__stat-sub {
-    font-size: 9px;
+    font-size: 8.5px;
   }
 
   /* Close button: bigger touch target */
