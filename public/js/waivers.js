@@ -1357,13 +1357,24 @@ function renderAvailableFighters() {
         '<div class="lineup-roster-row__photo-wrap">' + photoHtml + '</div>' +
         '<span class="lineup-roster-row__rank ' + rankClass + '">' + rankLabel + subBadge + '</span>' +
         '<div class="lineup-roster-row__info">' +
-          '<button class="lineup-roster-row__name" data-open-fighter="' + f.id + '">' + escapeHtml(f.name) + '</button>' +
+          // Name line wraps name + inline rank suffix (rank shows on mobile
+          // only; see .lineup-roster-row__rank-inline rules in components.css)
+          '<span class="lineup-roster-row__name-line">' +
+            '<button class="lineup-roster-row__name" data-open-fighter="' + f.id + '">' + escapeHtml(f.name) + '</button>' +
+            '<span class="lineup-roster-row__rank-inline ' + rankClass + '" aria-hidden="true">' +
+              '<span class="lineup-roster-row__rank-inline-divider">|</span>' +
+              rankLabel +
+            '</span>' +
+          '</span>' +
           '<span class="lineup-roster-row__division">' + escapeHtml(divLine) + '</span>' +
           nextFightNote +
           rollingNote +
         '</div>' +
         '<span class="lineup-roster-row__record">' + statHtml + '</span>' +
-        btn +
+        // Wrap the action button (or rostered-by label) in __actions so
+        // the mobile grid layout places it cleanly at row 2 col 3 instead
+        // of letting it auto-flow into an implicit row beneath the photo.
+        '<div class="lineup-roster-row__actions">' + btn + '</div>' +
       '</div>';
   });
 

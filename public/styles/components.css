@@ -5540,6 +5540,162 @@ body {
 /* On narrow rows, hide the FV chip so the stat + buttons keep priority. */
 @media (max-width: 720px) {
   .lineup-roster-row__fv { display: none; }
+
+  /* ===== Mobile roster row redesign =====
+     Goal: uniform, scannable rows. The previous mobile layout had a
+     variable-height info column (matchup line + odds chips + next-fight
+     line could push some rows to 4-5 visible text lines while simple
+     rows had just 2). That created the "uneven and clunky" feel.
+
+     New approach:
+       grid: [ photo(40) | info(1fr) | right-col(auto) ]
+       - photo + info both span the two grid rows (centered vertically)
+       - right column: record/pts on row 1, actions on row 2
+       - matchup line + next-fight line + chips inside them: hidden
+         entirely on mobile (still reachable by tapping the fighter)
+       - inline rank badge hidden on mobile (also in the fighter modal)
+
+     Result: every row is exactly ~60px tall with the same visual
+     rhythm — photo on the left, name/division stacked in the middle,
+     stat + actions stacked on the right. */
+
+  .lineup-roster-row {
+    display: grid;
+    /* 4 columns on mobile: photo, info (flex), stat, actions.
+       Stat + actions both live on row 2 right side, side by side,
+       so the FV score (or W-L record) reads as part of the action
+       group rather than floating up next to the name. */
+    grid-template-columns: 40px 1fr auto auto;
+    grid-template-rows: auto auto;
+    column-gap: 10px;
+    row-gap: 2px;
+    padding: 10px 14px;
+    align-items: center;
+  }
+
+  /* Photo: spans both rows, vertically centered. */
+  .lineup-roster-row__photo-wrap {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    align-self: center;
+  }
+
+  /* Hide the standalone rank column on mobile — the inline version
+     after the name (.lineup-roster-row__rank-inline below) carries it.
+     Specificity bumped via the parent-class chain because the base
+     rules for these elements live AFTER this @media block in the file
+     and would otherwise clobber the display switches. */
+  .lineup-roster-row .lineup-roster-row__rank { display: none; }
+
+  /* Hide the position number (1, 2, 3...) shown in the free-agency list
+     on mobile — it's a sort-rank indicator that takes a grid cell and
+     mostly confuses the layout. The list order itself conveys the rank. */
+  .lineup-roster-row .lineup-roster-row__pos { display: none; }
+
+  /* Show the inline rank suffix after the fighter name on mobile.
+     Reads as "Joshua Van | C" or "Merab Dvalishvili | #1". */
+  .lineup-roster-row .lineup-roster-row__rank-inline {
+    display: inline-flex;
+    align-items: baseline;
+    flex-shrink: 0;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    letter-spacing: 0.01em;
+  }
+  .lineup-roster-row__rank-inline-divider {
+    color: var(--text-tertiary);
+    font-weight: 400;
+    margin: 0 6px;
+    opacity: 0.55;
+  }
+  /* Tier-tinted rank label */
+  .lineup-roster-row__rank-inline.rank-champion {
+    color: var(--accent-gold);
+  }
+  .lineup-roster-row__rank-inline.rank-ranked {
+    color: var(--text-primary);
+  }
+  .lineup-roster-row__rank-inline.rank-unranked {
+    color: var(--text-tertiary);
+  }
+
+  /* Info column: name + division stacked, spans both grid rows */
+  .lineup-roster-row__info {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: center;
+    min-width: 0;
+    gap: 1px;
+  }
+  .lineup-roster-row__name {
+    font-size: 14px;
+    font-weight: 600;
+    /* No flex-grow — keep the name at its natural content width so the
+       inline rank suffix lands right next to it instead of getting
+       pushed to the right edge of the info column. Shrink still allowed
+       so very long names ellipsize. */
+    min-width: 0;
+    flex: 0 1 auto;
+  }
+  /* Division line: lighter, smaller. Truncate if too long instead of
+     wrapping (which would push the row taller). */
+  .lineup-roster-row__division {
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    text-transform: none;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Hide the matchup + next-fight lines entirely — the previous "row 1
+     can grow tall" cause. Both reachable via fighter modal. Specificity
+     bumped for the same cascade reason as the rank rules above. */
+  .lineup-roster-row .lineup-roster-row__matchup { display: none; }
+
+  /* Row 2 right: stat (col 3) + actions (col 4) sit side by side, so
+     the FV score / record / PTS lives in the space between the name
+     above and the action button group on its right. */
+  .lineup-roster-row__record,
+  .lineup-roster-row__pts {
+    grid-column: 3;
+    grid-row: 2;
+    justify-self: end;
+    align-self: center;
+    min-width: 0;
+    font-size: 11px;
+    /* No bottom border on the FV button on mobile — it'd clash with
+       the inline placement next to the action buttons. */
+  }
+  .lineup-roster-row__pts-val { font-size: 13px; }
+  .lineup-roster-row__pts-label { font-size: 7px; }
+
+  .lineup-roster-row__actions {
+    grid-column: 4;
+    grid-row: 2;
+    justify-self: end;
+    align-self: center;
+    gap: 4px;
+  }
+
+  /* Smaller, more uniform action buttons. The 3-button cluster
+     (Start/Bench + → Flex + Drop) now reads as a tight pill group. */
+  .lineup-roster-row__actions .lineup-row-btn,
+  .lineup-roster-row__actions .lineup-flex-btn,
+  .lineup-roster-row__actions .lineup-drop-btn {
+    padding: 3px 8px;
+    font-size: 10px;
+    letter-spacing: 0.02em;
+  }
+
+  /* Empty placeholder rows (slot stubs) — keep them simple on a single
+     row, not the grid layout. */
+  .lineup-roster-row--empty {
+    display: flex;
+    align-items: center;
+  }
 }
 
 /* Crimson left accent for currently-started fighters */
@@ -5620,6 +5776,15 @@ body {
   gap: 2px;
 }
 
+/* Wrapper around the name button + inline rank suffix. Lays them out
+   on the same line so the rank reads as "Name | C" on mobile. */
+.lineup-roster-row__name-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0;
+  min-width: 0;
+}
+
 .lineup-roster-row__name {
   font-size: var(--text-body);
   font-weight: 600;
@@ -5634,6 +5799,14 @@ body {
   cursor: pointer;
   font-family: var(--font-body);
   text-align: left;
+}
+
+/* Inline rank suffix. Hidden on desktop — the standalone
+   .lineup-roster-row__rank column shows the rank there. Mobile turns
+   the column off and reveals this inline version instead so the user
+   still sees "Joshua Van | C" without losing a grid column. */
+.lineup-roster-row__rank-inline {
+  display: none;
 }
 
 .lineup-roster-row__name:hover {
@@ -5797,6 +5970,19 @@ body {
   color: var(--text-tertiary);
 }
 
+/* Wrapper around the trailing action buttons (Start/Bench, → Flex,
+   ← Out, Drop). On desktop it's an inline flex strip so the buttons
+   stay grouped with consistent spacing. On mobile (media query below)
+   the parent row becomes a 2-row grid and this wrapper flows beneath
+   the fighter info — giving the matchup line the full row width and
+   keeping the action chrome on its own line. */
+.lineup-roster-row__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
 .lineup-row-btn {
   flex-shrink: 0;
   padding: 5px 14px;
@@ -5911,6 +6097,143 @@ body {
 }
 
 /* ========================================================================
+   MOBILE HAMBURGER NAV + DRAWER
+   Injected by mobile-nav.js on every page that has <nav class="top-nav">.
+   The hamburger button is hidden on desktop; the drawer + overlay live
+   in the body and use position: fixed, so they're outside any container.
+   ======================================================================== */
+
+/* Hamburger button — hidden on desktop, shown on mobile (see media query) */
+.top-nav__hamburger {
+  display: none;
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  color: var(--text-primary);
+  cursor: pointer;
+  padding: 8px;
+  margin-left: var(--space-2);
+  /* 44px touch target */
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.top-nav__hamburger:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--border-strong);
+}
+
+/* Drawer overlay — dimmed backdrop behind the drawer */
+.mobile-drawer__overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 998;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+}
+.mobile-drawer__overlay--open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Drawer panel — slides in from the right */
+.mobile-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(82vw, 320px);
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border-subtle);
+  z-index: 999;
+  transform: translateX(100%);
+  transition: transform 0.22s ease;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.35);
+}
+.mobile-drawer--open {
+  transform: translateX(0);
+}
+
+/* Drawer header (title + close X) */
+.mobile-drawer__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border-subtle);
+  height: var(--nav-height);
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+.mobile-drawer__title {
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text-primary);
+}
+.mobile-drawer__close {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+}
+.mobile-drawer__close:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+/* Drawer body — scrollable list of items */
+.mobile-drawer__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-3) 0;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Each item is a full-width row, 48px tall for comfortable tapping */
+.mobile-drawer__item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 48px;
+  padding: var(--space-3) var(--space-5);
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 1rem;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+.mobile-drawer__item:hover,
+.mobile-drawer__item:active {
+  background: var(--bg-tertiary);
+}
+
+/* Divider between nav-link items and action items in the drawer */
+.mobile-drawer__divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: var(--space-3) var(--space-5);
+}
+
+/* ========================================================================
    RESPONSIVE ADJUSTMENTS
    ======================================================================== */
 
@@ -5920,8 +6243,171 @@ body {
     gap: var(--space-2);
   }
 
-  /* Hide less-important nav links on mobile */
-  .top-nav__links { display: none; }
+  /* Show the hamburger on mobile */
+  .top-nav__hamburger { display: inline-flex; }
+
+  /* Hide the full-text auth actions on mobile — the drawer surfaces
+     them. Keep the theme toggle visible so users can flip light/dark
+     without opening the menu. */
+  .top-nav__actions > *:not(.btn-theme) { display: none; }
+
+  /* Keep the back link visible inline (no need to open the drawer to
+     go back). Every member-area page puts the back link first inside
+     .top-nav__links, so showing the first child reliably surfaces it.
+     Any other items in the link group (mock-draft badge, draft sound
+     toggle, ? help trigger, etc.) still hide and live in the drawer. */
+  .top-nav__links {
+    display: flex;
+    min-width: 0;
+  }
+  .top-nav__links > * { display: none; }
+  .top-nav__links > :first-child {
+    display: inline-flex;
+    align-items: center;
+    max-width: 130px;
+    padding: 6px 10px;
+    font-size: 13px;
+    /* Truncate long labels ("← Back to League", "← My lineup") cleanly */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ----- GLOBAL MOBILE DEFAULTS -----
+     Bump form inputs to 16px so iOS doesn't zoom on focus.
+     Force comfortable touch targets on small buttons.
+     These apply across every page that uses the design system. */
+  .input,
+  .form-group input,
+  .form-group select,
+  .form-group textarea,
+  .form-input {
+    font-size: 16px;
+  }
+
+  /* Touch target floor for primary/secondary/ghost buttons. min-height,
+     not height, so multi-line buttons (rare) still grow. */
+  .btn-primary,
+  .btn-secondary,
+  .btn-ghost {
+    min-height: 44px;
+  }
+
+  /* Generic modals: stop forcing wide max-widths on phones */
+  .modal,
+  .modal__panel,
+  .modal-panel {
+    max-width: calc(100vw - var(--space-6));
+    width: calc(100vw - var(--space-6));
+    box-sizing: border-box;
+  }
+
+  /* Body text reads slightly tighter on phones to fit more content */
+  body { font-size: var(--text-body); }
+
+  /* Waiver/draft/trades search + filter selects use their own classes —
+     not .input or .form-group input — so the global 16px bump above
+     misses them. Bump explicitly so iOS doesn't zoom on focus. */
+  .waiver-search,
+  .waiver-filter {
+    font-size: 16px;
+  }
+
+  /* ----- TIER A PAGE LAYOUTS — mobile stacking -----
+     Multi-column row layouts that were defined without a mobile override.
+     Stacking them is the single biggest win for fight-week pages. */
+
+  /* Dashboard: three stat cards in a row → stack to single column.
+     Two-up would still cramp the labels at 390px, so go full-width. */
+  .dashboard-stats {
+    grid-template-columns: 1fr;
+    gap: var(--space-3);
+  }
+
+  /* League page: top performers + free agents row.
+     CSS comment claimed it stacked, but the rule was never written. */
+  .league-live-row {
+    grid-template-columns: 1fr;
+    gap: var(--space-4);
+  }
+
+  /* League page: league info + managers row → stack. */
+  .league-info-row {
+    grid-template-columns: 1fr;
+    gap: var(--space-4);
+  }
+
+  /* League page: "This Week" card. Desktop is a flex row with event
+     info left and countdown/CTA right. On mobile, stack vertically so
+     the countdown gets its own line and isn't cramped. */
+  .this-week-card {
+    flex-direction: column;
+    gap: var(--space-5);
+    padding: var(--space-6) var(--space-5) var(--space-5);
+    min-height: 0;
+  }
+  .this-week-card__right {
+    width: 100%;
+    align-items: flex-start;
+  }
+  /* Countdown: 4 unit blocks (Days/Hours/Mins/Secs) — keep them in a
+     single row but shrink the gap so they don't overflow. */
+  .this-week-card__countdown {
+    gap: var(--space-4);
+  }
+
+  /* Page chrome: tighten the league-header + dashboard-body padding so
+     more content fits on a 390px viewport. The default --space-8 (32px)
+     was eating ~16% of the viewport on each side. */
+  .league-header,
+  .dashboard-header {
+    padding: var(--space-5) var(--space-4);
+  }
+  .dashboard-body {
+    padding: var(--space-5) var(--space-4);
+  }
+
+  /* Tab bars (waivers, trades, draft mobile) can have 3-4 tabs that
+     don't fit. Allow horizontal scroll so the user can swipe to the
+     ones that overflow rather than have them squished. */
+  .waiver-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    /* Hide the scrollbar — the tab outlines themselves signal scrollability */
+    scrollbar-width: none;
+  }
+  .waiver-tabs::-webkit-scrollbar { display: none; }
+  .waiver-tab {
+    flex-shrink: 0;
+    padding: var(--space-3) var(--space-4);
+  }
+
+  /* Auth pages (signup/login/forgot/reset): the card has 32px internal
+     padding which steals 64px of horizontal room. Tighten to leave more
+     room for the form. The page-level 16px padding stays for the gutter. */
+  .auth-page .card {
+    padding: var(--space-6) var(--space-5);
+  }
+
+  /* Standings table has 7 columns; fixed widths total >520px so it
+     overflows hard at 390px. Hide the secondary columns (Δ, Trend,
+     Last Event, Last 30 Days) and keep #, Team, Total Pts so the
+     table still answers the core "who's winning" question. */
+  .standings-th--move,
+  .standings-th--trend,
+  .standings-table th:nth-child(6),
+  .standings-table th:nth-child(7),
+  .standings-move-cell,
+  .standings-trend-cell,
+  .standings-table td:nth-child(6),
+  .standings-table td:nth-child(7) {
+    display: none;
+  }
+  /* Let the (single remaining) Total column flex to whatever room is left */
+  .standings-th--pts:first-of-type {
+    width: auto;
+  }
 
   /* Hero carousel: switch from absolute stacking to block show/hide on mobile
      so the section height is driven by content instead of a fixed min-height */
@@ -6059,8 +6545,204 @@ body {
 
   .dashboard-body { padding: var(--space-6) var(--space-4); }
 
-  /* Lineup: stack card slots vertically on mobile */
-  .lineup-starters { flex-direction: column; align-items: center; }
+  /* ===== Lineup page mobile redesign =====
+     Starters become a compact 3-up horizontal strip that sticks to the
+     top of the viewport (under the nav) as the user scrolls the roster.
+     Without sticky + compact, three 200×300 cards stack to ~900px tall
+     before the roster is even visible — the user had to scroll past
+     empty placeholders to reach their fighters. */
+
+  .lineup-section--starters {
+    position: sticky;
+    top: var(--nav-height);
+    z-index: 50;
+    background: var(--bg-primary);
+    /* Pull a touch of negative horizontal margin so the strip aligns
+       flush with the page-body padding rather than nesting inside it,
+       making the sticky strip read as a true full-width bar. */
+    margin: 0 calc(var(--space-4) * -1) var(--space-4);
+    padding: var(--space-3) var(--space-4) var(--space-3);
+    border-bottom: 1px solid var(--border-subtle);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.18);
+  }
+  .lineup-section--starters .section-label {
+    margin: 0 0 var(--space-2);
+  }
+
+  /* Three slots side-by-side, equal width, fit the viewport */
+  .lineup-starters {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    justify-content: stretch;
+    gap: var(--space-2);
+  }
+
+  /* Compact card sizing for both filled and empty slots — content
+     drives height so cards with vs/forecast/score grow as needed. */
+  .lineup-starters > .fighter-card,
+  .lineup-starters > .lineup-slot--empty {
+    flex: 1 1 0;
+    width: 0;
+    min-width: 0;
+    min-height: 0;
+    aspect-ratio: auto;
+    height: auto;
+  }
+
+  /* ----- Filled starter card (redesigned) -----
+     Vertical stack centered: small avatar → name → vs Opponent →
+     forecast chips (or score) → bench button. The big head-shot photo
+     was eating the whole card on phones; the avatar style packs the
+     same info into a much smaller footprint. */
+  .lineup-starters .fighter-card {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 10px 6px 8px;
+    gap: 3px;
+  }
+
+  /* Small circular avatar at top */
+  .lineup-starters .fighter-card__photo-wrap {
+    flex: 0 0 auto;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-subtle);
+  }
+  .lineup-starters .fighter-card__photo {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    /* Shift focus down from "top center" so faces aren't cut at the
+       forehead in a circular crop window. */
+    object-position: center 18%;
+  }
+
+  /* Champion avatar gets a gold ring instead of the gray border */
+  .lineup-starters .fighter-card--champion .fighter-card__photo-wrap {
+    border-color: var(--accent-gold);
+    box-shadow: 0 0 0 1px var(--accent-gold);
+  }
+
+  /* Drop the rank badge + champ pill on mobile — too cluttered for a
+     50px-wide card. The avatar ring color carries the champion signal. */
+  .lineup-starters .fighter-card__rating,
+  .lineup-starters .fighter-card__badge-champ { display: none; }
+
+  /* Info area centered under the avatar */
+  .lineup-starters .fighter-card__info {
+    padding: 0;
+    flex: 1 1 auto;
+    width: 100%;
+    align-items: center;
+    text-align: center;
+    gap: 2px;
+  }
+
+  /* Hide division line — the roster section header already groups
+     fighters by division. */
+  .lineup-starters .fighter-card__division { display: none; }
+
+  .lineup-starters .fighter-card__name {
+    font-size: 12px;
+    line-height: 1.15;
+    font-weight: 700;
+    color: var(--text-primary);
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin: 0;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+
+  /* "vs. Opponent" line — small, secondary */
+  .lineup-starters .lineup-starter-card__opponent {
+    font-size: 9.5px;
+    line-height: 1.2;
+    color: var(--text-secondary);
+    margin: 0;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 500;
+  }
+
+  /* Forecast row (odds chip + projection pill). Tightened spacing +
+     allow wrap so the chips can flow onto a second row if too wide. */
+  .lineup-starters .lineup-starter-card__forecast {
+    display: flex;
+    gap: 3px;
+    margin-top: 3px;
+    margin-bottom: 0;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  /* Shrink the chip + pill so they fit at ~110px card width */
+  .lineup-starters .lineup-starter-card__forecast .fight-odds,
+  .lineup-starters .lineup-starter-card__forecast .fight-projection {
+    padding: 1px 5px;
+    font-size: 9px;
+  }
+  .lineup-starters .lineup-starter-card__forecast .fight-odds__pct,
+  .lineup-starters .lineup-starter-card__forecast .fight-projection__val {
+    font-size: 10px;
+  }
+  .lineup-starters .lineup-starter-card__forecast .fight-projection__label {
+    font-size: 7px;
+  }
+
+  /* Stat row: hide W-L record on compact (rarely useful for a starter
+     card); keep the score chip when present so post-event scoring is
+     visible. */
+  .lineup-starters .fighter-card__stat-row {
+    margin-top: 3px;
+    justify-content: center;
+    width: 100%;
+  }
+  .lineup-starters .fighter-card__record { display: none; }
+  .lineup-starters .fighter-card__pts {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 3px;
+  }
+  .lineup-starters .fighter-card__pts-val { font-size: 14px; }
+  .lineup-starters .fighter-card__pts-label { font-size: 8px; }
+
+  /* Bench button — full width, tight */
+  .lineup-starters .lineup-bench-btn {
+    width: 100%;
+    margin-top: 6px;
+    padding: 4px 0;
+    font-size: 9px;
+  }
+  .lineup-starters .lineup-starter-badge {
+    font-size: 9px;
+    padding: 3px 6px;
+    margin-top: 4px;
+  }
+
+  /* ----- Empty slot (compact) -----
+     Matches the typical filled-card height (~150px) so empty + filled
+     slots align even when the filled cards grow taller from chips. */
+  .lineup-starters .lineup-slot--empty {
+    min-height: 152px;
+    gap: 2px;
+    padding: 8px;
+  }
+  .lineup-starters .lineup-slot__number {
+    font-size: 2.25rem;
+  }
+  .lineup-starters .lineup-slot__label {
+    font-size: 8px;
+    letter-spacing: 0.08em;
+  }
 
   .home-footer {
     flex-direction: column;
@@ -6078,11 +6760,15 @@ body {
 
   .fight-history-table { font-size: var(--text-caption); }
 
-  /* Hide method + round columns on small screens to keep table readable */
+  /* Hide method + round columns on small screens to keep table readable.
+     Scoped to fight-history-table so the bare nth-child selectors don't
+     leak into other tables (standings, league member table, etc.). */
   .fight-history-method,
   .fight-history-round,
-  th:nth-child(4),
-  th:nth-child(5) { display: none; }
+  .fight-history-table th:nth-child(4),
+  .fight-history-table th:nth-child(5),
+  .fight-history-table td:nth-child(4),
+  .fight-history-table td:nth-child(5) { display: none; }
 }
 
 /* ========================================================================
@@ -10498,6 +11184,23 @@ label .form-label__hint {
   .draft-room--stacked .panel-board {
     flex: 1;
   }
+
+  /* On mobile, the "My Roster" tab should lead with the actual roster
+     (the fighters you've drafted), not the queue. Swap to flex column
+     so we can push the queue group below using `order`. The original
+     grid template (auto auto 1fr) doesn't apply once we flip display. */
+  .panel-roster.waiver-tab--active {
+    display: flex;
+    flex-direction: column;
+  }
+  /* Queue header is the first .draft-panel__header in the panel; the
+     roster header is the second. Push the queue trio (header + auto-
+     draft banner + queue body) below the roster trio. */
+  .panel-roster > .draft-panel__header:first-of-type,
+  .panel-roster > .draft-autodraft-banner,
+  .panel-roster > .draft-panel__body--queue {
+    order: 2;
+  }
 }
 
 /* ============================================================
@@ -11297,6 +12000,8 @@ label .form-label__hint {
 @media (max-width: 720px) {
   .chat-page {
     grid-template-columns: 1fr;
+    /* Tighten the outer padding so the chat window itself gets more room */
+    padding: var(--space-4);
     /* Cap the sidebar height on mobile so the conversation stays usable */
   }
   .chat-sidebar { max-height: 220px; }
@@ -11895,10 +12600,34 @@ label .form-label__hint {
     border-right: none;
     border-bottom: 1px solid var(--border-subtle);
   }
+  /* Minimized chat on mobile = small corner launcher pill, not a
+     full-width bar. The dynamic title ("League Chat" / DM name) is
+     hidden behind a static "Chat" label injected via ::before; the
+     minimize icon is redundant in minimized state; the unread badge
+     stays so the user can still see new-message counts. */
   .chat-popup[data-state="minimized"] {
-    left: var(--space-3);
+    left: auto;
     right: var(--space-3);
+    bottom: var(--space-3);
     width: auto;
+    max-width: 140px;
+    border-radius: 999px;
+  }
+  .chat-popup[data-state="minimized"] .chat-popup__bar {
+    padding: 8px 16px;
+    border-radius: 999px;
+    gap: 8px;
+  }
+  .chat-popup[data-state="minimized"] .chat-popup__bar-title {
+    display: none;
+  }
+  .chat-popup[data-state="minimized"] .chat-popup__bar::before {
+    content: "Chat";
+    font-weight: 700;
+    font-size: 14px;
+  }
+  .chat-popup[data-state="minimized"] .chat-popup__bar-controls {
+    display: none;
   }
 }
 

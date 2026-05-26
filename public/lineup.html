@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <script src="js/theme.js"></script>
+  <script src="js/mobile-nav.js" defer></script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -49,8 +50,11 @@
            out of alignment with construction rules. Populated by lineup.js. -->
       <div id="rosterImbalanceBanner" class="roster-imbalance-banner" style="display: none;"></div>
 
-      <!-- Starter card slots -->
-      <div class="lineup-section">
+      <!-- Starter card slots. On mobile this section is sticky and the
+           cards inside collapse to a compact horizontal strip so all the
+           starter slots stay visible while the user scrolls the roster
+           beneath. -->
+      <div class="lineup-section lineup-section--starters">
         <p class="section-label">
           My Starters
           <span class="section-label__count" id="starterCount">(0 / 3)</span>

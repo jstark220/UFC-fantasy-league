@@ -1140,6 +1140,16 @@ function renderRosterList() {
 
   let html = '';
 
+  // Temporary Extended Roster Flex — visible only while the +3 expansion is
+  // active (Thu 3am ET event-week → Sun 3am ET after event). These fighters
+  // will be auto-dropped Wed 3am ET if you don't drop down to 20 manually.
+  // Rendered FIRST (above the core roster) so the time-pressured slots —
+  // the ones the manager has to decide on before Wed — sit at the top of
+  // the roster where they're impossible to miss.
+  if (showTerf) {
+    html += renderTerfSection(terfRoster, ctx);
+  }
+
   // One section per men's weight class, each with ROSTER_SLOTS_PER_DIVISION
   // pip total. Empty divisions still render so the roster requirements are
   // visible (e.g., "Heavyweight: 0 / 1" with one empty pip).
@@ -1155,13 +1165,6 @@ function renderRosterList() {
   // more roster spots gets more flex slots displayed.
   var anyFlexCap = typeof getAnyFlexSlots === 'function' ? getAnyFlexSlots(league) : ROSTER_FLEX_SLOTS;
   html += renderSlotSection('Any-Division Flex', groups['any_flex'], anyFlexCap, ctx, 'any_flex');
-
-  // Temporary Extended Roster Flex — visible only while the +3 expansion is
-  // active (Thu 3am ET event-week → Sun 3am ET after event). These fighters
-  // will be auto-dropped Wed 3am ET if you don't drop down to 20 manually.
-  if (showTerf) {
-    html += renderTerfSection(terfRoster, ctx);
-  }
 
   // Surface any roster construction violations introduced by trades / FA adds
   renderImbalanceBanner(myRoster, capExpanded);
@@ -1550,12 +1553,28 @@ function renderRosterRow(fighter, ctx, slotType) {
     }
   }
 
+  // Group the action chrome into a single wrapper so we can lay it out
+  // as a unit. On desktop it reads as a clean trailing group; on mobile
+  // CSS reflows it onto its own row beneath the fighter info.
+  var actionsHtml = btnHtml + flexBtn + unflexBtn + dropBtn;
+  var hasActions = actionsHtml.length > 0;
+
   return (
     '<div class="lineup-roster-row' + rowClass + '" id="roster-row-' + fighter.id + '">' +
       '<div class="lineup-roster-row__photo-wrap">' + photoHtml + '</div>' +
       '<span class="lineup-roster-row__rank ' + rankClass + '">' + rankLabel + subBadge + '</span>' +
       '<div class="lineup-roster-row__info">' +
-        '<button class="lineup-roster-row__name" data-open-fighter="' + fighter.id + '">' + escapeHtml(fighter.name) + '</button>' +
+        // Name line: the fighter name + a small inline rank suffix.
+        // The inline rank is hidden on desktop (where the separate
+        // .lineup-roster-row__rank column carries the rank) and shown
+        // on mobile (where the column is hidden to save space).
+        '<span class="lineup-roster-row__name-line">' +
+          '<button class="lineup-roster-row__name" data-open-fighter="' + fighter.id + '">' + escapeHtml(fighter.name) + '</button>' +
+          '<span class="lineup-roster-row__rank-inline ' + rankClass + '" aria-hidden="true">' +
+            '<span class="lineup-roster-row__rank-inline-divider">|</span>' +
+            rankLabel +
+          '</span>' +
+        '</span>' +
         (fightInfo
           ? '<span class="lineup-roster-row__matchup">' +
               'vs. ' + escapeHtml(fightInfo.opponent) +
@@ -1568,10 +1587,9 @@ function renderRosterRow(fighter, ctx, slotType) {
       '</div>' +
       fvChip +
       rightStat +
-      btnHtml +
-      flexBtn +
-      unflexBtn +
-      dropBtn +
+      (hasActions
+        ? '<div class="lineup-roster-row__actions">' + actionsHtml + '</div>'
+        : '') +
     '</div>'
   );
 }
