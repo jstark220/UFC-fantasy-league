@@ -24,7 +24,6 @@
     </a>
 
     <div class="top-nav__links">
-      <a href="#fighters" class="btn-ghost">Fighters</a>
       <a href="#howto"    class="btn-ghost">How it works</a>
     </div>
 
@@ -147,7 +146,7 @@
               Dynasty leagues.<br>Year-long <span class="kf-red">rivalries.</span>
             </h2>
             <p class="hero__subtitle">
-              Eight managers, full-roster drafts, season-long drama. Knockdown
+              4–14 managers, full-roster drafts, season-long drama. Knockdown
               Fantasy runs like a real league — not a weekly pick'em.
             </p>
             <div class="hero__actions">
@@ -430,7 +429,7 @@
       <p class="home-section__eyebrow">The format</p>
       <h2 class="home-section__title">How Knockdown Fantasy works</h2>
       <p class="home-section__sub">
-        Season-long or dynasty. Snake or auction draft. Up to 8 managers per league.
+        Season-long or dynasty. Snake or auction draft. 4–14 managers per league.
       </p>
     </div>
 
@@ -478,7 +477,17 @@
   <section class="home-section" id="scoring">
     <div class="home-section__header">
       <p class="home-section__eyebrow">The rulebook</p>
-      <h2 class="home-section__title">How scoring works</h2>
+      <h2 class="home-section__title">
+        How scoring works
+        <!-- "? More info" pill — opens the full How It Works primer modal.
+             Wired by LeaguePrimer.install() in the script block at the
+             bottom of the page. id="pageHelpTrigger" is what LeaguePrimer
+             expects so PageHelp.attachTrigger() picks it up. -->
+        <button id="pageHelpTrigger" class="page-help-trigger home-scoring__more-info" type="button" aria-label="Full how-it-works primer">
+          <span class="page-help-trigger__icon" aria-hidden="true">?</span>
+          <span class="page-help-trigger__label">More info</span>
+        </button>
+      </h2>
       <p class="home-section__sub">
         Points for every significant action inside the cage. The faster the finish,
         the bigger the bonus. Main event fighters score 20% more than the undercard.
@@ -604,90 +613,6 @@
   </section>
 
   <!-- ================================================================
-       FEATURE HIGHLIGHTS
-       What makes Knockdown different from a generic pick'em or roto game.
-       Six cards covering the draft room, live data, decision aids, and
-       commissioner controls.
-       ================================================================ -->
-  <section class="home-section">
-    <div class="home-section__header">
-      <p class="home-section__eyebrow">Built for fight fans</p>
-      <h2 class="home-section__title">More than a fantasy game</h2>
-      <p class="home-section__sub">
-        Real-time scoring, live betting odds, a draft room that feels like ESPN,
-        and the same tools the commissioner uses to run the league.
-      </p>
-    </div>
-
-    <div class="features-grid">
-
-      <div class="feature-card">
-        <p class="feature-card__icon" aria-hidden="true">🥊</p>
-        <h3 class="feature-card__title">Cinematic draft room</h3>
-        <p class="feature-card__body">
-          Live pick clock with a sweeping ring timer, snake-board with
-          team-color columns, on-the-clock highlight, and a thin activity
-          feed at the top. Picks land with a confirmation animation and
-          a sound effect. Practice with the mock draft before the real one.
-        </p>
-      </div>
-
-      <div class="feature-card">
-        <p class="feature-card__icon" aria-hidden="true">⚡</p>
-        <h3 class="feature-card__title">Auto-draft &amp; queues</h3>
-        <p class="feature-card__body">
-          Build a personal queue before the draft. Toggle auto-draft and
-          the system picks from your queue first, then highest Fantasy Value.
-          Step away from the keyboard without giving up your team.
-        </p>
-      </div>
-
-      <div class="feature-card">
-        <p class="feature-card__icon" aria-hidden="true">📊</p>
-        <h3 class="feature-card__title">Live odds &amp; projections</h3>
-        <p class="feature-card__body">
-          Polymarket implied probabilities on every booked fight, plus
-          per-fighter projected points. Both visible during draft, on the
-          lineup page, and in the fighter modal. Make decisions on data,
-          not just hype.
-        </p>
-      </div>
-
-      <div class="feature-card">
-        <p class="feature-card__icon" aria-hidden="true">🎯</p>
-        <h3 class="feature-card__title">Fantasy Value scoring</h3>
-        <p class="feature-card__body">
-          Every fighter gets a composite FV score blending career average,
-          recent form, activity, opponent strength, and rank. Sort the pool
-          by FV; STEAL / VALUE / REACH badges appear on rows when a fighter
-          is ranked far from the current pick slot.
-        </p>
-      </div>
-
-      <div class="feature-card">
-        <p class="feature-card__icon" aria-hidden="true">📡</p>
-        <h3 class="feature-card__title">Real-time everything</h3>
-        <p class="feature-card__body">
-          Draft picks sync instantly across every connected manager. Scoring
-          updates between rounds on fight night. League chat, trade offers,
-          waiver claims — all live, no refresh needed.
-        </p>
-      </div>
-
-      <div class="feature-card">
-        <p class="feature-card__icon" aria-hidden="true">⚖️</p>
-        <h3 class="feature-card__title">Commish power tools</h3>
-        <p class="feature-card__body">
-          Manually edit any roster, override fight stats, reverse trades.
-          Co-commissioner support means you can split the workload.
-          Everything's auditable in the league activity feed.
-        </p>
-      </div>
-
-    </div>
-  </section>
-
-  <!-- ================================================================
        LEAGUE FORMAT
        Key numbers + weekly schedule so users understand what they're
        committing to before creating a league.
@@ -697,14 +622,14 @@
       <p class="home-section__eyebrow">The format</p>
       <h2 class="home-section__title">Built for serious fans</h2>
       <p class="home-section__sub">
-        Season-long or dynasty. Snake or auction draft. Eight managers.
+        Season-long or dynasty. Snake or auction draft. 4–14 managers per league.
         The format is designed around how real GMs think.
       </p>
     </div>
 
     <div class="format-stats">
       <div class="format-stat">
-        <span class="format-stat__value">8</span>
+        <span class="format-stat__value">4–14</span>
         <span class="format-stat__label">Managers per league</span>
       </div>
       <div class="format-stat">
@@ -768,7 +693,6 @@
 
     <div class="home-footer__links">
       <a href="#howto">How it works</a>
-      <a href="#fighters">Fighters</a>
       <a href="login.html">Log in</a>
       <a href="signup.html">Sign up</a>
     </div>
@@ -862,6 +786,25 @@
   <script src="js/fight-odds.js"></script>
   <script src="js/projections.js"></script>
   <script src="js/fight-card-modal.js"></script>
+  <!-- Shared "How it works" primer. PageHelp renders the modal chrome;
+       LeaguePrimer builds the content using v1.2 scoring defaults when
+       no league context is passed (which is the case here on the public
+       landing page). Wired to the "? More info" pill next to the
+       scoring section header. -->
+  <script src="js/scoring.js"></script>
+  <script src="js/page-help-modal.js"></script>
+  <script src="js/league-primer.js"></script>
+  <script>
+    // Register the primer content + wire the "? More info" button. The
+    // page has no league context (anon visitor), so we pass an empty
+    // object; buildPrimerContent() then falls back to the v1.2 scoring
+    // defaults and the default 15-fighter roster. league-primer's own
+    // autoInit no-ops here because there's no #leagueName element on
+    // this page.
+    if (typeof LeaguePrimer !== 'undefined') {
+      LeaguePrimer.install({});
+    }
+  </script>
   <script>
     (async function () {
       var session = (await supabaseClient.auth.getSession()).data.session;
