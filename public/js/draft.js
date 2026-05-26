@@ -842,6 +842,13 @@ const PICK_REACTION_EMOJIS = ['🔥', '👀', '😱', '💀'];
 // this toggle. Persisted per league so a user can have it on in one
 // league and off in another.
 let autoDraftOn = false;
+// Pending timer handle for maybeAutoPickNow's deferred autoPick call.
+// Used to dedup multiple invocations in the same render cycle — e.g.,
+// makePick fires it after a successful pick AND realtime broadcasts
+// the same pick a moment later. Without this guard, both paths would
+// schedule their own setTimeouts and the second autoPick attempt would
+// be wasted (or worse, race the first).
+let autoPickTimer = null;
 
 // Mock-draft mode. Activated by ?mock=1 in the URL. In this mode:
 //   * Picks live in memory only — no Supabase writes, no realtime.
@@ -1341,11 +1348,17 @@ async function autoPick() {
 // the auto-pick after a short delay so the user sees their turn arrive
 // before the pick lands (and renderAll finishes first).
 function maybeAutoPickNow() {
+  // Idempotent — if a deferred autoPick is already pending, do nothing.
+  // Multiple call sites (makePick success path, handleNewPick, toggle-on,
+  // init) can all hit this in quick succession; without the guard we'd
+  // schedule overlapping setTimeouts and risk racing autoPick attempts.
+  if (autoPickTimer != null) return;
   if (!autoDraftOn) return;
   if (!isMyTurn() || picking) return;
   if (league && league.draft_paused_at) return;
 
-  setTimeout(function() {
+  autoPickTimer = setTimeout(function() {
+    autoPickTimer = null;
     // Re-check inside the timeout — state may have flipped during the
     // delay (someone else picked, draft paused, user toggled off, etc).
     if (autoDraftOn && isMyTurn() && !picking && !(league && league.draft_paused_at)) {
@@ -1426,7 +1439,13 @@ function mockInsertPick(memberId, fighter) {
   if (picks.length >= getTotalPicks()) {
     handleDraftComplete();
   } else {
+    // Mock mode kicks both schedulers: the AI loop for non-user picks,
+    // AND the auto-draft loop for user picks. maybeScheduleNextAiPick
+    // bails when the next slot is the user's; maybeAutoPickNow bails
+    // when it isn't OR when auto-draft is off. Calling both is safe
+    // and handles back-to-back user picks at snake reversals.
     maybeScheduleNextAiPick();
+    maybeAutoPickNow();
   }
 }
 
@@ -1626,7 +1645,19 @@ async function makePick(fighter) {
     }, myMemberId);
   }
 
-  if (picks.length >= getTotalPicks()) handleDraftComplete();
+  if (picks.length >= getTotalPicks()) {
+    handleDraftComplete();
+  } else {
+    // CRITICAL: keep the auto-draft chain alive after our own pick.
+    // Without this, the post-INSERT SELECT merge already adds the pick
+    // to local state with its real UUID, so when realtime later
+    // broadcasts the same pick, handleNewPick's id-dedup short-circuits
+    // and never reaches its own maybeAutoPickNow() call. We'd auto-pick
+    // once and stall until the user manually toggled auto-draft off+on.
+    // The timer guard inside maybeAutoPickNow makes this safe to call
+    // here AND from realtime (whichever fires first wins).
+    maybeAutoPickNow();
+  }
 }
 
 // ========================================================================

@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <script src="js/theme.js"></script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="styles/tokens.css">
+  <link rel="stylesheet" href="styles/components.css">
+
+  <title>Commish Powers - Knockdown Fantasy</title>
+  <script src="js/loading-screen.js"></script>
+</head>
+<body>
+
+  <div class="dashboard-page" id="pageContent" style="display: none;">
+
+    <nav class="top-nav">
+      <a href="index.html" class="top-nav__logo">
+        <span class="kf-red">Knockdown</span> Fantasy
+      </a>
+      <div class="top-nav__links">
+        <a href="#" class="btn-ghost" id="backToLeague">← Back to League</a>
+      </div>
+      <div class="top-nav__actions">
+        <button class="btn-theme" onclick="toggleTheme()" aria-label="Toggle theme">☾</button>
+        <button id="globalLogoutBtn" class="btn-ghost" onclick="logOut()">Log out</button>
+      </div>
+    </nav>
+
+    <div class="league-header league-header--settings">
+      <div class="league-header__inner">
+        <p class="league-header__eyebrow">Commish Powers</p>
+        <h1 class="league-header__name" id="leagueName"></h1>
+        <p class="commish-page__warning">Changes here bypass normal league flow. Use sparingly and tell your league.</p>
+      </div>
+    </div>
+
+    <div class="dashboard-body">
+
+      <!-- Status message strip (save confirmation, error, etc.) -->
+      <div id="commishMessage" class="settings-message" style="display: none;"></div>
+
+      <!-- Tab bar — Rosters / Scores / Trades. waiver-tabs class re-used
+           for consistency with other tabbed pages (draft room, waivers). -->
+      <div class="waiver-tabs commish-tabs">
+        <button class="waiver-tab waiver-tab--active" data-commish-tab="rosters">Rosters</button>
+        <button class="waiver-tab"                    data-commish-tab="scores">Scores</button>
+        <button class="waiver-tab"                    data-commish-tab="trades">Trades</button>
+      </div>
+
+      <!-- Rosters tab ------------------------------------------------------ -->
+      <section class="commish-section" id="commishRostersSection">
+        <div class="commish-section__header">
+          <h2 class="commish-section__title">Edit Rosters</h2>
+          <p class="commish-section__sub">Add or remove fighters on any manager's roster. Removed fighters go straight to free agency.</p>
+        </div>
+        <div class="commish-team-picker">
+          <label class="form-label" for="commishTeamSelect">Team</label>
+          <select id="commishTeamSelect" class="waiver-filter"></select>
+        </div>
+        <div class="commish-roster-pane" id="commishRosterPane">
+          <p class="commish-empty">Pick a team to view their roster.</p>
+        </div>
+      </section>
+
+      <!-- Scores tab ------------------------------------------------------- -->
+      <section class="commish-section" id="commishScoresSection" hidden>
+        <div class="commish-section__header">
+          <h2 class="commish-section__title">Edit Scores</h2>
+          <p class="commish-section__sub">Pick an event, edit per-fighter fight stats, and re-save to update each manager's score.</p>
+        </div>
+        <div class="commish-event-picker">
+          <label class="form-label" for="commishEventSelect">Event</label>
+          <select id="commishEventSelect" class="waiver-filter"></select>
+        </div>
+        <div class="commish-scores-pane" id="commishScoresPane">
+          <p class="commish-empty">Pick an event to view its fight card.</p>
+        </div>
+      </section>
+
+      <!-- Trades tab ------------------------------------------------------- -->
+      <section class="commish-section" id="commishTradesSection" hidden>
+        <div class="commish-section__header">
+          <h2 class="commish-section__title">Reverse Trades</h2>
+          <p class="commish-section__sub">Reversing puts each fighter back on their original team. The trade record is marked reversed for the league activity feed.</p>
+        </div>
+        <div class="commish-trades-pane" id="commishTradesPane">
+          <p class="commish-empty">Loading trades…</p>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/auth-guard.js"></script>
+  <script src="js/empty-state.js"></script>
+  <script src="js/chat.js"></script>
+  <script src="js/chat-widget.js"></script>
+  <script src="js/chat-nav.js"></script>
+  <script src="js/scoring.js"></script>
+  <script src="js/country-flags.js"></script>
+  <script src="js/commissioner.js"></script>
+  <script src="js/league-nav.js"></script>
+  <script src="js/page-help-modal.js"></script>
+  <script src="js/league-primer.js"></script>
+  <script src="js/commish-powers.js"></script>
+
+</body>
+</html>

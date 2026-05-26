@@ -593,13 +593,11 @@ function resetFightForm() {
     document.getElementById(id).value = '0';
   });
   document.getElementById('aOpponentRank').value = '';
-  document.getElementById('aPotN').checked = false;
 
   ['bSigStrikes','bTakedowns','bKnockdowns','bControlSeconds'].forEach(function(id) {
     document.getElementById(id).value = '0';
   });
   document.getElementById('bOpponentRank').value = '';
-  document.getElementById('bPotN').checked = false;
 }
 
 // ========================================================================
@@ -647,14 +645,12 @@ function populateFightForm(fight) {
   document.getElementById('aKnockdowns').value     = fight.fighter_a_knockdowns     || 0;
   document.getElementById('aControlSeconds').value = fight.fighter_a_control_seconds || 0;
   document.getElementById('aOpponentRank').value   = fight.fighter_a_opponent_rank != null ? fight.fighter_a_opponent_rank : '';
-  document.getElementById('aPotN').checked         = !!fight.fighter_a_potn;
 
   document.getElementById('bSigStrikes').value     = fight.fighter_b_sig_strikes   || 0;
   document.getElementById('bTakedowns').value      = fight.fighter_b_takedowns      || 0;
   document.getElementById('bKnockdowns').value     = fight.fighter_b_knockdowns     || 0;
   document.getElementById('bControlSeconds').value = fight.fighter_b_control_seconds || 0;
   document.getElementById('bOpponentRank').value   = fight.fighter_b_opponent_rank != null ? fight.fighter_b_opponent_rank : '';
-  document.getElementById('bPotN').checked         = !!fight.fighter_b_potn;
 }
 
 // ========================================================================
@@ -710,13 +706,11 @@ async function handleFightFormSubmit(e) {
     fighter_a_knockdowns:        parseInt(document.getElementById('aKnockdowns').value)     || 0,
     fighter_a_control_seconds:   parseInt(document.getElementById('aControlSeconds').value) || 0,
     fighter_a_opponent_rank:     parseInt(document.getElementById('aOpponentRank').value)   || null,
-    fighter_a_potn:              document.getElementById('aPotN').checked,
     fighter_b_sig_strikes:       parseInt(document.getElementById('bSigStrikes').value)     || 0,
     fighter_b_takedowns:         parseInt(document.getElementById('bTakedowns').value)      || 0,
     fighter_b_knockdowns:        parseInt(document.getElementById('bKnockdowns').value)     || 0,
     fighter_b_control_seconds:   parseInt(document.getElementById('bControlSeconds').value) || 0,
-    fighter_b_opponent_rank:     parseInt(document.getElementById('bOpponentRank').value)   || null,
-    fighter_b_potn:              document.getElementById('bPotN').checked
+    fighter_b_opponent_rank:     parseInt(document.getElementById('bOpponentRank').value)   || null
   };
 
   const btn = document.getElementById('saveFightBtn');
@@ -914,7 +908,6 @@ async function saveScores() {
       win_bonus:        s.win_bonus,
       title_bonus:      s.title_bonus,
       ranked_opp_bonus: s.ranked_opp_bonus,
-      potn_bonus:       s.potn_bonus,
       fotn_bonus:       s.fotn_bonus,
       card_multiplier:  s.card_multiplier,
       total_points:     s.total,

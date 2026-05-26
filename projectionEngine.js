@@ -21,8 +21,9 @@
 //
 //   multiplier      = 1.2 main event, 1.1 co-main, 1.0 otherwise.
 //
-// PotN / FotN are excluded — too noisy to predict per-fighter, and they net
-// out to a few tenths of a point across a roster.
+// FotN is excluded from projections — too noisy to predict per-fighter,
+// and it nets out to a few tenths of a point across a roster. PotN was
+// removed from the scoring system entirely.
 // ============================================================================
 
 const Scoring = require('./public/js/scoring.js');

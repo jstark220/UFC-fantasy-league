@@ -134,15 +134,32 @@
     tone({ freq: 784, dur: 0.40, gain: 0.20, delay: 0.26 });
   }
 
+  // ----- Lineup-page sounds ---------------------------------------------
+  // Quick ascending two-tone pop when a fighter is set as a starter. Tighter
+  // than yourPickMade so it doesn't feel like a "draft pick" — this is a
+  // small confirmation that the toggle registered.
+  function starterAdded() {
+    tone({ freq: 660, dur: 0.08, gain: 0.16 });
+    tone({ freq: 880, dur: 0.10, gain: 0.16, delay: 0.05 });
+  }
+  // Short descending tone when benching — opposite shape to starterAdded
+  // so the two actions read as paired.
+  function starterBenched() {
+    tone({ freq: 520, dur: 0.10, gain: 0.13 });
+    tone({ freq: 360, dur: 0.10, gain: 0.13, delay: 0.05 });
+  }
+
   root.DraftSounds = {
-    pickMade:     pickMade,
-    yourPickMade: yourPickMade,
-    yourTurn:     yourTurn,
-    clockWarn:    clockWarn,
-    clockUrgent:  clockUrgent,
-    clockExpired: clockExpired,
-    draftDone:    draftDone,
-    setMuted:     setMuted,
-    isMuted:      isMuted
+    pickMade:       pickMade,
+    yourPickMade:   yourPickMade,
+    yourTurn:       yourTurn,
+    clockWarn:      clockWarn,
+    clockUrgent:    clockUrgent,
+    clockExpired:   clockExpired,
+    draftDone:      draftDone,
+    starterAdded:   starterAdded,
+    starterBenched: starterBenched,
+    setMuted:       setMuted,
+    isMuted:        isMuted
   };
 })(typeof window !== 'undefined' ? window : this);

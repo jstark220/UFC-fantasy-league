@@ -68,7 +68,13 @@
           <div class="hero-slide__right">
             <div class="roster-preview">
               <div class="roster-preview__card-zone">
-                <div class="fighter-card fighter-card--champion fighter-card--featured">
+                <!-- Mirrors the live in-app starter card (buildStarterCard
+                     in lineup.js). Champion treatment, opponent line, real
+                     odds/projection chip markup, and a stat row with record
+                     + current event points. Static for the landing page —
+                     no live data — but the structure and class names are
+                     identical to what users see inside their league. -->
+                <div class="fighter-card lineup-starter-card fighter-card--champion fighter-card--featured">
                   <div class="fighter-card__photo-wrap">
                     <img
                       class="fighter-card__photo"
@@ -77,37 +83,50 @@
                       onerror="this.style.display='none'"
                     >
                   </div>
-                  <!-- OVR badge: stacked number + label instead of plain "94" -->
-                  <span class="fighter-card__rating" aria-label="94 OVR">
-                    <span class="fighter-card__rating-num">94</span>
-                    <span class="fighter-card__rating-label">OVR</span>
-                  </span>
-                  <span class="fighter-card__badge-champ">CHAMP</span>
+                  <!-- Rank badge — "C" for champion, matching the in-app
+                       treatment. The featured-card CSS scales this up but
+                       the class names are the same. -->
+                  <div class="fighter-card__rating">
+                    <span class="fighter-card__rating-num">C</span>
+                    <span class="fighter-card__rating-label">CHAMP</span>
+                  </div>
+                  <span class="fighter-card__badge-champ">Champ</span>
                   <div class="fighter-card__info">
-                    <div class="fighter-card__division">Lightweight</div>
+                    <p class="fighter-card__division">Men's Lightweight</p>
                     <p class="fighter-card__name">Ilia Topuria</p>
-                    <p class="fighter-card__record">17-0-0</p>
-                    <!-- Fantasy points table: last 3 events with explicit context -->
+                    <div class="fighter-card__stat-row">
+                      <p class="fighter-card__record">17-0</p>
+                      <span class="fighter-card__pts">
+                        <span class="fighter-card__pts-val">41.4</span>
+                        <span class="fighter-card__pts-label">PTS</span>
+                      </span>
+                    </div>
+                    <!-- Real Topuria fight history. Points computed with the
+                         live v1.2 scoring rules (sig strikes + finish bonus +
+                         title bonus + main-event 1.2× multiplier). Numbers
+                         are static here, but they're the same shape the live
+                         lineup page produces when you select one of these
+                         past events. -->
                     <div class="card-fp">
-                      <p class="card-fp__label">Fantasy Points</p>
+                      <p class="card-fp__label">Recent fights</p>
                       <div class="card-fp__rows">
                         <div class="card-fp__row card-fp__row--peak">
-                          <span class="card-fp__event">UFC 327 &middot; Holloway</span>
-                          <span class="card-fp__method">KO R2</span>
-                          <span class="card-fp__pts">156</span>
+                          <span class="card-fp__event">UFC 317 &middot; Oliveira</span>
+                          <span class="card-fp__method">KO R1 &middot; Title</span>
+                          <span class="card-fp__pts">41.4</span>
                         </div>
                         <div class="card-fp__row">
-                          <span class="card-fp__event">UFC 314 &middot; Volkanovski</span>
-                          <span class="card-fp__method">KO R3</span>
-                          <span class="card-fp__pts">89</span>
+                          <span class="card-fp__event">UFC 308 &middot; Holloway</span>
+                          <span class="card-fp__method">KO R3 &middot; Title def.</span>
+                          <span class="card-fp__pts">33.6</span>
                         </div>
                         <div class="card-fp__row">
-                          <span class="card-fp__event">UFC 319 &middot; Oliveira</span>
-                          <span class="card-fp__method">Dec W</span>
-                          <span class="card-fp__pts">24</span>
+                          <span class="card-fp__event">UFC 298 &middot; Volkanovski</span>
+                          <span class="card-fp__method">KO R2 &middot; Title</span>
+                          <span class="card-fp__pts">36.8</span>
                         </div>
                       </div>
-                      <p class="card-fp__summary">AVG 75.6 &middot; HIGH 156</p>
+                      <p class="card-fp__summary">AVG 37.3 &middot; HIGH 41.4 &middot; 3/3 KO finishes</p>
                     </div>
                   </div>
                 </div>
@@ -128,8 +147,8 @@
               Dynasty leagues.<br>Year-long <span class="kf-red">rivalries.</span>
             </h2>
             <p class="hero__subtitle">
-              Eight managers, twenty fighters each, season-long drama. Knockdown
-              Fantasy runs like a real league, not a weekly pick'em.
+              Eight managers, full-roster drafts, season-long drama. Knockdown
+              Fantasy runs like a real league — not a weekly pick'em.
             </p>
             <div class="hero__actions">
               <a href="signup.html" class="btn-primary">Start your league free</a>
@@ -356,13 +375,17 @@
 
   </section>
 
-  <!-- Next event: compact strip below the hero (moved from the right column) -->
-  <div class="next-event-strip">
+  <!-- Next event: compact strip below the hero. Populated dynamically by
+       the wireNextEvent() block at the bottom of this file — fetches the
+       soonest upcoming row from ufc_events so this stays in sync with the
+       same banner inside the app. Hidden entirely if no upcoming event
+       is found (or the query fails) rather than showing stale data. -->
+  <div class="next-event-strip" id="nextEventStrip" style="display: none;">
     <div class="event-banner">
       <div>
         <p class="event-banner__eyebrow">Next event</p>
-        <h2 class="event-banner__name">UFC 329</h2>
-        <p class="event-banner__meta">Sat, May 3 &middot; T-Mobile Arena, Las Vegas</p>
+        <h2 class="event-banner__name"     id="neName">—</h2>
+        <p class="event-banner__meta"       id="neMeta">—</p>
       </div>
       <div class="event-banner__countdown">
         <div class="countdown-unit">
@@ -379,22 +402,22 @@
         </div>
       </div>
       <div>
-        <p class="event-banner__fight-label">Main Event &middot; Lightweight Title</p>
-        <p class="event-banner__matchup">Islam Makhachev <span class="vs-small">vs</span> Arman Tsarukyan II</p>
+        <p class="event-banner__fight-label" id="neFightLabel">Main event</p>
+        <p class="event-banner__matchup"     id="neMatchup">—</p>
       </div>
-      <a href="signup.html" class="btn-primary">Start your league</a>
+      <button class="btn-ghost" id="neViewFightCardBtn" type="button">View fight card &rarr;</button>
     </div>
   </div>
 
   <!-- Stats strip: product credibility at a glance -->
   <div class="stats-strip">
-    <span class="stats-strip__item"><strong>233</strong> active fighters</span>
+    <span class="stats-strip__item">Every active UFC fighter</span>
     <span class="stats-strip__dot"></span>
-    <span class="stats-strip__item"><strong>9</strong> men's divisions</span>
+    <span class="stats-strip__item"><strong>8</strong> men's divisions</span>
     <span class="stats-strip__dot"></span>
     <span class="stats-strip__item"><strong>3</strong> women's divisions</span>
     <span class="stats-strip__dot"></span>
-    <span class="stats-strip__item">Real stat scoring</span>
+    <span class="stats-strip__item">Live Polymarket odds</span>
     <span class="stats-strip__dot"></span>
     <span class="stats-strip__item">Free to play</span>
   </div>
@@ -417,9 +440,9 @@
         <p class="step-card__number">01</p>
         <h3 class="step-card__title">Draft your roster</h3>
         <p class="step-card__body">
-          Snake or auction format. Build a 20-fighter roster from 233 active
-          athletes across every weight class. Champions, top contenders,
-          and deep-cut prospects — your call.
+          Snake draft with a live cinematic room — pick clock, board reactions,
+          presence dots, and a queue you can build in advance. Mock the draft
+          first if you want practice. Run auto-draft if you can't make it.
         </p>
       </div>
 
@@ -427,9 +450,9 @@
         <p class="step-card__number">02</p>
         <h3 class="step-card__title">Set your lineup</h3>
         <p class="step-card__body">
-          Pick 3 starters before the card locks Saturday night. Lineup lock
-          hits at the first prelim. After that, you ride whatever happens
-          inside the cage.
+          Pick starters before the card locks Saturday night — 3 for numbered
+          PPVs, 2 for Fight Nights. Lineup lock hits at the first prelim.
+          After that, you ride whatever happens inside the cage.
         </p>
       </div>
 
@@ -437,9 +460,10 @@
         <p class="step-card__number">03</p>
         <h3 class="step-card__title">Score on fight night</h3>
         <p class="step-card__body">
-          Points for sig strikes, takedowns, control time, and finishes.
-          A first-round KO on the main card scores more than a five-round
-          decision on the prelims. Finishing is always the right call.
+          Points for sig strikes, takedowns, control time, and finishes —
+          live, between rounds. A first-round KO on the main card scores
+          more than a five-round decision on the prelims. Finishing is
+          always the right call.
         </p>
       </div>
 
@@ -516,42 +540,55 @@
       </div>
 
       <div class="scoring-card">
-        <h3 class="scoring-card__title">Event bonuses</h3>
+        <h3 class="scoring-card__title">Title &amp; opponent bonuses</h3>
         <div class="scoring-list">
           <div class="scoring-row">
-            <span class="scoring-row__label">Title fight win</span>
-            <span class="scoring-row__value scoring-row__value--gold">+10</span>
+            <span class="scoring-row__label">Divisional title win</span>
+            <span class="scoring-row__value scoring-row__value--gold">+12</span>
           </div>
           <div class="scoring-row">
-            <span class="scoring-row__label">Title defense</span>
-            <span class="scoring-row__value scoring-row__value--gold">+5</span>
+            <span class="scoring-row__label">Divisional title defense</span>
+            <span class="scoring-row__value scoring-row__value--gold">+8</span>
           </div>
           <div class="scoring-row">
-            <span class="scoring-row__label">Performance of the Night</span>
-            <span class="scoring-row__value">+6</span>
+            <span class="scoring-row__label">BMF / interim title win</span>
+            <span class="scoring-row__value">+8</span>
           </div>
           <div class="scoring-row">
-            <span class="scoring-row__label">Fight of the Night</span>
-            <span class="scoring-row__value">+4</span>
+            <span class="scoring-row__label">BMF / interim title defense</span>
+            <span class="scoring-row__value">+5</span>
           </div>
+          <div class="scoring-row scoring-row--divider"></div>
           <div class="scoring-row">
             <span class="scoring-row__label">Defeated top-5 opponent</span>
-            <span class="scoring-row__value">+4</span>
+            <span class="scoring-row__value">+8</span>
           </div>
           <div class="scoring-row">
             <span class="scoring-row__label">Defeated top-10 opponent</span>
-            <span class="scoring-row__value">+2</span>
+            <span class="scoring-row__value">+5</span>
           </div>
           <div class="scoring-row">
             <span class="scoring-row__label">Defeated top-15 opponent</span>
-            <span class="scoring-row__value">+1</span>
+            <span class="scoring-row__value">+3</span>
           </div>
         </div>
+        <p class="scoring-card__note">
+          Title and opponent-rank bonuses don't stack — a winner takes whichever is highest, not both.
+        </p>
       </div>
 
       <div class="scoring-card">
-        <h3 class="scoring-card__title">Multipliers &amp; extras</h3>
+        <h3 class="scoring-card__title">Performance &amp; multipliers</h3>
         <div class="scoring-list">
+          <div class="scoring-row">
+            <span class="scoring-row__label">Fight of the Night</span>
+            <span class="scoring-row__value scoring-row__value--gold">+4</span>
+          </div>
+          <div class="scoring-row">
+            <span class="scoring-row__label">Draw (both fighters)</span>
+            <span class="scoring-row__value">+3</span>
+          </div>
+          <div class="scoring-row scoring-row--divider"></div>
           <div class="scoring-row">
             <span class="scoring-row__label">Main event fighter</span>
             <span class="scoring-row__value scoring-row__value--gold">1.2&times;</span>
@@ -560,16 +597,91 @@
             <span class="scoring-row__label">Co-main event fighter</span>
             <span class="scoring-row__value">1.1&times;</span>
           </div>
-          <div class="scoring-row scoring-row--divider"></div>
-          <div class="scoring-row">
-            <span class="scoring-row__label">BMF / interim title win</span>
-            <span class="scoring-row__value">+5</span>
-          </div>
-          <div class="scoring-row">
-            <span class="scoring-row__label">BMF / interim title defense</span>
-            <span class="scoring-row__value">+3</span>
-          </div>
         </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ================================================================
+       FEATURE HIGHLIGHTS
+       What makes Knockdown different from a generic pick'em or roto game.
+       Six cards covering the draft room, live data, decision aids, and
+       commissioner controls.
+       ================================================================ -->
+  <section class="home-section">
+    <div class="home-section__header">
+      <p class="home-section__eyebrow">Built for fight fans</p>
+      <h2 class="home-section__title">More than a fantasy game</h2>
+      <p class="home-section__sub">
+        Real-time scoring, live betting odds, a draft room that feels like ESPN,
+        and the same tools the commissioner uses to run the league.
+      </p>
+    </div>
+
+    <div class="features-grid">
+
+      <div class="feature-card">
+        <p class="feature-card__icon" aria-hidden="true">🥊</p>
+        <h3 class="feature-card__title">Cinematic draft room</h3>
+        <p class="feature-card__body">
+          Live pick clock with a sweeping ring timer, snake-board with
+          team-color columns, on-the-clock highlight, and a thin activity
+          feed at the top. Picks land with a confirmation animation and
+          a sound effect. Practice with the mock draft before the real one.
+        </p>
+      </div>
+
+      <div class="feature-card">
+        <p class="feature-card__icon" aria-hidden="true">⚡</p>
+        <h3 class="feature-card__title">Auto-draft &amp; queues</h3>
+        <p class="feature-card__body">
+          Build a personal queue before the draft. Toggle auto-draft and
+          the system picks from your queue first, then highest Fantasy Value.
+          Step away from the keyboard without giving up your team.
+        </p>
+      </div>
+
+      <div class="feature-card">
+        <p class="feature-card__icon" aria-hidden="true">📊</p>
+        <h3 class="feature-card__title">Live odds &amp; projections</h3>
+        <p class="feature-card__body">
+          Polymarket implied probabilities on every booked fight, plus
+          per-fighter projected points. Both visible during draft, on the
+          lineup page, and in the fighter modal. Make decisions on data,
+          not just hype.
+        </p>
+      </div>
+
+      <div class="feature-card">
+        <p class="feature-card__icon" aria-hidden="true">🎯</p>
+        <h3 class="feature-card__title">Fantasy Value scoring</h3>
+        <p class="feature-card__body">
+          Every fighter gets a composite FV score blending career average,
+          recent form, activity, opponent strength, and rank. Sort the pool
+          by FV; STEAL / VALUE / REACH badges appear on rows when a fighter
+          is ranked far from the current pick slot.
+        </p>
+      </div>
+
+      <div class="feature-card">
+        <p class="feature-card__icon" aria-hidden="true">📡</p>
+        <h3 class="feature-card__title">Real-time everything</h3>
+        <p class="feature-card__body">
+          Draft picks sync instantly across every connected manager. Scoring
+          updates between rounds on fight night. League chat, trade offers,
+          waiver claims — all live, no refresh needed.
+        </p>
+      </div>
+
+      <div class="feature-card">
+        <p class="feature-card__icon" aria-hidden="true">⚖️</p>
+        <h3 class="feature-card__title">Commish power tools</h3>
+        <p class="feature-card__body">
+          Manually edit any roster, override fight stats, reverse trades.
+          Co-commissioner support means you can split the workload.
+          Everything's auditable in the league activity feed.
+        </p>
       </div>
 
     </div>
@@ -596,16 +708,16 @@
         <span class="format-stat__label">Managers per league</span>
       </div>
       <div class="format-stat">
-        <span class="format-stat__value">20</span>
-        <span class="format-stat__label">Fighters per roster</span>
+        <span class="format-stat__value">15</span>
+        <span class="format-stat__label">Roster spots (commish can adjust)</span>
       </div>
       <div class="format-stat">
-        <span class="format-stat__value">3</span>
-        <span class="format-stat__label">Starters per card</span>
+        <span class="format-stat__value">3 / 2</span>
+        <span class="format-stat__label">Starters per numbered / Fight Night card</span>
       </div>
       <div class="format-stat">
-        <span class="format-stat__value">233</span>
-        <span class="format-stat__label">Active fighters in the pool</span>
+        <span class="format-stat__value">11</span>
+        <span class="format-stat__label">Weight classes drafted from</span>
       </div>
     </div>
 
@@ -614,19 +726,27 @@
       <div class="format-schedule__rows">
         <div class="schedule-row">
           <span class="schedule-row__day">Thursday</span>
-          <span class="schedule-row__action">Roster moves open. Two adds per week. Released fighters move to waivers.</span>
+          <span class="schedule-row__action">Pre-event waiver window opens. Roster cap expands by +3 for the Temporary Extended Roster Flex (TERF).</span>
         </div>
         <div class="schedule-row">
           <span class="schedule-row__day">Friday</span>
-          <span class="schedule-row__action">Waiver wire processes in reverse standings order.</span>
+          <span class="schedule-row__action">Pre-event waivers process in reverse-standings order. Successful claimants move to the back of the queue.</span>
         </div>
         <div class="schedule-row">
           <span class="schedule-row__day">Saturday</span>
-          <span class="schedule-row__action">Lineup locks at the first prelim. No changes after that.</span>
+          <span class="schedule-row__action">Lineup locks at the first prelim. Live scoring kicks in. Watch your points tick up between rounds.</span>
+        </div>
+        <div class="schedule-row">
+          <span class="schedule-row__day">Sunday</span>
+          <span class="schedule-row__action">Post-event waiver window opens. Roster cap reverts to base.</span>
         </div>
         <div class="schedule-row">
           <span class="schedule-row__day">Tuesday</span>
-          <span class="schedule-row__action">Drop-down deadline. Fighters not on this card must be designated or released.</span>
+          <span class="schedule-row__action">Post-event waivers process. Drop-down deadline for the +3 TERF.</span>
+        </div>
+        <div class="schedule-row">
+          <span class="schedule-row__day">Wednesday</span>
+          <span class="schedule-row__action">Auto-drop sweep — most-recent acquisitions get released until rosters are back at the base cap.</span>
         </div>
       </div>
     </div>
@@ -660,25 +780,6 @@
   </footer>
 
   <script>
-    // ---- Countdown to UFC 329 main card (PDT) ----
-    var eventDate = new Date('2026-05-03T20:00:00-07:00');
-    function updateCountdown() {
-      var diff = eventDate - new Date();
-      if (diff <= 0) {
-        // Replace the countdown cluster with LIVE NOW text
-        var cdWrap = document.querySelector('.event-banner__countdown');
-        if (cdWrap) cdWrap.innerHTML =
-          '<p style="color:var(--accent-crimson);font-weight:700;font-family:var(--font-display);margin:0">LIVE NOW</p>';
-        return;
-      }
-      document.getElementById('cdDays').textContent  = Math.floor(diff / 86400000);
-      document.getElementById('cdHours').textContent = String(Math.floor((diff % 86400000) / 3600000)).padStart(2,'0');
-      document.getElementById('cdMins').textContent  = String(Math.floor((diff % 3600000)  / 60000)).padStart(2,'0');
-    }
-
-    updateCountdown();
-    setInterval(updateCountdown, 60000);
-
     // ---- Hero carousel: cross-fade between full-layout slides ----
     // Auto-advances every 7s, pauses on hover, arrow buttons, and touch swipe
     (function () {
@@ -748,6 +849,19 @@
        No redirect — the homepage stays visible for logged-in users. -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/supabase-config.js"></script>
+  <!-- FightCardModal is the same shared module the league page uses for
+       its "View fight card" button. Reads ufc_events / fight_results /
+       fighters, all of which are public-readable per RLS, so it works
+       fine for anonymous landing-page visitors.
+       FightOdds + Projections are optional deps the modal feature-gates
+       on `typeof X !== 'undefined'`. Both their backing tables (fight_odds,
+       fighter_projections) are public-readable, and the projection rows
+       are pre-baked against the v1.2 scoring defaults server-side —
+       so no league context is needed on the landing page. -->
+  <script src="js/country-flags.js"></script>
+  <script src="js/fight-odds.js"></script>
+  <script src="js/projections.js"></script>
+  <script src="js/fight-card-modal.js"></script>
   <script>
     (async function () {
       var session = (await supabaseClient.auth.getSession()).data.session;
@@ -772,6 +886,121 @@
         }
       });
     }());
+
+    // ---- Dynamic "Next event" banner ----------------------------------
+    // Fetches the soonest upcoming row from ufc_events (same query the
+    // league page uses), populates the strip, kicks off a 1Hz countdown,
+    // and wires the "View fight card →" button to FightCardModal.show().
+    // Falls through silently (the strip stays display:none) on query
+    // failure or when no upcoming event exists. Mirrors the logic in
+    // league.js's wireNextEventBanner() so the landing page never drifts
+    // from the in-app banner.
+    (async function () {
+      var strip = document.getElementById('nextEventStrip');
+      if (!strip) return;
+
+      var todayISO = new Date().toISOString().split('T')[0];
+      var res = await supabaseClient
+        .from('ufc_events')
+        .select('id, name, full_name, event_date, venue, lineup_lock_time')
+        .gte('event_date', todayISO)
+        .order('event_date', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      var event = res && res.data;
+      if (!event) return; // no upcoming event — keep banner hidden
+
+      // Headline. Numbered PPVs already read as "UFC <number>"; Fight
+      // Nights default to "UFC Fight Night" which is generic, so we
+      // prefer the full_name's pre-colon segment when it adds info.
+      function displayName(e) {
+        if (!e) return '—';
+        if (e.name && e.name.indexOf('Fight Night') === -1) return e.name;
+        if (e.full_name && e.full_name.indexOf(':') !== -1) {
+          return e.full_name.split(':')[0].trim();
+        }
+        return e.name || 'Upcoming event';
+      }
+      document.getElementById('neName').textContent = displayName(event);
+
+      // Date + venue line.
+      var d = new Date(event.event_date + 'T12:00:00');
+      var dateStr = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+      if (event.venue) dateStr += ' · ' + event.venue;
+      document.getElementById('neMeta').textContent = dateStr;
+
+      // Main-event matchup. Try the fight_results table first, then fall
+      // back to the colon suffix in full_name ("UFC 329: McGregor vs. Holloway").
+      var matchupEl = document.getElementById('neMatchup');
+      var matchup = '';
+      try {
+        var mainRes = await supabaseClient
+          .from('fight_results')
+          .select('fighter_a_id, fighter_b_id')
+          .eq('event_id', event.id)
+          .eq('card_position', 'main_event')
+          .maybeSingle();
+        if (mainRes && mainRes.data) {
+          var pair = await supabaseClient
+            .from('fighters')
+            .select('id, name')
+            .in('id', [mainRes.data.fighter_a_id, mainRes.data.fighter_b_id]);
+          if (pair && pair.data && pair.data.length === 2) {
+            var lastName = function (full) { return (full || '').split(' ').pop(); };
+            var a = pair.data.find(function (p) { return p.id === mainRes.data.fighter_a_id; });
+            var b = pair.data.find(function (p) { return p.id === mainRes.data.fighter_b_id; });
+            if (a && b) matchup = lastName(a.name) + ' vs. ' + lastName(b.name);
+          }
+        }
+      } catch (_e) { /* fall through */ }
+      if (!matchup && event.full_name && event.full_name.indexOf(':') !== -1) {
+        matchup = event.full_name.split(':').slice(1).join(':').trim();
+      }
+      matchupEl.textContent = matchup || event.name || '';
+
+      // Countdown — target lineup_lock_time when set, otherwise the
+      // event date at 5pm ET (the app-wide default lock time).
+      function lockTarget(ev) {
+        if (ev.lineup_lock_time) {
+          var t = new Date(ev.lineup_lock_time);
+          if (!isNaN(t.getTime())) return t;
+        }
+        // 5pm ET ≈ 21:00 UTC during standard, 22:00 UTC during DST. Using
+        // 22:00 UTC here is a reasonable approximation for the landing
+        // page; precision isn't critical to a marketing countdown.
+        return new Date(ev.event_date + 'T22:00:00Z');
+      }
+      var target = lockTarget(event);
+
+      function tick() {
+        var diff = target - new Date();
+        if (diff <= 0) {
+          var cdWrap = document.querySelector('.event-banner__countdown');
+          if (cdWrap) cdWrap.innerHTML =
+            '<p style="color:var(--accent-crimson);font-weight:700;font-family:var(--font-display);margin:0">LIVE NOW</p>';
+          return;
+        }
+        document.getElementById('cdDays').textContent  = Math.floor(diff / 86400000);
+        document.getElementById('cdHours').textContent = String(Math.floor((diff % 86400000) / 3600000)).padStart(2, '0');
+        document.getElementById('cdMins').textContent  = String(Math.floor((diff % 3600000)  / 60000)).padStart(2, '0');
+      }
+      tick();
+      setInterval(tick, 60000);
+
+      // Wire the "View fight card →" button to the shared modal.
+      var fcBtn = document.getElementById('neViewFightCardBtn');
+      if (fcBtn && typeof FightCardModal !== 'undefined') {
+        fcBtn.addEventListener('click', function () {
+          FightCardModal.show(event.id);
+        });
+      } else if (fcBtn) {
+        fcBtn.style.display = 'none';
+      }
+
+      // Reveal the strip now that everything's populated.
+      strip.style.display = '';
+    })();
   </script>
 
 </body>

@@ -14,9 +14,10 @@
 //   2. Run node ingestEvents.js to populate ufc_events with ufcstats_id values
 //
 // Notes:
-//   - Performance of the Night (PotN) is NOT on ufcstats. The scraper sets
-//     fighter_a_potn and fighter_b_potn to false. Commissioner sets them via
-//     score-event.html after the event.
+//   - Performance of the Night was removed from the scoring system —
+//     ufcstats doesn't expose it per-fighter and we don't want any
+//     manual commissioner input. The scraper no longer reads or writes
+//     any PotN columns.
 //   - A 150ms delay between HTTP requests avoids overwhelming ufcstats.
 //   - Re-running is safe: uses ufcstats_fight_id as the upsert key.
 //   - Unmatched fighter names are printed at the end for manual review.
@@ -495,7 +496,6 @@ async function scrapeEventFightList(eventId) {
       fightIndex: idx,
       isTitleFight:    hasIcon('belt.png'),
       fightOfTheNight: hasIcon('fight.png'),
-      hasPotN:         hasIcon('perf.png'),  // which fighter won it is not available; commissioner sets via score-event.html
     });
   });
 
@@ -612,13 +612,11 @@ async function processEvent(dbEvent, lookup, pendingNameUpdates) {
       fighter_a_knockdowns:      detail.statsA.knockdowns,
       fighter_a_control_seconds: detail.statsA.control_seconds,
       fighter_a_opponent_rank:   opponentRankA,
-      fighter_a_potn:            false,        // PotN winner not determinable per-fighter from ufcstats; commissioner sets
       fighter_b_sig_strikes:     detail.statsB.sig_strikes,
       fighter_b_takedowns:       detail.statsB.takedowns,
       fighter_b_knockdowns:      detail.statsB.knockdowns,
       fighter_b_control_seconds: detail.statsB.control_seconds,
       fighter_b_opponent_rank:   opponentRankB,
-      fighter_b_potn:            false,
     });
   }
 
@@ -732,7 +730,7 @@ async function main() {
 
   const elapsed = ((Date.now() - start) / 1000 / 60).toFixed(1);
   console.log(`\nTotal time: ${elapsed} minutes`);
-  console.log('\nNext step: open score-event.html to set PotN and is_title_defense for any title fights (belt wins = false, belt defenses = true). BMF and interim type are now auto-detected.');
+  console.log('\nNext step: open score-event.html to set is_title_defense for any title fights (belt wins = false, belt defenses = true). BMF and interim type are now auto-detected.');
 }
 
 main().catch(err => {

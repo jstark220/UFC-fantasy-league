@@ -56,8 +56,10 @@
     top10_win:                5,
     top15_win:                3,
 
-    // Performance bonuses
-    potn:                     6,
+    // Performance bonuses. PotN was dropped from the scoring system —
+    // ufcstats / public APIs don't expose it per-fighter, and we don't
+    // want any manual commissioner input on game-day. FotN is still in
+    // because the icon is parseable from ufcstats.
     fotn:                     4,
 
     // Card-position multipliers
@@ -98,7 +100,7 @@
   //                    falls back entirely to v1.2 defaults
   //
   // Returns: { fighterId, total, base_points, win_bonus, title_bonus,
-  //            ranked_opp_bonus, potn_bonus, fotn_bonus, card_multiplier,
+  //            ranked_opp_bonus, fotn_bonus, card_multiplier,
   //            scoring_detail }
   // -----------------------------------------------------------------------
   function computeFighterScore(fight, isA, scoringConfig) {
@@ -109,7 +111,6 @@
     var takedowns    = fight[prefix + 'takedowns']        || 0;
     var knockdowns   = fight[prefix + 'knockdowns']       || 0;
     var controlSec   = fight[prefix + 'control_seconds']  || 0;
-    var potn         = !!fight[prefix + 'potn'];
     var opponentRank = fight[prefix + 'opponent_rank'];   // null if unranked
 
     var fighterId = isA ? fight.fighter_a_id : fight.fighter_b_id;
@@ -198,13 +199,13 @@
     }
 
     // ---- Performance bonuses ----
-    var potnBonus = potn ? get(cfg, 'potn') : 0;
+    // PotN intentionally dropped — see SCORING_DEFAULTS_V1_2 above.
     var fotnBonus = fight.fight_of_the_night ? get(cfg, 'fotn') : 0;
 
     // ---- Card-position multiplier ----
     var multiplier = multiplierFor(fight.card_position, cfg);
 
-    var subtotal = base + winBonus + titleBonus + rankedOppBonus + potnBonus + fotnBonus;
+    var subtotal = base + winBonus + titleBonus + rankedOppBonus + fotnBonus;
     var total    = Math.round(subtotal * multiplier * 100) / 100;  // 2 decimals
 
     return {
@@ -214,7 +215,6 @@
       win_bonus:        winBonus,
       title_bonus:      titleBonus,
       ranked_opp_bonus: rankedOppBonus,
-      potn_bonus:       potnBonus,
       fotn_bonus:       fotnBonus,
       card_multiplier:  multiplier,
       scoring_detail: {

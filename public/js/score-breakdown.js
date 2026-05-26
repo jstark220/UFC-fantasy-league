@@ -69,9 +69,10 @@
     var kdPts   = (d.knockdowns      || 0) * cfgVal(scoringConfig, 'knockdown');
     var ctrlPts = (d.control_seconds || 0) * cfgVal(scoringConfig, 'control_per_sec');
 
-    // Subtotal of every component before the card-position multiplier
+    // Subtotal of every component before the card-position multiplier.
+    // PotN is no longer part of scoring — see scoring.js.
     var subtotal = score.base_points + score.win_bonus + score.title_bonus +
-                   score.ranked_opp_bonus + score.potn_bonus + score.fotn_bonus;
+                   score.ranked_opp_bonus + score.fotn_bonus;
 
     // ---- BASE STATS ----
     var baseLines =
@@ -117,8 +118,8 @@
     var rankLine = lineHtml('Ranked opp.', rankLabel, score.ranked_opp_bonus, { muted: score.ranked_opp_bonus === 0 });
 
     // ---- PERFORMANCE BONUSES ----
-    var potnLine = lineHtml('Performance of the night', score.potn_bonus > 0 ? 'POTN' : '—', score.potn_bonus, { muted: score.potn_bonus === 0 });
-    var fotnLine = lineHtml('Fight of the night',       score.fotn_bonus > 0 ? 'FOTN' : '—', score.fotn_bonus, { muted: score.fotn_bonus === 0 });
+    // PotN dropped — only FotN survives.
+    var fotnLine = lineHtml('Fight of the night', score.fotn_bonus > 0 ? 'FOTN' : '—', score.fotn_bonus, { muted: score.fotn_bonus === 0 });
 
     // ---- CARD MULTIPLIER ----
     var multLabel;
@@ -139,7 +140,7 @@
         '</div>' +
         '<div class="fight-breakdown__group">' +
           '<div class="fight-breakdown__group-label">Bonuses</div>' +
-          winLine + titleLine + rankLine + potnLine + fotnLine +
+          winLine + titleLine + rankLine + fotnLine +
         '</div>' +
         '<div class="fight-breakdown__group fight-breakdown__group--total">' +
           '<div class="fight-breakdown__line fight-breakdown__line--subtotal">' +

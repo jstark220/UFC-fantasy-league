@@ -51,7 +51,6 @@ const SCORING_FIELDS = [
   { id: 's_top5_win',                  key: 'top5_win' },
   { id: 's_top10_win',                 key: 'top10_win' },
   { id: 's_top15_win',                 key: 'top15_win' },
-  { id: 's_potn',                      key: 'potn' },
   { id: 's_fotn',                      key: 'fotn' },
   { id: 's_main_event_mult',           key: 'main_event_mult' },
   { id: 's_co_main_mult',              key: 'co_main_mult' },

@@ -118,6 +118,15 @@ async function initLeague() {
   document.getElementById('waiverLink').href  = 'waivers.html?id='   + leagueId;
   document.getElementById('settingsLink').href = 'league-settings.html?id=' + leagueId;
 
+  // Commish Powers — revealed only for commissioners. Page is gated
+  // server-side via RLS, but the link itself is hidden so non-commish
+  // members don't see a tease they can't act on.
+  var commishPowersLink = document.getElementById('commishPowersLink');
+  if (commishPowersLink) {
+    commishPowersLink.href = 'commissioner.html?id=' + leagueId;
+    commishPowersLink.style.display = isCommissioner ? 'block' : 'none';
+  }
+
   // ---- Wire the activity card ----
   // The card itself is in league.html; we point the "See all" link at the
   // standalone activity page and ask the shared module to render the
@@ -1265,7 +1274,7 @@ async function renderTopPerformers() {
       'fighter_a_sig_strikes, fighter_a_takedowns, fighter_a_knockdowns, fighter_a_control_seconds, ' +
       'fighter_b_sig_strikes, fighter_b_takedowns, fighter_b_knockdowns, fighter_b_control_seconds, ' +
       'fighter_a_opponent_rank, fighter_b_opponent_rank, ' +
-      'fighter_a_potn, fighter_b_potn, fight_of_the_night'
+      'fight_of_the_night'
     )
     .eq('event_id', event.id)
     .not('outcome', 'is', null);

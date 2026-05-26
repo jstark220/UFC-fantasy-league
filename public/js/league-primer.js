@@ -83,7 +83,7 @@
           divisional_title_win: 12, divisional_title_defense: 8,
           bmf_interim_win: 8, bmf_interim_defense: 5,
           top5_win: 8, top10_win: 5, top15_win: 3,
-          potn: 6, fotn: 4, main_event_mult: 1.2, co_main_mult: 1.1
+          fotn: 4, main_event_mult: 1.2, co_main_mult: 1.1
         };
     var scoringCfg = (league && league.scoring_config) || {};
 
@@ -194,7 +194,6 @@
             'Title-holders count as top-5 talent for the ranked-opponent bonus.</em></p>' +
             '<p class="page-help__subheading"><strong>Performance bonuses</strong></p>' +
             '<ul>' +
-              '<li>Performance of the Night: <strong>' + fmt(cfg('potn')) + '</strong></li>' +
               '<li>Fight of the Night: <strong>' + fmt(cfg('fotn')) + '</strong></li>' +
             '</ul>' +
             '<p class="page-help__subheading"><strong>Card-position multiplier</strong></p>' +

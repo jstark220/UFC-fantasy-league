@@ -157,6 +157,11 @@ let selectedEventFightCard = [];
 // per-fighter event scores via Scoring.computeFighterScore.
 let leagueScoringConfig = null;
 
+// Full league row — needed by getAnyFlexSlots() and other helpers that
+// depend on league.roster_size to size the Any-Division Flex section.
+// Populated from leagueRes.data in init.
+let league = null;
+
 // fighter_id -> computed event score for the selected event (from
 // fight_results, using the scoring engine). Populated for any fighter who
 // fought at the event, regardless of whether they were a starter.
@@ -214,7 +219,9 @@ async function initLineup() {
     return;
   }
 
-  const league  = leagueRes.data;
+  // Assign into the module-level `league` declared at the top of the file
+  // (not a fresh local const) so helpers like renderRosterList can read it.
+  league = leagueRes.data;
   leagueScoringConfig = league.scoring_config || null;
   const members = membersRes.data || [];
   const myMember = members.find(function(m) { return m.user_id === user.id; });
@@ -459,9 +466,9 @@ async function loadEventData() {
         title_type, is_title_defense, outcome, winner_id, fight_of_the_night,
         end_round, end_time_seconds,
         fighter_a_sig_strikes, fighter_a_takedowns, fighter_a_knockdowns,
-        fighter_a_control_seconds, fighter_a_opponent_rank, fighter_a_potn,
+        fighter_a_control_seconds, fighter_a_opponent_rank,
         fighter_b_sig_strikes, fighter_b_takedowns, fighter_b_knockdowns,
-        fighter_b_control_seconds, fighter_b_opponent_rank, fighter_b_potn
+        fighter_b_control_seconds, fighter_b_opponent_rank
       `)
       .eq('event_id', selectedEvent.id),
   ]);
@@ -1580,6 +1587,12 @@ async function toggleStarter(fighterId) {
   if (isLocked) return;
   if (!selectedEvent) { alert('No upcoming event found. Cannot save starters.'); return; }
 
+  // Capture which action we're about to take. After the re-renders below
+  // we use this to find the affected DOM element and apply a short
+  // pop/flash animation + play a small confirmation sound. Kept as a
+  // local rather than module state so concurrent toggles can't race.
+  var action = selections.has(fighterId) ? 'bench' : 'start';
+
   if (selections.has(fighterId)) {
     // Bench: delete from DB first, then update local state
     const rowId = selectionRowIds[fighterId];
@@ -1627,6 +1640,39 @@ async function toggleStarter(fighterId) {
   renderStarterSlots();
   renderRosterList();
   renderEventBanner();
+
+  // Small confirmation animation + sound. We do this AFTER the renders so
+  // we can find the freshly-painted element. The animation classes auto-
+  // clear via setTimeout so subsequent renders don't strip them mid-anim.
+  flashStarterChange(fighterId, action);
+}
+
+// Apply a brief CSS animation class to the element that just changed
+// state, plus play the corresponding sound effect. Targets the starter
+// card (for 'start') or the roster row (for 'bench') since the starter
+// card disappears on bench.
+function flashStarterChange(fighterId, action) {
+  if (action === 'start') {
+    var card = document.querySelector('.lineup-starter-card[data-modal-fighter-id="' + fighterId + '"]');
+    if (card) {
+      card.classList.add('lineup-starter-card--just-added');
+      setTimeout(function() { card.classList.remove('lineup-starter-card--just-added'); }, 600);
+    }
+    if (typeof DraftSounds !== 'undefined' && DraftSounds.starterAdded) {
+      DraftSounds.starterAdded();
+    }
+  } else if (action === 'bench') {
+    // The starter card is gone — flash the roster row instead. Roster
+    // rows carry id="roster-row-<fighterId>" (set in renderRosterRow).
+    var row = document.getElementById('roster-row-' + fighterId);
+    if (row) {
+      row.classList.add('lineup-roster-row--just-benched');
+      setTimeout(function() { row.classList.remove('lineup-roster-row--just-benched'); }, 600);
+    }
+    if (typeof DraftSounds !== 'undefined' && DraftSounds.starterBenched) {
+      DraftSounds.starterBenched();
+    }
+  }
 }
 
 // ========================================================================
