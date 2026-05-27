@@ -14537,4 +14537,20 @@ label .form-label__hint {
     padding: 0 !important;
     position: relative;
   }
+
+  /* Hide the "Available Fighters" panel header + View All button on
+     mobile — the Fighters tab above already labels the section, so
+     the duplicated header just eats vertical space. The button is
+     still visible on desktop where there's room. */
+  body .draft-page .panel-fighters > .draft-panel__header {
+    display: none !important;
+  }
+
+  /* Add breathing room between the stacked search + filter dropdowns. */
+  body .draft-page .draft-panel__controls > * {
+    margin-bottom: var(--space-2) !important;
+  }
+  body .draft-page .draft-panel__controls > *:last-child {
+    margin-bottom: 0 !important;
+  }
 }
