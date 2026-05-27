@@ -14453,3 +14453,88 @@ label .form-label__hint {
 .commish-trades-list__reverse:hover {
   background: rgba(193, 59, 46, 0.12);
 }
+
+/* ============================================================================
+   MOBILE DRAFT REDESIGN — fresh start, lives at the bottom of the file so
+   it wins the cascade against everything above. Every selector uses the
+   `body .draft-page` chain (specificity 0,1,1) so it outweighs the original
+   `.draft-page` rules higher up. All sizing forced via `!important` to
+   defeat any inline style the JS height-syncer might set.
+
+   Goals:
+     - The whole page is a single full-width column that scrolls naturally.
+     - Status / commish toolbar / tabs / search / filters / fighter pool
+       all stack as plain blocks at the full viewport width.
+     - No `position: sticky` on the page (Safari has known sticky bugs
+       inside transformed/overflowed ancestors).
+     - Active tab's panel shows; inactive ones are display: none.
+   ============================================================================ */
+
+@media (max-width: 899px) {
+
+  body .draft-page,
+  body .draft-page .draft-room,
+  body .draft-page .draft-bottom,
+  body .draft-page .draft-panel,
+  body .draft-page .draft-panel__body,
+  body .draft-page .draft-panel__header,
+  body .draft-page .draft-panel__controls {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    flex: none !important;
+    grid-template-rows: none !important;
+    grid-template-columns: none !important;
+    box-sizing: border-box !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+
+  body .draft-page {
+    min-height: 100vh !important;
+  }
+
+  /* Panel visibility — only the active tab's panel renders */
+  body .draft-page .draft-panel {
+    display: none !important;
+  }
+  body .draft-page .draft-panel.waiver-tab--active {
+    display: block !important;
+  }
+
+  /* Resize handles disabled on mobile */
+  body .draft-page .draft-resize-handle {
+    display: none !important;
+  }
+
+  /* Tab bar stays a flex row (override the block reset above for tabs) */
+  body .draft-page .draft-tabs {
+    display: flex !important;
+  }
+
+  /* Draft board: only place horizontal scroll lives, since the table is
+     genuinely wider than the viewport with 8 manager columns. */
+  body .draft-page .draft-board {
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+    -webkit-overflow-scrolling: touch;
+    width: 100% !important;
+    height: auto !important;
+  }
+
+  /* Defensive: kill any horizontal overflow on the body itself so nothing
+     can drag the viewport wider than the screen */
+  html,
+  body {
+    width: 100% !important;
+    max-width: 100vw !important;
+    overflow-x: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    position: relative;
+  }
+}
