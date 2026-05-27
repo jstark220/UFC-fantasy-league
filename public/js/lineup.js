@@ -38,6 +38,24 @@ const DIVISION_LABELS = {
   heavyweight:       "Men's Heavyweight"
 };
 
+// 2-letter weight-class abbreviations used inline next to the fighter name
+// on mobile rows. No men's/women's prefix — the section header already
+// establishes which side. Featherweight uses FE so it doesn't collide
+// with Flyweight (FW).
+const DIVISION_ABBR = {
+  strawweight:       "SW",
+  flyweight_w:       "FW",
+  bantamweight_w:    "BW",
+  flyweight:         "FW",
+  bantamweight:      "BW",
+  featherweight:     "FE",
+  lightweight:       "LW",
+  welterweight:      "WW",
+  middleweight:      "MW",
+  light_heavyweight: "LH",
+  heavyweight:       "HW"
+};
+
 // Maximum possible starter count — used for empty-slot rendering caps,
 // fallback labels, and any callsite that doesn't have an event in hand.
 // The actual count for the currently-selected event comes from
@@ -1555,25 +1573,39 @@ function renderRosterRow(fighter, ctx, slotType) {
 
   // Group the action chrome into a single wrapper so we can lay it out
   // as a unit. On desktop it reads as a clean trailing group; on mobile
-  // CSS reflows it onto its own row beneath the fighter info.
+  // CSS reflows it onto its own row beneath the fighter info, with the
+  // country flag prepended inside so it sits to the left of the buttons.
   var actionsHtml = btnHtml + flexBtn + unflexBtn + dropBtn;
   var hasActions = actionsHtml.length > 0;
+  var divAbbr = DIVISION_ABBR[fighter.primary_division] || '';
+  // Flag rendered inside the actions wrapper so on mobile it lands at
+  // the left of the action row (under the name). Hidden on desktop via
+  // CSS — the full division line still carries the flag there.
+  var actionsFlagHtml = flag
+    ? '<span class="lineup-roster-row__actions-flag">' + flag + '</span>'
+    : '';
 
   return (
     '<div class="lineup-roster-row' + rowClass + '" id="roster-row-' + fighter.id + '">' +
       '<div class="lineup-roster-row__photo-wrap">' + photoHtml + '</div>' +
       '<span class="lineup-roster-row__rank ' + rankClass + '">' + rankLabel + subBadge + '</span>' +
       '<div class="lineup-roster-row__info">' +
-        // Name line: the fighter name + a small inline rank suffix.
-        // The inline rank is hidden on desktop (where the separate
-        // .lineup-roster-row__rank column carries the rank) and shown
-        // on mobile (where the column is hidden to save space).
+        // Name line: name + inline rank suffix + inline division-abbr
+        // suffix. The two inline suffixes only show on mobile; desktop
+        // uses the separate .lineup-roster-row__rank column for rank
+        // and the full .lineup-roster-row__division line for weight class.
         '<span class="lineup-roster-row__name-line">' +
           '<button class="lineup-roster-row__name" data-open-fighter="' + fighter.id + '">' + escapeHtml(fighter.name) + '</button>' +
           '<span class="lineup-roster-row__rank-inline ' + rankClass + '" aria-hidden="true">' +
             '<span class="lineup-roster-row__rank-inline-divider">|</span>' +
             rankLabel +
           '</span>' +
+          (divAbbr
+            ? '<span class="lineup-roster-row__div-abbr" aria-hidden="true">' +
+                '<span class="lineup-roster-row__rank-inline-divider">|</span>' +
+                divAbbr +
+              '</span>'
+            : '') +
         '</span>' +
         (fightInfo
           ? '<span class="lineup-roster-row__matchup">' +
@@ -1588,7 +1620,7 @@ function renderRosterRow(fighter, ctx, slotType) {
       fvChip +
       rightStat +
       (hasActions
-        ? '<div class="lineup-roster-row__actions">' + actionsHtml + '</div>'
+        ? '<div class="lineup-roster-row__actions">' + actionsFlagHtml + actionsHtml + '</div>'
         : '') +
     '</div>'
   );

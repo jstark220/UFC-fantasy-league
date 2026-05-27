@@ -5737,10 +5737,12 @@ body {
     color: var(--text-tertiary);
   }
 
-  /* Info column: name + division stacked, spans both grid rows */
+  /* Info column lives on row 1 only — the action group (with the flag
+     prepended) sits below it on row 2, spanning the rest of the row.
+     Together they read as "name | C | FW" on top of "🇺🇸 [Bench][→F][Drop]". */
   .lineup-roster-row__info {
     grid-column: 2;
-    grid-row: 1 / span 2;
+    grid-row: 1;
     align-self: center;
     min-width: 0;
     gap: 1px;
@@ -5787,12 +5789,37 @@ body {
   .lineup-roster-row__pts-val { font-size: 12px; }
   .lineup-roster-row__pts-label { font-size: 7px; }
 
+  /* Actions row 2 spans cols 2–3 and sits left-aligned so the flag is
+     directly under the fighter name. The action buttons line up to the
+     right of the flag. */
   .lineup-roster-row__actions {
-    grid-column: 3;
+    grid-column: 2 / span 2;
     grid-row: 2;
-    justify-self: end;
-    align-self: start;
-    gap: 3px;
+    justify-self: start;
+    align-self: center;
+    gap: 4px;
+  }
+  /* Country flag prepended to the action group on mobile */
+  .lineup-roster-row .lineup-roster-row__actions-flag {
+    display: inline-flex;
+    align-items: center;
+    font-size: 14px;
+    line-height: 1;
+    margin-right: 2px;
+    flex-shrink: 0;
+  }
+
+  /* Inline division-abbr suffix next to the rank-inline. Same divider
+     treatment as the rank — small tertiary color so it reads as
+     supplementary info, not a heading. */
+  .lineup-roster-row .lineup-roster-row__div-abbr {
+    display: inline-flex;
+    align-items: baseline;
+    flex-shrink: 0;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-tertiary);
+    letter-spacing: 0.04em;
   }
 
   /* Compact action buttons — tighter padding + smaller font so the
@@ -5939,6 +5966,21 @@ body {
    the column off and reveals this inline version instead so the user
    still sees "Joshua Van | C" without losing a grid column. */
 .lineup-roster-row__rank-inline {
+  display: none;
+}
+
+/* Inline weight-class abbreviation suffix (e.g. "| FW", "| LH"). Hidden
+   on desktop — the .lineup-roster-row__division line below shows the
+   full label there. Mobile reveals it inline next to the rank so the
+   name line reads "Joshua Van | C | FW". */
+.lineup-roster-row__div-abbr {
+  display: none;
+}
+
+/* Country flag prepended inside the actions wrapper. Hidden on desktop
+   (the division line above carries the flag); shown on mobile so the
+   flag sits to the left of the action buttons under the name. */
+.lineup-roster-row__actions-flag {
   display: none;
 }
 
@@ -11531,19 +11573,24 @@ label .form-label__hint {
   }
 
   /* ===== Mobile draft scrolling — make it native page scroll =====
-     Desktop uses a fixed-height .draft-room with internal scroll inside
-     each panel body. That works on a big screen but on mobile it makes
-     scrolling janky: a small touch target needs to engage the inner
-     scroll instead of the page scroll, and the user can fight it when
-     trying to scroll the fighter list. Switch to native page scrolling:
-     the room and panels lose their height clamps, the active panel's
-     body just flows down the page. The JS that sets inline
-     room.style.height = Npx is overridden via !important. */
+     Desktop uses a fixed-height .draft-page (100vh + overflow:hidden)
+     with internal scroll inside each panel body. That makes the whole
+     page non-scrollable on mobile because the page itself is clamped to
+     the viewport. Release all the height/overflow clamps so the page
+     scrolls naturally. The JS that sets inline room.style.height = Npx
+     is overridden via !important. */
+  .draft-page {
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+    display: block;
+  }
   .draft-room {
     height: auto !important;
     min-height: 0;
     overflow: visible;
     flex: none;
+    display: block;
   }
   .draft-panel {
     overflow: visible;
@@ -11555,6 +11602,10 @@ label .form-label__hint {
   }
   .draft-room--stacked .panel-board {
     flex: none;
+  }
+  .draft-bottom {
+    display: block;
+    overflow: visible;
   }
 
   /* Sticky status strip: pick clock + whose turn stay glued to the top
@@ -11594,26 +11645,34 @@ label .form-label__hint {
     background: var(--bg-primary);
   }
 
-  /* Tighten draft pool rows — drop visual chrome that doesn't earn its
-     vertical space on mobile. The trend chips and form sparkline live
-     in the sub-line under the name; hide them so each row stays compact
-     and the fighter is easier to scan. The full breakdown is reachable
-     by tapping into the fighter modal. */
-  .draft-pool-row__sub-line .fight-projection,
-  .draft-pool-row__sub-line .fight-odds,
+  /* Make draft pool rows as compact as possible. The full sub-line
+     (division text + form sparkline + trend chips + matchup) is dropped
+     on mobile — the rank inline next to the name already conveys "who"
+     this fighter is, and the full breakdown is one tap away in the
+     fighter modal. */
+  .draft-pool-row .draft-pool-row__sub-line,
+  .draft-pool-row .draft-form,
   .draft-pool-row .draft-form-sparkline,
   .draft-pool-row .draft-trend-chip,
-  .draft-pool-row .draft-pool-row__sub-line > .lineup-roster-row__matchup,
-  .draft-pool-row .lineup-roster-row__matchup.waiver-next-fight {
+  .draft-pool-row .lineup-roster-row__matchup,
+  .draft-pool-row .lineup-roster-row__matchup.waiver-next-fight,
+  .draft-pool-row .lineup-roster-row__record {
     display: none;
+  }
+
+  /* Tighter row sizing — less vertical space per fighter so more fit
+     on screen in the available-fighters list. */
+  .draft-pool-row {
+    margin-bottom: 4px;
+    padding: 6px 8px;
   }
 
   /* Compact draft pool action buttons (Queue + Draft/No slot) to match
      the lineup-roster-row mobile button sizing. */
   .draft-pool-row .draft-queue-btn,
   .draft-pool-row .draft-pick-btn {
-    padding: 3px 6px;
-    font-size: 9px;
+    padding: 3px 7px;
+    font-size: 9.5px;
     letter-spacing: 0;
     min-height: 0;
   }
