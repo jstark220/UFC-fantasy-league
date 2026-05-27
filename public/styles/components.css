@@ -11572,40 +11572,45 @@ label .form-label__hint {
     order: 2;
   }
 
-  /* ===== Mobile draft scrolling — make it native page scroll =====
-     Desktop uses a fixed-height .draft-page (100vh + overflow:hidden)
-     with internal scroll inside each panel body. That makes the whole
-     page non-scrollable on mobile because the page itself is clamped to
-     the viewport. Release all the height/overflow clamps so the page
-     scrolls naturally. The JS that sets inline room.style.height = Npx
-     is overridden via !important. */
-  .draft-page {
-    height: auto;
-    min-height: 100vh;
-    overflow: visible;
-    display: block;
-  }
-  .draft-room {
-    height: auto !important;
-    min-height: 0;
-    overflow: visible;
-    flex: none;
-    display: block;
-  }
-  .draft-panel {
-    overflow: visible;
-  }
+  /* ===== Mobile draft layout RESET =====
+     Desktop uses nested flex/grid containers with `height: 100vh` +
+     `overflow: hidden` at multiple levels. On mobile that fights with
+     native page scroll and can leave panels at the wrong width when
+     `display: contents` flattens children. This block forcefully resets
+     every draft container to a plain full-width block with visible
+     overflow, then re-enables horizontal scroll only where it actually
+     belongs (the draft board table). The JS that writes inline
+     `room.style.height = Npx` is overridden via `!important`. */
+  .draft-page,
+  .draft-room,
+  .draft-bottom,
+  .draft-panel,
   .draft-panel__body {
-    overflow: visible;
-    /* min-height: 0 isn't needed once overflow:visible is in play, but
-       leaving it harmless to keep the desktop rule's intent intact. */
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    flex: none !important;
+    box-sizing: border-box;
   }
-  .draft-room--stacked .panel-board {
-    flex: none;
+  /* Ensure the page is at least full viewport tall so the bg paints to
+     the bottom edge on short content. */
+  .draft-page {
+    min-height: 100vh !important;
   }
-  .draft-bottom {
-    display: block;
-    overflow: visible;
+  /* Active panel visibility — override the desktop `display: none` on
+     inactive panels. Hidden ones stay hidden. */
+  .draft-panel {
+    display: none !important;
+  }
+  .draft-panel.waiver-tab--active {
+    display: block !important;
+  }
+  /* Resize handles are noise on mobile */
+  .draft-resize-handle {
+    display: none !important;
   }
 
   /* Sticky status strip: pick clock + whose turn stay glued to the top
