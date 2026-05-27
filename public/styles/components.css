@@ -11650,19 +11650,52 @@ label .form-label__hint {
     background: var(--bg-primary);
   }
 
-  /* Make draft pool rows as compact as possible. The full sub-line
-     (division text + form sparkline + trend chips + matchup) is dropped
-     on mobile — the rank inline next to the name already conveys "who"
-     this fighter is, and the full breakdown is one tap away in the
-     fighter modal. */
-  .draft-pool-row .draft-pool-row__sub-line,
-  .draft-pool-row .draft-form,
-  .draft-pool-row .draft-form-sparkline,
-  .draft-pool-row .draft-trend-chip,
+  /* Draft pool rows on mobile: show all the info we have on desktop —
+     division, form sparkline, trend chips, record — but compress fonts
+     and tighten spacing so each row stays readable in the narrow space.
+     Hide just the matchup/next-fight lines (they don't fit and the
+     fighter modal carries them). */
   .draft-pool-row .lineup-roster-row__matchup,
-  .draft-pool-row .lineup-roster-row__matchup.waiver-next-fight,
-  .draft-pool-row .lineup-roster-row__record {
+  .draft-pool-row .lineup-roster-row__matchup.waiver-next-fight {
     display: none;
+  }
+
+  /* Show the sub-line (division + form + chips) inline at small size */
+  .draft-pool-row .draft-pool-row__sub-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    font-size: 9px;
+    line-height: 1.2;
+    margin-top: 1px;
+  }
+  .draft-pool-row .draft-pool-row__division {
+    font-size: 9px;
+    letter-spacing: 0.04em;
+  }
+  /* Form sparkline dots — shrink */
+  .draft-pool-row .draft-form {
+    gap: 3px;
+  }
+  .draft-pool-row .draft-form__dot {
+    width: 6px;
+    height: 6px;
+  }
+  /* Tiny trend chips */
+  .draft-pool-row .draft-trend-chip {
+    font-size: 8px;
+    padding: 1px 4px;
+  }
+  /* Record fits inline with the actions on row 2 */
+  .draft-pool-row .lineup-roster-row__record {
+    font-size: 10px;
+  }
+  /* Value-pick badge stays inline next to the name; shrink it. */
+  .draft-pool-row .value-pick-badge,
+  .draft-pool-row .draft-value-pick {
+    font-size: 9px;
+    padding: 1px 4px;
   }
 
   /* Tighter row sizing — less vertical space per fighter so more fit
