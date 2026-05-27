@@ -5673,12 +5673,19 @@ body {
        Stat + actions both live on row 2 right side, side by side,
        so the FV score (or W-L record) reads as part of the action
        group rather than floating up next to the name. */
-    grid-template-columns: 40px 1fr auto auto;
+    grid-template-columns: 36px 1fr auto auto;
     grid-template-rows: auto auto;
-    column-gap: 10px;
+    column-gap: 8px;
     row-gap: 2px;
-    padding: 10px 14px;
+    padding: 8px 10px;
     align-items: center;
+  }
+  /* Slightly tighter photo on mobile so the name has more room.
+     Specificity bumped so it overrides the base width/height further
+     down the file. */
+  .lineup-roster-row .lineup-roster-row__photo-wrap {
+    width: 36px;
+    height: 36px;
   }
 
   /* Photo: spans both rows, vertically centered. */
@@ -5773,11 +5780,9 @@ body {
     justify-self: end;
     align-self: center;
     min-width: 0;
-    font-size: 11px;
-    /* No bottom border on the FV button on mobile — it'd clash with
-       the inline placement next to the action buttons. */
+    font-size: 10px;
   }
-  .lineup-roster-row__pts-val { font-size: 13px; }
+  .lineup-roster-row__pts-val { font-size: 12px; }
   .lineup-roster-row__pts-label { font-size: 7px; }
 
   .lineup-roster-row__actions {
@@ -5785,17 +5790,35 @@ body {
     grid-row: 2;
     justify-self: end;
     align-self: center;
-    gap: 4px;
+    gap: 3px;
   }
 
-  /* Smaller, more uniform action buttons. The 3-button cluster
-     (Start/Bench + → Flex + Drop) now reads as a tight pill group. */
+  /* Compact action buttons — tighter padding + smaller font so the
+     3-button cluster (Start/Bench + → Flex + Drop) stays narrow and
+     the fighter name above gets more horizontal room. */
   .lineup-roster-row__actions .lineup-row-btn,
   .lineup-roster-row__actions .lineup-flex-btn,
   .lineup-roster-row__actions .lineup-drop-btn {
-    padding: 3px 8px;
-    font-size: 10px;
-    letter-spacing: 0.02em;
+    padding: 3px 6px;
+    font-size: 9px;
+    letter-spacing: 0;
+    min-height: 0;
+  }
+
+  /* Name itself gets a touch smaller and the rank pill tightens so
+     more characters fit before truncating to ellipsis. */
+  .lineup-roster-row__name {
+    font-size: 13px;
+  }
+  .lineup-roster-row__rank-inline {
+    font-size: 11px;
+  }
+  .lineup-roster-row__rank-inline-divider {
+    margin: 0 4px;
+  }
+  /* Division line shrinks slightly so it doesn't compete with the name */
+  .lineup-roster-row__division {
+    font-size: 9.5px;
   }
 
   /* Empty placeholder rows (slot stubs) — keep them simple on a single
@@ -7255,31 +7278,46 @@ body {
     height: 100dvh;
     border-radius: 0;
     border: none;
+    /* Make the WHOLE modal scrollable on mobile — not just the body.
+       Previously hero + stats were fixed and only fight history scrolled,
+       which hid the CTA buttons below the fold on phones. Switching the
+       modal to a single scroll container means the user can see card +
+       name + CTAs + stats + history in one natural scroll. */
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    display: block;
+  }
+  /* The body's inner overflow becomes redundant on mobile; let it expand
+     naturally so its content sits in the modal's own scroll. */
+  .fighter-modal__body {
+    overflow: visible;
+    flex: none;
   }
 
-  /* Hero: vertical stack. The fighter card takes the full width of the
-     modal at the top — no crunched name/bio sitting beside a thumbnail.
-     Below the card comes the nickname / name / country / CTA row, all
-     centered. */
+  /* Hero: vertical stack. Fighter card on top (smaller now), then
+     nickname / name / country / CTA row beneath. */
   .fighter-modal__hero {
     flex-direction: column;
     align-items: stretch;
     justify-content: flex-start;
     text-align: center;
-    gap: var(--space-4);
+    gap: var(--space-3);
     padding: var(--space-5) var(--space-4) var(--space-4);
   }
 
-  /* Fighter card spans the modal width at the top */
+  /* Smaller fighter card — was overwhelming the modal at 360px wide.
+     220 keeps the photo readable but no longer dominates the screen. */
   .fighter-modal__hero > .fighter-card {
     width: 100%;
-    max-width: 360px;
+    max-width: 220px;
     min-height: 0;
     margin: 0 auto;
     align-self: center;
   }
-  /* Photo area scales with the wider card; aspect ratio 4/3 keeps it
-     a band rather than a portrait so the modal doesn't feel top-heavy. */
+  /* Photo area: 4/3 band keeps the card compact while still showing the
+     full face. At 220px wide that's a 220×165 photo — generous but not
+     dominating the viewport. */
   .fighter-modal__hero > .fighter-card .fighter-card__photo-wrap {
     flex: 0 0 auto;
     aspect-ratio: 4 / 3;
@@ -7337,12 +7375,24 @@ body {
     font-size: 8.5px;
   }
 
-  /* Close button: bigger touch target */
+  /* Close button: bigger touch target + fixed position so it stays
+     visible on top of the modal as the user scrolls through hero,
+     CTAs, stats, and fight history. */
   .fighter-modal__close {
-    padding: 8px 12px;
-    font-size: 1.3rem;
+    position: fixed;
     top: var(--space-3);
     right: var(--space-3);
+    z-index: 10;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    background: rgba(0, 0, 0, 0.75);
+    color: #F5F5F0;
+    border-color: rgba(255, 255, 255, 0.25);
   }
 }
 
