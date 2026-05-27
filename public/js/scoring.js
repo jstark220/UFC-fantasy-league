@@ -48,10 +48,16 @@
     // Title bonus and ranked-opponent bonus do NOT stack — a winner gets
     // whichever is higher, not both. See computeFighterScore for the max-of
     // logic and the champion-as-top-5 treatment.
+    //
+    // Win vs defense are unified by default — same bonus regardless of
+    // whether a champion is winning a vacant belt or defending their own.
+    // is_title_defense is still auto-detected by ingestFightResults.js so
+    // leagues can opt back into the distinction by overriding these keys
+    // in their scoring_config JSONB (e.g. set defense values to 8 / 5).
     divisional_title_win:     12,
-    divisional_title_defense: 8,
+    divisional_title_defense: 12,
     bmf_interim_win:          8,
-    bmf_interim_defense:      5,
+    bmf_interim_defense:      8,
     top5_win:                 8,
     top10_win:                5,
     top15_win:                3,

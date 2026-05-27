@@ -80,8 +80,8 @@
           sig_strike: 0.1, takedown: 1, knockdown: 2, control_per_sec: 0.01,
           finish_r1: 18, finish_r2: 14, finish_r3: 9, finish_r4_r5: 8,
           decision: 6, quick_win_bonus: 5,
-          divisional_title_win: 12, divisional_title_defense: 8,
-          bmf_interim_win: 8, bmf_interim_defense: 5,
+          divisional_title_win: 12, divisional_title_defense: 12,
+          bmf_interim_win: 8, bmf_interim_defense: 8,
           top5_win: 8, top10_win: 5, top15_win: 3,
           fotn: 4, main_event_mult: 1.2, co_main_mult: 1.1
         };
@@ -182,10 +182,17 @@
             '</ul>' +
             '<p class="page-help__subheading"><strong>Matchup bonuses (winner only)</strong></p>' +
             '<ul>' +
-              '<li>Divisional title win: <strong>' + fmt(cfg('divisional_title_win')) + '</strong> &middot; ' +
-                  'defense: <strong>' + fmt(cfg('divisional_title_defense')) + '</strong></li>' +
-              '<li>Interim or BMF title win: <strong>' + fmt(cfg('bmf_interim_win')) + '</strong> &middot; ' +
-                  'defense: <strong>' + fmt(cfg('bmf_interim_defense')) + '</strong></li>' +
+              // Win and defense scores are unified by default (same number).
+              // If this league's commissioner has overridden them to differ,
+              // show both values; otherwise collapse to a single "win or defense" line.
+              (cfg('divisional_title_win') === cfg('divisional_title_defense')
+                ? '<li>Divisional title win or defense: <strong>' + fmt(cfg('divisional_title_win')) + '</strong></li>'
+                : '<li>Divisional title win: <strong>' + fmt(cfg('divisional_title_win')) + '</strong> &middot; ' +
+                      'defense: <strong>' + fmt(cfg('divisional_title_defense')) + '</strong></li>') +
+              (cfg('bmf_interim_win') === cfg('bmf_interim_defense')
+                ? '<li>Interim or BMF title win or defense: <strong>' + fmt(cfg('bmf_interim_win')) + '</strong></li>'
+                : '<li>Interim or BMF title win: <strong>' + fmt(cfg('bmf_interim_win')) + '</strong> &middot; ' +
+                      'defense: <strong>' + fmt(cfg('bmf_interim_defense')) + '</strong></li>') +
               '<li>Beating a top-5 opponent: <strong>' + fmt(cfg('top5_win')) + '</strong></li>' +
               '<li>Beating a top-10 opponent: <strong>' + fmt(cfg('top10_win')) + '</strong></li>' +
               '<li>Beating a top-15 opponent: <strong>' + fmt(cfg('top15_win')) + '</strong></li>' +

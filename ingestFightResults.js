@@ -68,6 +68,35 @@ const NAME_OVERRIDES = {
   // 'cub swanson':     'cub-swanson',
 };
 
+// Derive is_title_defense for a single fight. A defense is a title fight
+// where the winner held the matching title going into the fight:
+//   - divisional title fight → winner.is_champion
+//   - interim title fight    → winner.is_sub_champion && sub_title_type='interim'
+//   - bmf title fight        → winner.is_sub_champion && sub_title_type='bmf'
+//
+// Returns false for non-title fights, draws/NCs (no winner), or vacant
+// title fights where neither fighter held the belt going in.
+function deriveTitleDefense(titleType, winnerId, fighterAEntry, fighterBEntry, fighterAId, fighterBId) {
+  if (titleType === 'none') return false;
+  if (!winnerId) return false;
+
+  let winnerEntry = null;
+  if (winnerId === fighterAId)      winnerEntry = fighterAEntry;
+  else if (winnerId === fighterBId) winnerEntry = fighterBEntry;
+  if (!winnerEntry) return false;
+
+  if (titleType === 'divisional') {
+    return !!winnerEntry.is_champion;
+  }
+  if (titleType === 'interim') {
+    return !!(winnerEntry.is_sub_champion && winnerEntry.sub_title_type === 'interim');
+  }
+  if (titleType === 'bmf') {
+    return !!(winnerEntry.is_sub_champion && winnerEntry.sub_title_type === 'bmf');
+  }
+  return false;
+}
+
 // Build the fighter lookup tables from the DB at startup.
 // Returns { byNormName: Map<normalizedName, {id, name}>, byUfcstatsName: Map<ufcstatsName, {id}> }
 async function buildFighterLookup() {
@@ -79,7 +108,15 @@ async function buildFighterLookup() {
   while (true) {
     const { data, error } = await supabaseClient
       .from('fighters')
-      .select('id, name, ufcstats_name, current_rank, ufc_id, is_active')
+      // is_champion / is_sub_champion / sub_title_type are pulled so the
+      // ingest can auto-detect is_title_defense (winner was the reigning
+      // titleholder going into the fight). See the title-defense logic
+      // in processEvent. Champion state is read at script startup —
+      // for the --recent path that's the correct pre-event state, which
+      // is what we want for live-night detection. For backfills (--all)
+      // it reflects today's champions, so historical title-defense
+      // detection may be off; commissioner can correct via score-event.html.
+      .select('id, name, ufcstats_name, current_rank, ufc_id, is_active, is_champion, is_sub_champion, sub_title_type')
       .range(from, from + PAGE - 1);
     if (error) throw new Error('Failed to load fighters: ' + error.message);
     all.push(...data);
@@ -109,7 +146,14 @@ async function buildFighterLookup() {
     if (f.ufcstats_name) {
       byUfcstatsName.set(f.ufcstats_name, f.id);
     }
-    byNormName.set(normalizeName(f.name), { id: f.id, dbName: f.name, rank: f.current_rank });
+    byNormName.set(normalizeName(f.name), {
+      id: f.id,
+      dbName: f.name,
+      rank: f.current_rank,
+      is_champion:    !!f.is_champion,
+      is_sub_champion: !!f.is_sub_champion,
+      sub_title_type: f.sub_title_type || null
+    });
   }
 
   console.log(`  Loaded ${all.length} fighters (${byUfcstatsName.size} with ufcstats_name already set)\n`);
@@ -568,8 +612,6 @@ async function processEvent(dbEvent, lookup, pendingNameUpdates) {
     // says "Title Bout" / "Championship". The latter catches BMF fights that
     // ufcstats forgot to flag with the belt icon (e.g. Holloway vs Gaethje
     // at UFC 300, Oliveira vs Holloway at UFC 326).
-    //
-    // is_title_defense cannot be detected from ufcstats — commissioner sets it.
     let title_type = 'none';
     if (stub.isTitleFight || detail.isTitleFromText) {
       const rawLower = detail.weightClassRaw.toLowerCase();
@@ -590,6 +632,16 @@ async function processEvent(dbEvent, lookup, pendingNameUpdates) {
     const opponentRankA = fighterBEntry?.rank ?? null; // B is A's opponent
     const opponentRankB = fighterAEntry?.rank ?? null; // A is B's opponent
 
+    // Auto-detect is_title_defense from the pre-event champion state
+    // captured in the lookup. Works correctly for the live-night --recent
+    // workflow because the script reads champion state BEFORE this title
+    // fight's outcome is applied. For historical backfills the state
+    // already reflects today's champions and detection may be wrong;
+    // commissioner can correct via score-event.html.
+    const is_title_defense_auto = deriveTitleDefense(
+      title_type, winnerId, fighterAEntry, fighterBEntry, fighterAId, fighterBId
+    );
+
     rowsToUpsert.push({
       ufcstats_fight_id:         stub.ufcstatsFightId,
       event_id:                  dbEvent.id,
@@ -601,7 +653,7 @@ async function processEvent(dbEvent, lookup, pendingNameUpdates) {
       // Used by the lineup page to split Main Card vs Prelims display.
       fight_order:               stub.fightIndex + 1,
       title_type,
-      is_title_defense:          false,        // commissioner sets manually
+      is_title_defense:          is_title_defense_auto,
       fight_of_the_night:        stub.fightOfTheNight,
       outcome,
       winner_id:                 winnerId,
@@ -730,7 +782,7 @@ async function main() {
 
   const elapsed = ((Date.now() - start) / 1000 / 60).toFixed(1);
   console.log(`\nTotal time: ${elapsed} minutes`);
-  console.log('\nNext step: open score-event.html to set is_title_defense for any title fights (belt wins = false, belt defenses = true). BMF and interim type are now auto-detected.');
+  console.log('\nTitle defense, BMF/interim type, and divisional title type are all auto-detected. Open score-event.html only if you need to correct a specific fight (e.g. backfill where pre-event champion state was stale).');
 }
 
 main().catch(err => {
