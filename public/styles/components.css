@@ -5799,14 +5799,19 @@ body {
     align-self: center;
     gap: 4px;
   }
-  /* Country flag prepended to the action group on mobile */
+  /* Earlier design surfaced a duplicate flag inside the action wrapper.
+     The flag is already shown in the division line under the name, so
+     keep this one hidden on mobile too — we don't need two flags per row. */
   .lineup-roster-row .lineup-roster-row__actions-flag {
-    display: inline-flex;
-    align-items: center;
-    font-size: 14px;
-    line-height: 1;
-    margin-right: 2px;
-    flex-shrink: 0;
+    display: none;
+  }
+
+  /* Hide "Age N" on the roster cell on mobile — the age is still
+     visible in the fighter modal (one tap on the row). Wrapping the
+     leading " · " inside the same span means dropping it doesn't
+     leave a stray separator behind. */
+  .lineup-roster-row .lineup-roster-row__sub-age {
+    display: none;
   }
 
   /* Inline division-abbr suffix next to the rank-inline. Same divider
@@ -6571,11 +6576,12 @@ body {
 
   /* League page: "This Week" card. Desktop is a flex row with event
      info left and countdown/CTA right. On mobile, stack vertically so
-     the countdown gets its own line and isn't cramped. */
+     the countdown gets its own line and isn't cramped. Padding tightens
+     so the card uses less vertical space at small widths. */
   .this-week-card {
     flex-direction: column;
-    gap: var(--space-5);
-    padding: var(--space-6) var(--space-5) var(--space-5);
+    gap: var(--space-3);
+    padding: var(--space-4) var(--space-4) var(--space-3);
     min-height: 0;
   }
   .this-week-card__right {
@@ -6587,6 +6593,34 @@ body {
   .this-week-card__countdown {
     gap: var(--space-4);
   }
+
+  /* Hide the Whole-Team button on mobile — the roster section below
+     already shows every fighter the user has drafted, so the modal
+     button is duplicate work on a small screen. Keep desktop. */
+  .lineup-banner-actions #viewWholeTeamBtn {
+    display: none;
+  }
+
+  /* Pack the remaining banner actions onto a single horizontal row at
+     a smaller font so the user can see all of them at once instead of
+     wrapping to multiple lines. */
+  .lineup-banner-actions {
+    flex-wrap: nowrap;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .lineup-banner-actions .fight-card-btn {
+    flex-shrink: 0;
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+  /* Trim the event metadata so the card itself is shorter on mobile */
+  .this-week-card__eyebrow { font-size: 10px; }
+  .this-week-card__name    { font-size: 1.6rem; line-height: 1.05; }
+  .this-week-card__date    { font-size: 11px; }
+  .this-week-card__matchup { font-size: 12px; }
 
   /* Page chrome: tighten the league-header + dashboard-body padding so
      more content fits on a 390px viewport. The default --space-8 (32px)
@@ -14526,16 +14560,23 @@ label .form-label__hint {
     height: auto !important;
   }
 
-  /* Defensive: kill any horizontal overflow on the body itself so nothing
-     can drag the viewport wider than the screen */
+  /* Defensive: kill any horizontal overflow that might escape the page.
+     Important: only apply overflow-x: hidden to the draft page itself,
+     NOT to body. Setting overflow-x: hidden on body breaks
+     position: sticky on Safari for ALL pages (sticky starters on the
+     lineup page, sticky status/tabs on the draft page) because Safari
+     treats any non-visible overflow on an ancestor as cancelling
+     sticky behavior. */
   html,
   body {
     width: 100% !important;
     max-width: 100vw !important;
-    overflow-x: hidden !important;
     margin: 0 !important;
     padding: 0 !important;
-    position: relative;
+  }
+  body .draft-page {
+    overflow-x: hidden !important;
+    overflow-y: visible !important;
   }
 
   /* Hide the "Available Fighters" panel header + View All button on

@@ -1433,13 +1433,25 @@ function renderRosterRow(fighter, ctx, slotType) {
   }
   const divLabel   = DIVISION_LABELS[fighter.primary_division] || fighter.primary_division;
   const record     = fighter.record_wins + '-' + fighter.record_losses + (fighter.record_draws ? '-' + fighter.record_draws : '');
-  // Compose flag · division · age into a single sub-line. Each piece optional.
+  // Build the flag · division · age sub-line as separate spans so the
+  // mobile stylesheet can hide individual pieces (e.g. age is hidden
+  // on mobile; the full age stays visible in the fighter modal).
   const flag = (typeof countryFlag === 'function') ? countryFlag(fighter.country) : '';
-  let subParts = [];
-  if (flag)              subParts.push(flag);
-  if (divLabel)          subParts.push(divLabel);
-  if (fighter.age != null) subParts.push('Age ' + fighter.age);
-  const divLine = subParts.join(' · ');
+  let divLineHtml = '';
+  if (flag) {
+    divLineHtml += '<span class="lineup-roster-row__sub-flag">' + flag + '</span>';
+  }
+  if (divLabel) {
+    divLineHtml += (divLineHtml ? ' · ' : '') + escapeHtml(divLabel);
+  }
+  if (fighter.age != null) {
+    // Wrap age (plus its leading separator) so hiding the span on mobile
+    // also drops the " · " that would otherwise be left dangling.
+    divLineHtml +=
+      '<span class="lineup-roster-row__sub-age">' +
+        (divLineHtml ? ' · ' : '') + 'Age ' + fighter.age +
+      '</span>';
+  }
   // Prefer ID-based matching (handles same-named fighters) but fall back to
   // lowercase-name in case a roster fighter's record id differs from the
   // fight_results id for any reason.
@@ -1615,7 +1627,7 @@ function renderRosterRow(fighter, ctx, slotType) {
               (projPill ? ' ' + projPill : '') +
             '</span>'
           : nextFightLine) +
-        '<span class="lineup-roster-row__division">' + escapeHtml(divLine) + '</span>' +
+        '<span class="lineup-roster-row__division">' + divLineHtml + '</span>' +
       '</div>' +
       fvChip +
       rightStat +
