@@ -3248,35 +3248,10 @@ function renderMyRoster() {
   var totalEl = document.getElementById('myRosterTotal');
   if (totalEl) totalEl.textContent = (league && league.roster_size) || ROSTER_SIZE_BASE;
 
-  let html = '<div class="draft-slots">';
-
-  // 8 men's-division rows
-  MENS_DIVISIONS.forEach(function(div) {
-    html += '<div class="draft-slots__row">';
-    html += '<span class="draft-slots__label">' + escapeHtml(DIVISION_LABELS[div]) + '</span>';
-    html += '<span class="draft-slots__pips">' + renderPips(inDiv[div], ROSTER_SLOTS_PER_DIVISION) + '</span>';
-    html += '</div>';
-  });
-
-  // Single Women's Flex row (pools all 3 women's divisions)
-  html += '<div class="draft-slots__row">';
-  html += '<span class="draft-slots__label">Women\'s Flex</span>';
-  html += '<span class="draft-slots__pips">' + renderPips(womensFlex, ROSTER_WOMENS_FLEX_SLOTS) + '</span>';
-  html += '</div>';
-
-  // Any-flex pip count scales with the league's roster_size — see
-  // getAnyFlexSlots(). Default leagues land on 6; custom leagues
-  // (e.g., roster_size = 20) get 11 pips.
-  var anyFlexCapDisplay = getAnyFlexSlots(league);
-  html += '<div class="draft-slots__row">';
-  html += '<span class="draft-slots__label">Any-Division Flex</span>';
-  html += '<span class="draft-slots__pips">' + renderPips(anyFlex.slice(0, anyFlexCapDisplay), anyFlexCapDisplay) + '</span>';
-  html += '</div>';
-
-  html += '</div>';
-
-  // Drafted fighters in pick order — uses the lineup-roster-row look but compact
-  html += '<div class="draft-my-picks">';
+  // Drafted fighters in pick order render FIRST so the user sees who
+  // they've actually picked before scanning the slot-fullness dots.
+  // The .draft-slots dot grid follows beneath as a summary view.
+  let html = '<div class="draft-my-picks">';
   if (myPickFighters.length === 0) {
     html += EmptyState.html({
       kind:    'roster',
@@ -3312,6 +3287,34 @@ function renderMyRoster() {
         '</div>';
     });
   }
+  html += '</div>';
+
+  // Slot-fullness grid (dots) — summary of what's full vs unfilled.
+  html += '<div class="draft-slots">';
+
+  // 8 men's-division rows
+  MENS_DIVISIONS.forEach(function(div) {
+    html += '<div class="draft-slots__row">';
+    html += '<span class="draft-slots__label">' + escapeHtml(DIVISION_LABELS[div]) + '</span>';
+    html += '<span class="draft-slots__pips">' + renderPips(inDiv[div], ROSTER_SLOTS_PER_DIVISION) + '</span>';
+    html += '</div>';
+  });
+
+  // Single Women's Flex row (pools all 3 women's divisions)
+  html += '<div class="draft-slots__row">';
+  html += '<span class="draft-slots__label">Women\'s Flex</span>';
+  html += '<span class="draft-slots__pips">' + renderPips(womensFlex, ROSTER_WOMENS_FLEX_SLOTS) + '</span>';
+  html += '</div>';
+
+  // Any-flex pip count scales with the league's roster_size — see
+  // getAnyFlexSlots(). Default leagues land on 6; custom leagues
+  // (e.g., roster_size = 20) get 11 pips.
+  var anyFlexCapDisplay = getAnyFlexSlots(league);
+  html += '<div class="draft-slots__row">';
+  html += '<span class="draft-slots__label">Any-Division Flex</span>';
+  html += '<span class="draft-slots__pips">' + renderPips(anyFlex.slice(0, anyFlexCapDisplay), anyFlexCapDisplay) + '</span>';
+  html += '</div>';
+
   html += '</div>';
 
   document.getElementById('myRoster').innerHTML = html;

@@ -15,7 +15,7 @@
   <!-- ?v=2 — cache-bust the stylesheet so Safari picks up the latest
        mobile draft redesign instead of serving a stale copy. Bump this
        when you ship further draft CSS changes. -->
-  <link rel="stylesheet" href="styles/components.css?v=2">
+  <link rel="stylesheet" href="styles/components.css?v=3">
 
   <title>Draft Room - Knockdown Fantasy</title>
   <script src="js/loading-screen.js"></script>
@@ -227,11 +227,21 @@
         <!-- RIGHT: queue + your roster. Both live in the same panel because
              they're both "you" — what you've drafted and what you intend to
              draft next. The queue body sits at the top so it gets attention
-             during the draft; the roster grows beneath it. -->
-        <div class="draft-panel panel-roster">
+             during the draft; the roster grows beneath it.
+             The queue is collapsed by default (is-queue-collapsed class) —
+             clicking the queue header toggles it open. State is per-page
+             session only; not persisted. -->
+        <div class="draft-panel panel-roster is-queue-collapsed">
 
-          <div class="draft-panel__header draft-panel__header--with-action">
+          <!-- Queue header doubles as the collapse toggle. The chevron
+               rotates when expanded. role/tabindex/aria-expanded make it
+               keyboard-accessible. Clicks inside the autodraft toggle
+               stopPropagation so they don't also fold/unfold the queue. -->
+          <div class="draft-panel__header draft-panel__header--with-action draft-queue-header"
+               id="queueHeader" role="button" tabindex="0" aria-expanded="false"
+               aria-controls="queueList" title="Show/hide queue">
             <p class="section-label">
+              <span class="draft-queue-chevron" aria-hidden="true">▸</span>
               My Queue
               <span class="section-label__count">(<span id="queueCount">0</span>)</span>
             </p>
@@ -262,12 +272,15 @@
             </p>
             <button class="btn-ghost draft-view-all-btn" id="viewWholeRosterBtn">Whole roster &rarr;</button>
           </div>
+          <!-- Roster body (actual fighter cards) sits ABOVE the roster-needs
+               widget so you see who you've drafted before the unfilled-slot
+               dots. The needs widget is a summary, not a primary view. -->
+          <div class="draft-panel__body" id="myRoster"></div>
           <!-- Roster-needs widget: "Still need: 2 men's, 6 any-flex" plus a
                smart suggestion for the highest-FV fighter who'd fill an
                unfilled slot. Populated by renderRosterNeeds(); auto-hides
                once the roster is full or before the draft starts. -->
           <div class="draft-roster-needs" id="rosterNeeds" hidden></div>
-          <div class="draft-panel__body" id="myRoster"></div>
 
         </div>
 
@@ -426,6 +439,44 @@
         e.preventDefault();
       });
     });
+
+    // ---- Queue collapse toggle ----
+    // The queue starts collapsed (is-queue-collapsed on .panel-roster). Click
+    // (or Enter/Space) on the queue header to toggle. We stopPropagation on
+    // the autodraft toggle so toggling it doesn't also fold the queue.
+    (function() {
+      var header = document.getElementById('queueHeader');
+      var panel  = document.querySelector('.panel-roster');
+      if (!header || !panel) return;
+      function toggle() {
+        var collapsed = panel.classList.toggle('is-queue-collapsed');
+        header.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        // The room's content height changed — re-sync so the board grows
+        // or shrinks to fill the freed/consumed space cleanly.
+        if (typeof window.syncDraftRoomHeight === 'function') {
+          window.syncDraftRoomHeight();
+        }
+      }
+      header.addEventListener('click', function(e) {
+        // Ignore clicks that originated inside the auto-draft toggle button;
+        // those have their own behavior and shouldn't fold the queue.
+        if (e.target.closest('#autoDraftToggle')) return;
+        toggle();
+      });
+      header.addEventListener('keydown', function(e) {
+        if (e.target.closest('#autoDraftToggle')) return;
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          toggle();
+        }
+      });
+      // Stop bubbling on the autodraft toggle so its own click handler
+      // (wired in draft.js) runs without the header also flipping state.
+      var autoBtn = document.getElementById('autoDraftToggle');
+      if (autoBtn) {
+        autoBtn.addEventListener('click', function(e) { e.stopPropagation(); });
+      }
+    })();
 
     // ---- Tab switching for narrow screens ----
     document.getElementById('draftTabs').addEventListener('click', function(e) {

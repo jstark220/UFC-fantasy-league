@@ -9581,6 +9581,38 @@ select.form-input option,
   overflow-y: auto;
 }
 
+/* ---- Collapsible queue ----
+   The queue is collapsed by default (is-queue-collapsed on .panel-roster).
+   Clicking the queue header toggles it. When collapsed we hide the queue
+   body and the autodraft banner; the header stays visible so the count,
+   hint, and autodraft toggle remain reachable. */
+.draft-queue-header {
+  cursor: pointer;
+  user-select: none;
+}
+.draft-queue-header:hover .section-label {
+  color: var(--text-primary);
+}
+/* Chevron rotates 90° when expanded. The character itself stays the same;
+   only the rotation changes, which keeps the alignment stable. */
+.draft-queue-chevron {
+  display: inline-block;
+  margin-right: 4px;
+  font-size: 0.85em;
+  color: var(--text-tertiary);
+  transition: transform 0.18s ease;
+}
+.panel-roster:not(.is-queue-collapsed) .draft-queue-chevron {
+  transform: rotate(90deg);
+}
+/* Hide the queue body + autodraft banner when collapsed. Need !important
+   because the mobile CSS sets `display: block !important` on
+   .draft-panel__body, and our rule has to win on both desktop and mobile. */
+.panel-roster.is-queue-collapsed > .draft-panel__body--queue,
+.panel-roster.is-queue-collapsed > .draft-autodraft-banner {
+  display: none !important;
+}
+
 /* Subtle hint text on the queue header (right side) */
 .draft-panel__hint {
   font-size: 10px;
