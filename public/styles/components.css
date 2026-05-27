@@ -11581,6 +11581,18 @@ label .form-label__hint {
      overflow, then re-enables horizontal scroll only where it actually
      belongs (the draft board table). The JS that writes inline
      `room.style.height = Npx` is overridden via `!important`. */
+
+  /* Root: prevent the page from being wider than the viewport — any
+     element accidentally exceeding viewport width creates horizontal
+     scroll/space that shows as a dark band on the right. */
+  html,
+  body {
+    width: 100% !important;
+    max-width: 100vw !important;
+    overflow-x: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
   .draft-page,
   .draft-room,
   .draft-bottom,
