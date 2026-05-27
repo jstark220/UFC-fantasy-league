@@ -9,6 +9,11 @@
 // Public API:
 //   FightCardModal.show(eventId, opts)
 //     eventId    — uuid of the ufc_events row
+//     opts.leagueId    — optional league uuid. When provided, fetches
+//                        league_event_overrides and merges them so the
+//                        modal shows this league's (possibly customized)
+//                        event name / date / venue. Omit for surfaces
+//                        without a league context (global views).
 //     opts.rosterIds   — optional Set/Object of fighter ids on the
 //                        viewer's roster (drives YOURS pill)
 //     opts.starterIds  — optional Set/Object of fighter ids in starter
@@ -259,10 +264,20 @@
     // Fire data fetches in parallel
     var eventP  = fetchEvent(eventId);
     var fightsP = fetchFights(eventId);
-    var event   = await eventP;
-    var rawFights = await fightsP;
+    // When a leagueId is provided, also fetch this league's override for
+    // the event so the modal shows commissioner-customized name/date/etc.
+    var overrideP = (opts.leagueId && typeof EventOverrides !== 'undefined')
+      ? EventOverrides.fetchForLeague(supabaseClient, opts.leagueId, [eventId])
+      : Promise.resolve({});
+    var event       = await eventP;
+    var rawFights   = await fightsP;
+    var overrideMap = await overrideP;
 
     if (!event) { close(); return; }
+    // Merge the override (no-op when none exists).
+    if (typeof EventOverrides !== 'undefined') {
+      event = EventOverrides.merge(event, overrideMap[event.id]);
+    }
 
     // Collect fighter ids and load details + odds/projections
     var idSet = new Set();

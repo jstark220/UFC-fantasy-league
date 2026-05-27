@@ -2422,6 +2422,72 @@ body {
   gap: var(--space-4);
 }
 
+/* Each card sits inside a relative wrap so the pin button (sibling of
+   the <a>) can be absolutely positioned in the corner. We keep the pin
+   outside the link element because nesting a button inside an anchor is
+   invalid HTML. */
+.dashboard-league-card-wrap {
+  position: relative;
+}
+
+/* Pin toggle in the top-right corner of a league card. The chevron arrow
+   inside the card lives at the right edge of the header; the pin sits
+   slightly above-and-right of where the eye expects the arrow so the two
+   don't fight for the same pixel. z-index above the link is what makes
+   the pin clickable without forwarding the click to the anchor. */
+.dashboard-league-card__pin {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+.dashboard-league-card__pin svg {
+  width: 18px;
+  height: 18px;
+  /* Pinned icons feel more "stuck" when rotated slightly — common pattern
+     across pin/tack UIs (Slack, Notion). */
+  transition: transform 0.18s ease;
+}
+.dashboard-league-card__pin:hover {
+  color: var(--text-primary);
+  background: var(--bg-tertiary, rgba(255, 255, 255, 0.04));
+  border-color: var(--border-subtle);
+}
+.dashboard-league-card__pin:focus-visible {
+  outline: 2px solid var(--accent-crimson);
+  outline-offset: 2px;
+}
+
+/* Active (pinned) state — full crimson, no border swap on hover. */
+.dashboard-league-card__pin--active {
+  color: var(--accent-crimson);
+}
+.dashboard-league-card__pin--active svg {
+  transform: rotate(35deg);
+}
+.dashboard-league-card__pin--active:hover {
+  color: var(--accent-crimson);
+}
+
+/* Pinned card: subtle left-edge accent so pinned leagues read as a group
+   at the top of the list without needing a separate section header. */
+.dashboard-league-card--pinned {
+  border-left: 3px solid var(--accent-crimson);
+  padding-left: calc(var(--space-8) - 2px);
+}
+
 /* ----- Old row layout (kept for any legacy callers) ----- */
 .dashboard-league-row {
   background: var(--bg-secondary);

@@ -259,7 +259,16 @@ async function initLineup() {
 
   // Build the event picker list and pick a sensible default — next upcoming
   // event when one exists, otherwise the most recent past event.
-  availableEvents = eventRes.data || [];
+  // Apply this league's overrides on top of the global ufc_events rows so
+  // commissioner-set date / lock / name / venue changes show through.
+  var rawEvents     = eventRes.data || [];
+  var eventOverrides = await EventOverrides.fetchForLeague(supabaseClient, leagueId);
+  availableEvents   = EventOverrides.mergeAll(rawEvents, eventOverrides);
+  // Re-sort: overrides can change event_date, so the original DB sort is no
+  // longer reliable. Newest first (matches the original `descending` order).
+  availableEvents.sort(function(a, b) {
+    return String(b.event_date || '').localeCompare(String(a.event_date || ''));
+  });
   selectedEvent   = pickDefaultEvent(availableEvents);
   recomputeLockStatus(); // sets isLocked / isPastEvent based on selectedEvent
 
@@ -2127,6 +2136,7 @@ function showFightCardModal() {
   }
 
   FightCardModal.show(selectedEvent.id, {
+    leagueId:   leagueId,
     rosterIds:  rosterIds,
     starterIds: starterIds
   });
@@ -2308,8 +2318,8 @@ function renderTeamTile(fighter, opts) {
 // / venue on the currently selected event. Fight management is delegated to
 // score-event.html via the "Manage fights" link — that page is the canonical
 // fight CRUD surface and we don't duplicate it here.
-// Note: ufc_events is GLOBAL across leagues, so edits affect every league
-// using this event. The modal surfaces this so the commissioner isn't surprised.
+// Writes go to league_event_overrides (per-league), not ufc_events (global).
+// Reads merge overrides on top of the global row via EventOverrides.merge.
 // ========================================================================
 
 // Convert a Postgres timestamptz / ISO string into the value format expected
@@ -2344,7 +2354,7 @@ function showEditEventModal() {
       '</div>' +
       '<div class="fight-card-modal__body">' +
         '<p class="form-hint" style="margin-bottom: var(--space-4);">' +
-          'This event is shared across every league. Changes here affect all leagues using it.' +
+          'Changes here only apply to this league. Other leagues using this event keep the global UFC schedule.' +
         '</p>' +
         '<div class="form-group">' +
           '<label for="editEventName">Event name <span style="color: var(--accent-crimson);">*</span></label>' +
@@ -2426,16 +2436,20 @@ async function saveEditEvent() {
   saveBtn.disabled = true;
   saveBtn.textContent = 'Saving...';
 
+  // Writes go to league_event_overrides (per-league), NOT ufc_events
+  // (global real schedule). Upsert keyed on (league_id, event_id) so
+  // re-saving updates the same row. RLS restricts this to commissioners.
   var { error } = await supabaseClient
-    .from('ufc_events')
-    .update({
+    .from('league_event_overrides')
+    .upsert({
+      league_id:         leagueId,
+      event_id:          selectedEvent.id,
       name:              name,
       full_name:         fullName,
       event_date:        date,
       lineup_lock_time:  lockIso,
       venue:             venue
-    })
-    .eq('id', selectedEvent.id);
+    }, { onConflict: 'league_id,event_id' });
 
   if (error) {
     saveBtn.disabled = false;
@@ -2446,11 +2460,14 @@ async function saveEditEvent() {
 
   // Merge the saved values into local state so the page reflects them
   // without a full reload. recomputeLockStatus picks up date/lock changes.
+  // _hasOverride flag mirrors what EventOverrides.merge would set on the
+  // next fetch, so any UI conditional on it stays in sync.
   selectedEvent.name              = name;
   selectedEvent.full_name         = fullName;
   selectedEvent.event_date        = date;
   selectedEvent.lineup_lock_time  = lockIso;
   selectedEvent.venue             = venue;
+  selectedEvent._hasOverride      = true;
   var idx = availableEvents.findIndex(function(e) { return e.id === selectedEvent.id; });
   if (idx !== -1) availableEvents[idx] = selectedEvent;
 

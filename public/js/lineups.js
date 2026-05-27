@@ -91,7 +91,14 @@ async function initLineups() {
   myMember = members.find(function(m) { return m.user_id === user.id; });
   if (!myMember) { window.location.href = 'dashboard.html'; return; }
 
-  availableEvents = eventsRes.data || [];
+  // Merge this league's overrides so the event picker / banner reflect any
+  // commissioner-customized name / date / lock / venue.
+  var rawEvents       = eventsRes.data || [];
+  var eventOverrides  = await EventOverrides.fetchForLeague(supabaseClient, leagueId, rawEvents.map(function(e){return e.id;}));
+  availableEvents     = EventOverrides.mergeAll(rawEvents, eventOverrides);
+  // Re-sort: override dates can change ordering. Newest first matches the
+  // original DB sort.
+  availableEvents.sort(function(a, b) { return String(b.event_date || '').localeCompare(String(a.event_date || '')); });
 
   // Build the fighter lookup once — we'll reach into it for every starter
   // card rendered. fighter rows include the rank + photo we need.

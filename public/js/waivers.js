@@ -80,13 +80,16 @@ async function initWaivers() {
       .eq('league_id', leagueId)
       .order('priority')
       .order('submitted_at'),
-    // Next non-completed event drives the phase schedule
+    // Next non-completed event drives the phase schedule. We fetch a small
+    // window rather than a single row because per-league overrides can
+    // shift dates around — we re-pick the soonest effective event in JS
+    // after merging overrides (see below).
     supabaseClient
       .from('ufc_events')
       .select('id, name, full_name, event_date, lineup_lock_time, is_completed')
       .eq('is_completed', false)
       .order('event_date', { ascending: true })
-      .limit(1),
+      .limit(8),
     // Drop history — used for rolling waivers and the auto-drop bookkeeping
     supabaseClient
       .from('roster_drops')
@@ -178,7 +181,14 @@ async function initWaivers() {
   leagueActivity   = buildLeagueActivity(allClaims, dropsRes.data || [], rostersRes.data || []);
 
   // ---- Phase / cap / rolling-waiver state ----
-  nextEvent = (eventsRes.data && eventsRes.data[0]) || null;
+  // Merge this league's overrides onto the upcoming-event window and pick
+  // the soonest effective non-completed event. Phase math then uses the
+  // override-adjusted date / lock time.
+  var rawNextEvents      = eventsRes.data || [];
+  var nextEventOverrides = await EventOverrides.fetchForLeague(supabaseClient, leagueId, rawNextEvents.map(function(e){return e.id;}));
+  var nextEventsMerged   = EventOverrides.mergeAll(rawNextEvents, nextEventOverrides);
+  nextEventsMerged.sort(function(a, b) { return String(a.event_date || '').localeCompare(String(b.event_date || '')); });
+  nextEvent = nextEventsMerged[0] || null;
   recomputePhaseState(dropsRes.data || []);
 
   document.title = 'Free Agency - ' + league.name;

@@ -817,16 +817,29 @@ var _nextEventInterval = null;
 async function wireNextEventBanner() {
   const todayISO = new Date().toISOString().split('T')[0];
 
-  // Fetch the soonest upcoming event
-  const { data: event, error } = await supabaseClient
+  // Fetch the soonest upcoming event. We have to be careful here: this
+  // league might have an override that bumps an event's date EARLIER than
+  // the soonest one in ufc_events, OR bumps the soonest event LATER than
+  // it would otherwise be. So we can't just `.gte(today)` on ufc_events.
+  // Strategy: fetch a small recent window of events + this league's
+  // overrides, merge, then pick the soonest effective upcoming event in JS.
+  const { data: rawEvents, error } = await supabaseClient
     .from('ufc_events')
     .select('id, name, full_name, event_date, venue, lineup_lock_time')
     .gte('event_date', todayISO)
     .order('event_date', { ascending: true })
-    .limit(1)
-    .maybeSingle();
+    .limit(8);
 
-  if (error || !event) return;  // leave placeholder; nothing to render
+  if (error || !rawEvents || rawEvents.length === 0) return;
+
+  var overrides = await EventOverrides.fetchForLeague(supabaseClient, leagueIdRef, rawEvents.map(function(e){return e.id;}));
+  var merged    = EventOverrides.mergeAll(rawEvents, overrides);
+  // Pick the soonest effective event whose date is today or later. If every
+  // event got overridden into the past, fall back to the soonest of any.
+  var upcoming = merged.filter(function(e) { return e.event_date && e.event_date >= todayISO; });
+  upcoming.sort(function(a, b) { return String(a.event_date).localeCompare(String(b.event_date)); });
+  var event = upcoming[0] || merged[0];
+  if (!event) return;
 
   // Headline name — Fight Nights show as "UFC <City>" instead of the
   // generic "UFC Fight Night".
@@ -889,7 +902,7 @@ async function wireNextEventBanner() {
   const fcBtn = document.getElementById('viewFightCardBtn');
   if (fcBtn && typeof FightCardModal !== 'undefined') {
     fcBtn.addEventListener('click', function () {
-      FightCardModal.show(event.id);
+      FightCardModal.show(event.id, { leagueId: leagueIdRef });
     });
   } else if (fcBtn) {
     // FightCardModal failed to load — hide the button so it doesn't
@@ -1069,13 +1082,16 @@ async function loadFreeAgents() {
       .order('is_champion', { ascending: false })
       .order('current_rank', { ascending: true, nullsFirst: false })
       .order('name'),
+    // Fetch a small upcoming window so we can apply this league's overrides
+    // and still pick the soonest effective event. The override could move
+    // an event earlier or later, so a single-row query on global ufc_events
+    // isn't enough.
     supabaseClient
       .from('ufc_events')
-      .select('event_date')
+      .select('id, event_date')
       .gte('event_date', todayISO)
       .order('event_date', { ascending: true })
-      .limit(1)
-      .maybeSingle(),
+      .limit(8),
     supabaseClient
       .from('roster_drops')
       .select('fighter_id, dropped_at')
@@ -1115,7 +1131,16 @@ async function loadFreeAgents() {
   //      (until 3am ET on drop_date_ET + 2 days).
   // If neither applies, the add is instant and the button reads "Add".
   const now = new Date();
-  const nextEventDate = (nextEventRes && nextEventRes.data) ? nextEventRes.data.event_date : null;
+  // Merge per-league overrides onto the upcoming-event window, then pick
+  // the soonest effective event whose date is still today-or-later. This
+  // ensures waiver phase math respects this league's override schedule.
+  var rawNextEvents = (nextEventRes && nextEventRes.data) ? nextEventRes.data : [];
+  var nextEventOverrides = await EventOverrides.fetchForLeague(supabaseClient, leagueIdRef, rawNextEvents.map(function(e){return e.id;}));
+  var nextEventsMerged   = EventOverrides.mergeAll(rawNextEvents, nextEventOverrides);
+  nextEventsMerged = nextEventsMerged
+    .filter(function(e) { return e.event_date && e.event_date >= todayISO; })
+    .sort(function(a, b) { return String(a.event_date).localeCompare(String(b.event_date)); });
+  const nextEventDate = nextEventsMerged[0] ? nextEventsMerged[0].event_date : null;
   const phaseInfo = (typeof getWaiverPhase === 'function')
     ? getWaiverPhase(now, nextEventDate)
     : { phase: 'FA' };
@@ -1263,6 +1288,11 @@ async function renderTopPerformers() {
     showEmpty('No completed events yet.');
     return;
   }
+  // Apply this league's overrides so the panel's event name / date reflect
+  // commissioner customization. fight_results stays linked to the global
+  // ufc_events row, so this is purely a display tweak — scoring is unchanged.
+  var topPerfOverrides = await EventOverrides.fetchForLeague(supabaseClient, leagueIdRef, [event.id]);
+  event = EventOverrides.merge(event, topPerfOverrides[event.id]);
 
   // 2. Fight results for the event — full column list so the shared
   // Scoring engine has everything it needs to compute per-fighter scores.

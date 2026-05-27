@@ -203,15 +203,22 @@ async function renderEventSelector() {
   const el = document.getElementById('eventSelectorContent');
 
   // Fetch all events to populate the dropdown (newest first for easy picking)
-  const { data: events, error } = await supabaseClient
+  const { data: rawEvents, error } = await supabaseClient
     .from('ufc_events')
     .select('id, name, event_date')
     .order('event_date', { ascending: false });
 
-  if (error || !events || events.length === 0) {
+  if (error || !rawEvents || rawEvents.length === 0) {
     el.innerHTML = '<p class="score-empty">No UFC events yet. Click "+ New Event" above to add one.</p>';
     return;
   }
+
+  // Apply this league's overrides so the commissioner sees the same names
+  // and dates here that members see on the league pages. Re-sort after
+  // merging since override dates can change ordering.
+  var eventOverrides = await EventOverrides.fetchForLeague(supabaseClient, leagueId, rawEvents.map(function(e){return e.id;}));
+  var events         = EventOverrides.mergeAll(rawEvents, eventOverrides);
+  events.sort(function(a, b) { return String(b.event_date || '').localeCompare(String(a.event_date || '')); });
 
   let html = '<div class="form-group event-selector-group">';
   html += '<label for="eventSelect">Select Event</label>';

@@ -37,12 +37,14 @@ async function initDashboard() {
   document.getElementById('welcomeName').textContent = displayName;
 
   // ---- Fetch the user's league memberships with league details ----
-  // Also pull is_commissioner (per-member co-commissioner flag) and
-  // leagues.commissioner_id (primary owner) so we can show a Commish
-  // badge inline with each league row.
+  // Also pull is_commissioner (per-member co-commissioner flag),
+  // leagues.commissioner_id (primary owner) for the Commish badge,
+  // and `pinned` so the dashboard can sort pinned leagues to the top
+  // and render the pin toggle in the correct state. The PK `id` is
+  // included so the pin handler can target this specific row.
   const { data: memberships, error } = await supabaseClient
     .from('league_members')
-    .select('team_name, league_id, is_commissioner, leagues(id, name, format, max_managers, commissioner_id)')
+    .select('id, team_name, league_id, is_commissioner, pinned, leagues(id, name, format, max_managers, commissioner_id)')
     .eq('user_id', user.id);
 
   if (error) {
@@ -143,23 +145,74 @@ async function initDashboard() {
   }
 
   // ---- Render a rich card per league ----
+  // Render is wrapped in a closure so the pin toggle can re-run it after
+  // flipping a membership's `pinned` flag. All enrichment data (members,
+  // points, next event, lineup state) is captured in the closure so the
+  // re-render is instantaneous and doesn't re-hit the network.
   var listEl = document.getElementById('leaguesList');
-  var wrap   = document.createElement('div');
-  wrap.className = 'dashboard-league-list';
+  function renderLeagueList() {
+    // Sort: pinned first (preserve original order within each group via
+    // a stable sort, which all modern browsers provide).
+    memberships.sort(function (a, b) {
+      var ap = a.pinned ? 1 : 0;
+      var bp = b.pinned ? 1 : 0;
+      return bp - ap;
+    });
 
-  memberships.forEach(function (membership) {
-    wrap.appendChild(buildLeagueCard({
-      user:        user,
-      membership:  membership,
-      members:     membersByLeague[membership.league_id] || [],
-      points:      pointsByLeague[membership.league_id]  || {},
-      myMemberId:  myMemberIdByLeague[membership.league_id],
-      nextEvent:   nextEvent,
-      hasLineup:   !!hasLineup[membership.league_id]
-    }));
+    var wrap = document.createElement('div');
+    wrap.className = 'dashboard-league-list';
+
+    memberships.forEach(function (membership) {
+      wrap.appendChild(buildLeagueCard({
+        user:        user,
+        membership:  membership,
+        members:     membersByLeague[membership.league_id] || [],
+        points:      pointsByLeague[membership.league_id]  || {},
+        myMemberId:  myMemberIdByLeague[membership.league_id],
+        nextEvent:   nextEvent,
+        hasLineup:   !!hasLineup[membership.league_id]
+      }));
+    });
+
+    // Replace any existing list contents — re-render after a pin toggle
+    // shouldn't stack a second copy.
+    listEl.innerHTML = '';
+    listEl.appendChild(wrap);
+  }
+  renderLeagueList();
+
+  // ---- Pin / unpin handler (event-delegated on the list) ----
+  // The pin button is a sibling of the card <a> with z-index above it,
+  // so clicks land on the button — they never bubble to the link. We
+  // still call stopPropagation defensively in case the layout changes.
+  // Optimistic update: flip the flag locally and re-render immediately,
+  // then send the UPDATE. If the DB write fails, revert and re-render.
+  listEl.addEventListener('click', async function (e) {
+    var btn = e.target.closest('[data-pin-membership-id]');
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    var membershipId = btn.getAttribute('data-pin-membership-id');
+    var membership   = memberships.find(function (m) { return String(m.id) === String(membershipId); });
+    if (!membership) return;
+
+    var nextPinned = !membership.pinned;
+    membership.pinned = nextPinned;
+    renderLeagueList();
+
+    var res = await supabaseClient
+      .from('league_members')
+      .update({ pinned: nextPinned })
+      .eq('id', membership.id);
+
+    if (res.error) {
+      // Revert on failure so the UI matches reality.
+      membership.pinned = !nextPinned;
+      renderLeagueList();
+      console.error('Pin update failed:', res.error);
+    }
   });
-
-  listEl.appendChild(wrap);
 }
 
 // ========================================================================
@@ -264,8 +317,31 @@ function buildLeagueCard(opts) {
     ? '<span class="commish-badge" title="You\'re a commissioner of this league">Commish</span>'
     : '';
 
+  // Pin toggle. Lives as a sibling of the card <a> (see the wrap below)
+  // so it can be a real <button> — nesting button-in-anchor would be
+  // invalid HTML. Absolute positioning with z-index above the link means
+  // clicks on the pin never reach the anchor in the first place.
+  var isPinned = !!opts.membership.pinned;
+  var pinBtnHtml =
+    '<button class="dashboard-league-card__pin' +
+      (isPinned ? ' dashboard-league-card__pin--active' : '') + '"' +
+      ' type="button"' +
+      ' data-pin-membership-id="' + escapeHtml(String(opts.membership.id)) + '"' +
+      ' aria-label="' + (isPinned ? 'Unpin this league' : 'Pin this league to top') + '"' +
+      ' aria-pressed="' + (isPinned ? 'true' : 'false') + '"' +
+      ' title="' + (isPinned ? 'Unpin' : 'Pin to top') + '">' +
+      // Pin SVG. Filled (currentColor) when active; outline when not.
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" ' +
+           'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+        '<path d="M12 17v5" />' +
+        '<path d="M9 17h6" />' +
+        '<path d="M7 9V4h10v5l2 4v3H5v-3l2-4z"' +
+              (isPinned ? ' fill="currentColor"' : '') + ' />' +
+      '</svg>' +
+    '</button>';
+
   var anchor = document.createElement('a');
-  anchor.className = 'dashboard-league-card';
+  anchor.className = 'dashboard-league-card' + (isPinned ? ' dashboard-league-card--pinned' : '');
   anchor.href = 'league.html?id=' + encodeURIComponent(league.id);
   anchor.innerHTML =
     '<div class="dashboard-league-card__header">' +
@@ -301,7 +377,14 @@ function buildLeagueCard(opts) {
 
     alertHtml;
 
-  return anchor;
+  // Wrap the anchor + pin button so the button can be a sibling overlay
+  // (button-in-anchor would be invalid HTML). The wrap is the actual
+  // child of .dashboard-league-list.
+  var wrap = document.createElement('div');
+  wrap.className = 'dashboard-league-card-wrap';
+  wrap.innerHTML = pinBtnHtml;
+  wrap.appendChild(anchor);
+  return wrap;
 }
 
 // Escapes user-supplied strings before inserting into innerHTML to prevent XSS
@@ -333,8 +416,9 @@ function displayEventName(ev) {
 }
 
 async function loadNextEventTiles() {
-  var nameEl = document.getElementById('statNextEvent');
-  var lockEl = document.getElementById('statLineupLock');
+  var nameEl    = document.getElementById('statNextEvent');
+  var lockEl    = document.getElementById('statLineupLock');
+  var welcomeEl = document.getElementById('welcomeSub');
 
   var todayISO = new Date().toISOString().slice(0, 10);
   var res = await supabaseClient
@@ -346,8 +430,9 @@ async function loadNextEventTiles() {
     .maybeSingle();
 
   if (res.error || !res.data) {
-    if (nameEl) nameEl.textContent = '—';
-    if (lockEl) lockEl.textContent = 'TBD';
+    if (nameEl)    nameEl.textContent    = '—';
+    if (lockEl)    lockEl.textContent    = 'TBD';
+    if (welcomeEl) welcomeEl.textContent = 'No upcoming card scheduled';
     return;
   }
   var event = res.data;
@@ -361,6 +446,21 @@ async function loadNextEventTiles() {
     lockEl.textContent = d.toLocaleDateString('en-US', {
       weekday: 'short', month: 'short', day: 'numeric'
     });
+  }
+
+  // Welcome subtitle under the user's name. Prefer the explicit
+  // lineup_lock_time when present; otherwise infer the weekday from
+  // the event date (UFC cards lock at the first prelim, same day).
+  // Past lock but pre-event still gets a "Lineups locked" hint.
+  if (welcomeEl) {
+    var lockSource = event.lineup_lock_time
+      ? new Date(event.lineup_lock_time)
+      : new Date(event.event_date + 'T17:00:00');
+    var weekday = lockSource.toLocaleDateString('en-US', { weekday: 'long' });
+    var locked  = lockSource.getTime() < Date.now();
+    welcomeEl.textContent = locked
+      ? 'Lineups locked · ' + displayEventName(event)
+      : 'Next card locks ' + weekday + ' · ' + displayEventName(event);
   }
 }
 
