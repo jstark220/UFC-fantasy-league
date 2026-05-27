@@ -5669,11 +5669,13 @@ body {
 
   .lineup-roster-row {
     display: grid;
-    /* 4 columns on mobile: photo, info (flex), stat, actions.
-       Stat + actions both live on row 2 right side, side by side,
-       so the FV score (or W-L record) reads as part of the action
-       group rather than floating up next to the name. */
-    grid-template-columns: 36px 1fr auto auto;
+    /* 3 columns on mobile: photo, info (flex), right col.
+       The right col holds the stat (row 1) stacked above the action
+       button group (row 2) — same column, so the name has 4 cols' worth
+       of width to itself instead of competing with a separate stat col.
+       Visually the FV/record still reads as "in the space between the
+       name and the action buttons" since it sits directly above them. */
+    grid-template-columns: 36px 1fr auto;
     grid-template-rows: auto auto;
     column-gap: 8px;
     row-gap: 2px;
@@ -5770,15 +5772,15 @@ body {
      bumped for the same cascade reason as the rank rules above. */
   .lineup-roster-row .lineup-roster-row__matchup { display: none; }
 
-  /* Row 2 right: stat (col 3) + actions (col 4) sit side by side, so
-     the FV score / record / PTS lives in the space between the name
-     above and the action button group on its right. */
+  /* Right column: stat sits at top (row 1), actions sit below (row 2),
+     both in col 3. Stacking them in the same column instead of side by
+     side widens the info col so longer fighter names are visible. */
   .lineup-roster-row__record,
   .lineup-roster-row__pts {
     grid-column: 3;
-    grid-row: 2;
+    grid-row: 1;
     justify-self: end;
-    align-self: center;
+    align-self: end;
     min-width: 0;
     font-size: 10px;
   }
@@ -5786,10 +5788,10 @@ body {
   .lineup-roster-row__pts-label { font-size: 7px; }
 
   .lineup-roster-row__actions {
-    grid-column: 4;
+    grid-column: 3;
     grid-row: 2;
     justify-self: end;
-    align-self: center;
+    align-self: start;
     gap: 3px;
   }
 
@@ -6406,6 +6408,20 @@ body {
 
   /* Show the hamburger on mobile */
   .top-nav__hamburger { display: inline-flex; }
+
+  /* Shrink the wordmark on mobile so logo + back link + theme + hamburger
+     all fit within a 390px viewport. Without this, the actions section's
+     margin-left:auto collapsed to 0 and the theme toggle overlapped the
+     back link button. */
+  .top-nav__logo {
+    font-size: 1rem;
+    margin-right: var(--space-2);
+  }
+  /* Drop the decorative separator between the wordmark and the back link
+     — every pixel matters at 390px. */
+  .top-nav__logo::after {
+    display: none;
+  }
 
   /* Hide the full-text auth actions on mobile — the drawer surfaces
      them. Keep the theme toggle visible so users can flip light/dark
@@ -11512,6 +11528,115 @@ label .form-label__hint {
   .panel-roster > .draft-autodraft-banner,
   .panel-roster > .draft-panel__body--queue {
     order: 2;
+  }
+
+  /* ===== Mobile draft scrolling — make it native page scroll =====
+     Desktop uses a fixed-height .draft-room with internal scroll inside
+     each panel body. That works on a big screen but on mobile it makes
+     scrolling janky: a small touch target needs to engage the inner
+     scroll instead of the page scroll, and the user can fight it when
+     trying to scroll the fighter list. Switch to native page scrolling:
+     the room and panels lose their height clamps, the active panel's
+     body just flows down the page. The JS that sets inline
+     room.style.height = Npx is overridden via !important. */
+  .draft-room {
+    height: auto !important;
+    min-height: 0;
+    overflow: visible;
+    flex: none;
+  }
+  .draft-panel {
+    overflow: visible;
+  }
+  .draft-panel__body {
+    overflow: visible;
+    /* min-height: 0 isn't needed once overflow:visible is in play, but
+       leaving it harmless to keep the desktop rule's intent intact. */
+  }
+  .draft-room--stacked .panel-board {
+    flex: none;
+  }
+
+  /* Sticky status strip: pick clock + whose turn stay glued to the top
+     of the viewport (under the nav) while the user scrolls the fighter
+     pool or the board beneath. */
+  .draft-status {
+    position: sticky;
+    top: var(--nav-height);
+    z-index: 40;
+  }
+  /* Tight status content on mobile so it stays at a predictable ~46px
+     height (single line) — that's what the sticky-tab offset below
+     assumes. */
+  .draft-status__inner {
+    padding: var(--space-2) var(--space-3);
+    gap: var(--space-3);
+    flex-wrap: nowrap;
+  }
+  .draft-status__turn {
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+  .draft-status__counter {
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  /* Sticky tabs sit just below the status strip so the user can jump
+     between Board / Fighters / My Roster without scrolling to the top. */
+  .draft-tabs {
+    position: sticky;
+    /* Status strip is ~46px tall with the tightened content above. */
+    top: calc(var(--nav-height) + 46px);
+    z-index: 35;
+    background: var(--bg-primary);
+  }
+
+  /* Tighten draft pool rows — drop visual chrome that doesn't earn its
+     vertical space on mobile. The trend chips and form sparkline live
+     in the sub-line under the name; hide them so each row stays compact
+     and the fighter is easier to scan. The full breakdown is reachable
+     by tapping into the fighter modal. */
+  .draft-pool-row__sub-line .fight-projection,
+  .draft-pool-row__sub-line .fight-odds,
+  .draft-pool-row .draft-form-sparkline,
+  .draft-pool-row .draft-trend-chip,
+  .draft-pool-row .draft-pool-row__sub-line > .lineup-roster-row__matchup,
+  .draft-pool-row .lineup-roster-row__matchup.waiver-next-fight {
+    display: none;
+  }
+
+  /* Compact draft pool action buttons (Queue + Draft/No slot) to match
+     the lineup-roster-row mobile button sizing. */
+  .draft-pool-row .draft-queue-btn,
+  .draft-pool-row .draft-pick-btn {
+    padding: 3px 6px;
+    font-size: 9px;
+    letter-spacing: 0;
+    min-height: 0;
+  }
+
+  /* Draft board: keep horizontal scroll (the table is naturally wider
+     than the viewport with 8 manager columns), but let vertical flow
+     join the page scroll. -webkit-overflow-scrolling for momentum on
+     iOS. Tighter cells so more managers fit across the visible band. */
+  .draft-board {
+    height: auto;
+    overflow-x: auto;
+    overflow-y: visible;
+    -webkit-overflow-scrolling: touch;
+    padding: 0 0 var(--space-2);
+  }
+  .draft-board__cell {
+    min-width: 88px;
+    height: 64px;
+  }
+  .draft-board__col-header {
+    padding: 8px 6px;
+    font-size: 11px;
+    letter-spacing: 0.04em;
   }
 }
 

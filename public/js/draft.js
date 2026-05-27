@@ -2647,10 +2647,16 @@ function renderFighterPool() {
         '<div class="lineup-roster-row__photo-wrap">' + photoHtml + '</div>' +
         '<span class="lineup-roster-row__rank ' + rankClass + '">' + escapeHtml(rankLabel) + (typeof subBadge === 'string' ? subBadge : '') + '</span>' +
         '<div class="lineup-roster-row__info">' +
+          // Name line + inline rank suffix so the rank shows on mobile
+          // (matches the lineup/free-agency row convention).
           '<div class="draft-pool-row__name-line">' +
             '<button class="lineup-roster-row__name" data-open-fighter="' + f.id + '">' +
               escapeHtml(f.name) +
             '</button>' +
+            '<span class="lineup-roster-row__rank-inline ' + rankClass + '" aria-hidden="true">' +
+              '<span class="lineup-roster-row__rank-inline-divider">|</span>' +
+              escapeHtml(rankLabel) +
+            '</span>' +
             valuePickBadgeHtml(f) +
           '</div>' +
           '<div class="draft-pool-row__sub-line">' +
@@ -2662,8 +2668,13 @@ function renderFighterPool() {
         '</div>' +
         fighterFvChip(f) +
         '<span class="lineup-roster-row__record">' + record + '</span>' +
-        queueBtn +
-        pickBtn +
+        // Wrap action buttons in __actions so the mobile grid places
+        // them cleanly at col 3 row 2 (instead of auto-flowing into
+        // implicit rows beneath the photo).
+        '<div class="lineup-roster-row__actions">' +
+          queueBtn +
+          pickBtn +
+        '</div>' +
       '</div>';
   });
 
