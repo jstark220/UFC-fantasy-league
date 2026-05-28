@@ -822,20 +822,16 @@ function valuePickBadgeForPick(fighter, pickSlot) {
   return _valueBadgeFor(fighter, pickSlot);
 }
 
-function valuePickBadgeHtml(fighter) {
-  var b = valuePickBadge(fighter);
-  if (!b) return '';
-  return '<span class="draft-value-badge draft-value-badge--' + b.tone + '" title="FV rank vs current pick">' +
-           escapeHtml(b.label) +
-         '</span>';
+// STEAL / VALUE / REACH chips were judging picks against FV rank, which
+// felt noisy mid-draft and arbitrary post-draft. Both helpers now return
+// empty so no badge ever renders. The underlying _valueBadgeFor logic is
+// kept above in case we want to surface this signal elsewhere later.
+function valuePickBadgeHtml(/* fighter */) {
+  return '';
 }
 
-function valuePickBadgeForPickHtml(fighter, pickSlot) {
-  var b = valuePickBadgeForPick(fighter, pickSlot);
-  if (!b) return '';
-  return '<span class="draft-value-badge draft-value-badge--' + b.tone + '" title="FV rank vs the slot this pick was taken at">' +
-           escapeHtml(b.label) +
-         '</span>';
+function valuePickBadgeForPickHtml(/* fighter, pickSlot */) {
+  return '';
 }
 
 // Render the "league-rank | FV-score | FV" chip shown on each row.
