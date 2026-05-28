@@ -203,12 +203,14 @@ function setupAutoDraftToggle() {
 function setupMockChrome() {
   var badge        = document.getElementById('draftMockBadge');
   var reset        = document.getElementById('draftMockResetBtn');
+  var newMockBtn   = document.getElementById('draftMockNewBtn');
   var startBanner  = document.getElementById('draftMockStartBanner');
   var startBtn     = document.getElementById('draftMockStartBtn');
 
   if (!isMockMode) {
     if (badge)       badge.hidden       = true;
     if (reset)       reset.hidden       = true;
+    if (newMockBtn)  newMockBtn.hidden  = true;
     if (startBanner) startBanner.hidden = true;
     return;
   }
@@ -239,6 +241,48 @@ function setupMockChrome() {
       saveMockState();
       renderAll();
       maybeScheduleNextAiPick();
+    });
+  }
+
+  // "New mock" — full reset back to the Start banner. Distinct from
+  // Restart mock: wipes draft order + bots + mockStarted so the user
+  // can pick a different team count / draft position from scratch.
+  if (newMockBtn) {
+    newMockBtn.hidden = !mockStarted;
+    newMockBtn.addEventListener('click', function() {
+      if (mockAiTimer) { clearTimeout(mockAiTimer); mockAiTimer = null; }
+      // Wipe ALL mock-only state — picks, the synthetic bot members,
+      // the draft order, and the started flag — so we're back to the
+      // exact state the page was in before the user first hit Start.
+      picks = [];
+      mockPickIdCounter   = 0;
+      mockStarted         = false;
+      pickClockResetAt    = Date.now();
+      picking             = false;
+      lastAnimatedPickId  = null;
+      wasMyTurn           = false;
+      lastClockBand       = 'none';
+      draftDoneSounded    = false;
+      league.draft_completed = false;
+      league.draft_order     = [];
+      // Strip every synthetic bot from members + memberMap so the next
+      // build of draft_order doesn't reuse stale ids. Real DB members
+      // are left alone (they don't carry the _isMockBot flag).
+      members = members.filter(function(m) {
+        if (m._isMockBot) {
+          delete memberMap[m.id];
+          return false;
+        }
+        return true;
+      });
+      // Drop persisted state so a refresh doesn't restore the wiped mock.
+      clearMockState();
+      // Show the Start banner, hide the action buttons that only make
+      // sense once a mock is running.
+      if (startBanner) startBanner.hidden = false;
+      reset.hidden       = true;
+      newMockBtn.hidden  = true;
+      renderAll();
     });
   }
 
@@ -297,6 +341,7 @@ function setupMockChrome() {
       mockStarted = true;
       if (startBanner) startBanner.hidden = true;
       if (reset)       reset.hidden       = false;
+      if (newMockBtn)  newMockBtn.hidden  = false;
       // Persist the freshly-built draft order + bot lineup + mockStarted
       // flag so a refresh before the first pick still restores the user
       // to a live draft room (not back to the Start banner).
