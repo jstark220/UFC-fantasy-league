@@ -5641,15 +5641,21 @@ body {
 .lineup-roster-row:last-child { border-bottom: none; }
 
 /* Subtle lift on hover — the row tilts forward by 1px and gets a soft
-   shadow under it, signaling "you can click into this fighter". */
-.lineup-roster-row:hover {
-  background: var(--bg-tertiary);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.20);
-  z-index: 2;
-}
-[data-theme="light"] .lineup-roster-row:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+   shadow under it, signaling "you can click into this fighter".
+   Gated by @media (hover: hover) so touch devices never trigger this
+   state — on iOS / Android the :hover would stick after a tap until
+   another tap elsewhere, leaving the row visibly highlighted (and
+   sometimes lifted) after the user already drafted the fighter. */
+@media (hover: hover) {
+  .lineup-roster-row:hover {
+    background: var(--bg-tertiary);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.20);
+    z-index: 2;
+  }
+  [data-theme="light"] .lineup-roster-row:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  }
 }
 
 /* ----- Fantasy Value chip on the row -----
@@ -5696,20 +5702,24 @@ body {
   color: var(--text-tertiary);
   transition: color 0.15s ease;
 }
-.lineup-roster-row:hover .lineup-roster-row__fv {
-  background: rgba(193, 59, 46, 0.10);
-  border-color: rgba(193, 59, 46, 0.40);
-}
-.lineup-roster-row:hover .lineup-roster-row__fv-rank,
-.lineup-roster-row:hover .lineup-roster-row__fv-val {
-  color: var(--accent-crimson);
-}
-.lineup-roster-row:hover .lineup-roster-row__fv-label {
-  color: var(--accent-crimson);
-  opacity: 0.85;
-}
-.lineup-roster-row:hover .lineup-roster-row__fv-divider {
-  background: rgba(193, 59, 46, 0.40);
+/* FV chip recolors on row hover — same touch-device caveat as the row
+   lift above, so gated together under @media (hover: hover). */
+@media (hover: hover) {
+  .lineup-roster-row:hover .lineup-roster-row__fv {
+    background: rgba(193, 59, 46, 0.10);
+    border-color: rgba(193, 59, 46, 0.40);
+  }
+  .lineup-roster-row:hover .lineup-roster-row__fv-rank,
+  .lineup-roster-row:hover .lineup-roster-row__fv-val {
+    color: var(--accent-crimson);
+  }
+  .lineup-roster-row:hover .lineup-roster-row__fv-label {
+    color: var(--accent-crimson);
+    opacity: 0.85;
+  }
+  .lineup-roster-row:hover .lineup-roster-row__fv-divider {
+    background: rgba(193, 59, 46, 0.40);
+  }
 }
 /* On narrow rows, hide the FV chip so the stat + buttons keep priority. */
 @media (max-width: 720px) {

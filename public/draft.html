@@ -15,7 +15,7 @@
   <!-- ?v=2 — cache-bust the stylesheet so Safari picks up the latest
        mobile draft redesign instead of serving a stale copy. Bump this
        when you ship further draft CSS changes. -->
-  <link rel="stylesheet" href="styles/components.css?v=14">
+  <link rel="stylesheet" href="styles/components.css?v=15">
 
   <title>Draft Room - Knockdown Fantasy</title>
   <script src="js/loading-screen.js"></script>
@@ -360,6 +360,18 @@
       var theme = document.documentElement.getAttribute('data-theme');
       btn.textContent = theme === 'light' ? '☀' : '☾';
     });
+
+    // ---- Disable pull-to-refresh on the draft page ----
+    // iOS Safari (and Chrome on Android) refresh the page when the user
+    // swipes down past the top of the viewport. On a mock draft this
+    // wipes the in-memory board entirely; on a real draft it forces a
+    // re-fetch + re-render that looks like a flash. Scoped to .draft-page
+    // via inline styles since draft.html is the only entry that loads
+    // this script — nothing leaks to other pages. `contain` allows
+    // nested scroll containers (board horizontal scroll, fighter pool)
+    // to behave normally; it only stops the chain at the document root.
+    document.documentElement.style.overscrollBehaviorY = 'contain';
+    document.body.style.overscrollBehaviorY = 'contain';
 
     // ---- Reset inline drag-resized panel sizes whenever the window
     //      resizes. The drag handlers below set inline `flex: 0 0 Npx`
