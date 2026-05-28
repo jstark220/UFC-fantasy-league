@@ -2728,6 +2728,19 @@ function renderFighterPool() {
     return;
   }
 
+  // Cap the rendered list so the DOM stays manageable. The fighters
+  // table has 6k+ rows; without this cap, every render (per pick, per
+  // queue change, per search keystroke) built 6k+ row HTML strings and
+  // dropped them into the DOM via innerHTML. Result: visible UI lag on
+  // every interaction. 350 is far more than a user could browse without
+  // sorting/filtering, and the existing "View All →" button surfaces
+  // the full pool in a dedicated modal when needed.
+  var POOL_RENDER_CAP = 350;
+  var totalMatching   = fighters.length;
+  if (fighters.length > POOL_RENDER_CAP) {
+    fighters = fighters.slice(0, POOL_RENDER_CAP);
+  }
+
   let html = '';
 
   fighters.forEach(function(f, idx) {
@@ -2761,11 +2774,14 @@ function renderFighterPool() {
     let pickBtn   = '';
     if (myTurn && valid) {
       rowMods += ' draft-pool-row--pickable';
-      pickBtn  = '<button class="btn-secondary lineup-row-btn draft-pick-btn" data-fighter-id="' + f.id + '">Draft</button>';
+      // type="button" is explicit so iOS Safari doesn't ever treat a
+      // bare <button> as form-submit (which manifests as the page
+      // reloading on tap even when there's no surrounding form).
+      pickBtn  = '<button type="button" class="btn-secondary lineup-row-btn draft-pick-btn" data-fighter-id="' + f.id + '">Draft</button>';
     } else if (myTurn && !valid) {
       rowMods += ' draft-pool-row--invalid';
       titleAttr = ' title="No valid roster slot available for this fighter"';
-      pickBtn   = '<button class="btn-secondary lineup-row-btn" disabled>No slot</button>';
+      pickBtn   = '<button type="button" class="btn-secondary lineup-row-btn" disabled>No slot</button>';
     }
 
     // Queue toggle — shown next to the pick button regardless of whose
@@ -2776,7 +2792,7 @@ function renderFighterPool() {
     const queueBtnClass = inQueue
       ? 'btn-ghost lineup-row-btn draft-queue-btn draft-queue-btn--queued'
       : 'btn-ghost lineup-row-btn draft-queue-btn';
-    const queueBtn = '<button class="' + queueBtnClass + '" data-queue-fighter-id="' + f.id + '">' +
+    const queueBtn = '<button type="button" class="' + queueBtnClass + '" data-queue-fighter-id="' + f.id + '">' +
                        queueBtnLabel +
                      '</button>';
 
@@ -2822,11 +2838,24 @@ function renderFighterPool() {
       '</div>';
   });
 
+  // Footer hint when the list was truncated — nudges the user toward
+  // search / filters / View All if the fighter they want is past the cap.
+  if (totalMatching > POOL_RENDER_CAP) {
+    html +=
+      '<div class="draft-pool-truncated">' +
+        'Showing ' + POOL_RENDER_CAP + ' of ' + totalMatching + ' fighters. ' +
+        'Refine with search or filters, or use View All →.' +
+      '</div>';
+  }
+
   poolEl.innerHTML = html;
 
-  // Wire pick buttons (only present when it's your turn AND the slot is legal)
+  // Wire pick buttons (only present when it's your turn AND the slot is legal).
+  // preventDefault belt-and-suspenders against any default-submit weirdness
+  // some browsers add to <button> clicks.
   poolEl.querySelectorAll('.draft-pick-btn').forEach(function(btn) {
-    btn.addEventListener('click', function() {
+    btn.addEventListener('click', function(e) {
+      e.preventDefault();
       const fighter = fighterMap[btn.getAttribute('data-fighter-id')];
       if (fighter) makePick(fighter);
     });
@@ -2835,7 +2864,8 @@ function renderFighterPool() {
   // Wire queue toggle buttons. Same fighter id either adds or removes
   // depending on whether it's already in the local queue cache.
   poolEl.querySelectorAll('.draft-queue-btn').forEach(function(btn) {
-    btn.addEventListener('click', function() {
+    btn.addEventListener('click', function(e) {
+      e.preventDefault();
       const fighterId = btn.getAttribute('data-queue-fighter-id');
       if (isQueued(fighterId)) removeFromQueue(fighterId);
       else                     addToQueue(fighterId);

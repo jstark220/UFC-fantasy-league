@@ -10676,6 +10676,18 @@ label .form-label__hint {
   flex-shrink: 0;
 }
 
+/* Truncation hint shown at the bottom of the pool when results exceed
+   POOL_RENDER_CAP in draft.js. Keeps the user oriented when their
+   search returns more than fits on the rendered list. */
+.draft-pool-truncated {
+  padding: var(--space-3) var(--space-4);
+  text-align: center;
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  border-top: 1px dashed var(--border-subtle);
+  margin-top: var(--space-2);
+}
+
 /* "BEST" pill on the top row of the fighters pool. Crimson + gold treatment
    so it reads as a primary call-out without competing with the rank chip
    (which is also crimson for champions) — gold border + white-on-crimson
