@@ -1377,6 +1377,11 @@ async function initDraft() {
     }
     var trigger = e.target.closest('[data-open-fighter]');
     if (!trigger) return;
+    // Mobile: no fighter preview modal at all. The user explicitly asked
+    // for this — on a narrow viewport the modal eats most of the screen,
+    // dismissal is finicky, and it kept appearing when they thought they
+    // were tapping Draft. Desktop still gets the preview on click.
+    if (window.matchMedia('(max-width: 899px)').matches) return;
     if (typeof showFighterModal === 'function') {
       showFighterModal(trigger.getAttribute('data-open-fighter'));
     }
@@ -3840,9 +3845,12 @@ function showWholeRosterModal(memberId) {
   });
   document.addEventListener('keydown', handleWholeRosterEscape);
 
-  // Click a tile → open the existing fighter detail modal
+  // Click a tile → open the existing fighter detail modal. Skipped on
+  // mobile (same reasoning as the row-name handler above — the preview
+  // modal is unwanted on narrow viewports).
   modal.querySelectorAll('[data-roster-tile-id]').forEach(function(tile) {
     tile.addEventListener('click', function() {
+      if (window.matchMedia('(max-width: 899px)').matches) return;
       var fid = tile.getAttribute('data-roster-tile-id');
       if (fid && typeof showFighterModal === 'function') showFighterModal(fid);
     });
