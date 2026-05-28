@@ -9343,12 +9343,45 @@ select.form-input option,
 }
 .draft-status__inner {
   max-width: 100%;
-  padding: var(--space-3) var(--space-6);
+  padding: var(--space-2) var(--space-6);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
   flex-wrap: wrap;
+}
+
+/* The standalone "YOU'RE ON THE CLOCK" banner is hidden on desktop — its
+   info is redundant with the status strip directly below it, which already
+   highlights the user's turn in crimson. Mobile keeps it as a loud visual
+   cue since the status strip lines are tighter at that width. */
+@media (min-width: 900px) {
+  .draft-banner {
+    display: none !important;
+  }
+}
+
+/* Pick feed lives in the middle of the status strip now (moved here from
+   the panel-board header so we can hide that header entirely on desktop).
+   Constrained so it doesn't push the right-side timer/counter cluster
+   off the row; overflow clips on narrow widths rather than wrapping to
+   a second line. */
+.draft-status__inner > .draft-pick-feed {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 50%;
+  overflow: hidden;
+  flex-wrap: nowrap;
+}
+.draft-status__inner > .draft-pick-feed .draft-pick-feed__item {
+  white-space: nowrap;
+}
+@media (max-width: 1199px) {
+  /* Tight desktops — hide the ticker to keep the strip on one line.
+     Activity is still surfaced via the board cells filling in. */
+  .draft-status__inner > .draft-pick-feed {
+    display: none;
+  }
 }
 .draft-status__turn {
   margin: 0;
@@ -10632,6 +10665,77 @@ label .form-label__hint {
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
 }
+
+/* "BEST" pill on the top row of the fighters pool. Crimson + gold treatment
+   so it reads as a primary call-out without competing with the rank chip
+   (which is also crimson for champions) — gold border + white-on-crimson
+   text picks up the same accent palette the on-the-clock highlight uses. */
+.draft-pool-row__best-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 2px 6px;
+  background: var(--accent-crimson);
+  color: #fff;
+  border: 1px solid var(--accent-gold);
+  border-radius: 4px;
+  font-family: var(--font-body);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ---- Compact fighters panel chrome ----
+   The Available Fighters panel has its header row removed entirely (see
+   draft.html). What's left is a single-row controls strip: search input
+   takes ~2x the width of a filter, three filters at equal width, and the
+   View All button at its natural size on the far right. Everything
+   collapses to a stacked layout on narrow viewports.
+
+   Search 2fr keeps room for placeholder + typed query without truncation.
+   `min-width: 0` on the grid items lets the selects shrink to fit narrow
+   panel widths without overflowing. */
+.panel-fighters > .draft-panel__controls {
+  grid-template-columns: 2fr 1fr 1fr 1fr auto;
+  padding: var(--space-2) var(--space-3);
+  gap: var(--space-2);
+}
+.panel-fighters > .draft-panel__controls .waiver-search {
+  /* Reset the all-columns span the base rule sets — search is just the
+     first item in the single row now, not a full-width row of its own. */
+  grid-column: auto;
+}
+.panel-fighters > .draft-panel__controls .waiver-search,
+.panel-fighters > .draft-panel__controls .waiver-filter {
+  padding: 6px 10px;
+  font-size: 12px;
+  width: 100%;
+  min-width: 0;
+}
+/* View All button sits at natural width on the far right of the row. */
+.panel-fighters > .draft-panel__controls .draft-view-all-btn {
+  white-space: nowrap;
+}
+
+/* On narrow panels the 5-column row would crush the selects. Stack
+   vertically instead — same behavior as the original two-row layout, but
+   without the redundant header taking space above. */
+@media (max-width: 1100px) {
+  .panel-fighters > .draft-panel__controls {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+  .panel-fighters > .draft-panel__controls .waiver-search {
+    grid-column: 1 / -1;
+  }
+  .panel-fighters > .draft-panel__controls .draft-view-all-btn {
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
+}
 .draft-panel__controls .waiver-search {
   grid-column: 1 / -1;
 }
@@ -11263,10 +11367,34 @@ label .form-label__hint {
 .draft-board__col-header:hover {
   filter: brightness(1.15);
 }
-/* User's own column gets a subtle crimson inner ring on top of the team
-   color — so "this is you" still reads even if your team color is teal. */
+/* User's own column gets a strong crimson outer ring + top accent so
+   "this is you" reads at a glance even when their team color is similar
+   to a neighbor's. The cell-level rule below carries the ring down
+   through every row in the column. */
 .draft-board__col-header--mine {
-  box-shadow: inset 0 0 0 1px rgba(193, 59, 46, 0.55);
+  box-shadow:
+    inset 0 0 0 2px var(--accent-crimson),
+    0 -2px 0 0 var(--accent-crimson);
+}
+
+/* "YOU" pill on the user's column header — crimson chip with white
+   text, sits inline with the team name. Compact enough that it doesn't
+   push the team name out of view on narrow columns. */
+.draft-board__you-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 6px;
+  padding: 2px 6px;
+  background: var(--accent-crimson);
+  color: #fff;
+  border-radius: 4px;
+  font-family: var(--font-body);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  line-height: 1;
+  text-shadow: none;
+  vertical-align: middle;
 }
 
 /* "On the clock" — applied to the active manager's column header AND every
@@ -11322,12 +11450,14 @@ label .form-label__hint {
   outline-offset: -2px;
 }
 
-/* "Mine" cells get a soft crimson outline around the team-accent border
-   so the user's column always reads as theirs — even if their team color
-   happens to be teal or olive. The team accent border still shows on the
-   left; the crimson ring is a secondary visual layered on top. */
+/* "Mine" cells get a crimson outline around the team-accent border so
+   the user's column always reads as theirs — even if their team color
+   happens to be teal or olive. The team accent border still shows on
+   the left; the crimson ring is layered on top. Bumped from 0.45 to
+   full crimson @ 80% so the column reads as clearly highlighted
+   without losing the underlying team color cue. */
 .draft-board__cell--mine {
-  box-shadow: inset 0 0 0 1px rgba(193, 59, 46, 0.45);
+  box-shadow: inset 0 0 0 1.5px rgba(193, 59, 46, 0.8);
 }
 
 /* ----- Pick reveal animation ------------------------------------------
@@ -13973,13 +14103,24 @@ label .form-label__hint {
   text-transform: uppercase;
 }
 
-/* Team-count picker sits between the body copy and the Start button.
-   Compact label + native select, centered inside the banner column. */
+/* Options row holding the Teams + Your Pick pickers side by side,
+   centred under the body copy. Wraps to two rows on very narrow
+   widths so neither picker truncates. */
+.draft-mock-start__options {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: var(--space-4);
+  margin-top: var(--space-3);
+}
+
+/* Team-count + pick-position pickers: compact label + native select.
+   Reused for both controls inside .draft-mock-start__options. */
 .draft-mock-start__teams {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  margin-top: var(--space-3);
 }
 .draft-mock-start__teams-label {
   font-size: 10px;
@@ -14837,5 +14978,85 @@ label .form-label__hint {
   }
   body .draft-page .draft-panel__controls > *:last-child {
     margin-bottom: 0 !important;
+  }
+
+  /* ---- Draft board: uniform column widths + locked row heights ----
+     These rules live in the SECOND mobile block at the end of the file
+     so they win on source order, and use the `body .draft-page` chain
+     for specificity parity with the rest of this block. !important is
+     a belt-and-suspenders against any rule above that might re-introduce
+     auto layout or content-driven sizing. */
+  body .draft-page .draft-board__table {
+    table-layout: fixed !important;
+    width: max-content !important;
+    min-width: 100% !important;
+    border-spacing: 4px 4px !important;
+  }
+  body .draft-page .draft-board__col {
+    width: 84px !important;
+  }
+  body .draft-page .draft-board__col-header {
+    width: 84px !important;
+    min-width: 84px !important;
+    max-width: 84px !important;
+  }
+  body .draft-page .draft-board__cell {
+    width: 110px !important;
+    min-width: 110px !important;
+    max-width: 110px !important;
+    height: 64px !important;
+    max-height: 64px !important;
+    overflow: hidden !important;
+  }
+  body .draft-page .draft-board__col,
+  body .draft-page .draft-board__col-header {
+    width: 110px !important;
+    min-width: 110px !important;
+    max-width: 110px !important;
+  }
+
+  /* The "On the clock" label has line-height: 76px hardcoded for the
+     desktop cell height. On mobile that single line-height is taller
+     than the 64px cell, which silently pushes the WHOLE row taller
+     (because table rows size to their tallest cell). Override here. */
+  body .draft-page .draft-board__on-clock {
+    line-height: 64px !important;
+    font-size: 9.5px !important;
+    letter-spacing: 0.05em !important;
+  }
+
+  /* Country flag in the top-left corner of mobile cells. Slots into the
+     empty space alongside the round-pick badge (top-right) and the
+     value chip (also top-left, but pinned at left:3). The flag emoji
+     sits just inside the cell padding so it reads as an identity hint
+     for the fighter at a glance. */
+  body .draft-page .draft-board__cell-flag {
+    position: absolute;
+    top: 3px;
+    left: 4px;
+    z-index: 2;
+    font-size: 12px;
+    line-height: 1;
+    pointer-events: none;
+    /* Drop shadow so the emoji stays visible across all the
+       division-tinted backgrounds (some are very saturated). */
+    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.5));
+  }
+  /* If both a flag AND a value chip want the top-left, push the value
+     chip down so they stack. The chip is the rarer of the two (only
+     for steal / reach picks), so the flag wins the prime position. */
+  body .draft-page .draft-board__cell-flag + .draft-board__cell-value-badge,
+  body .draft-page .draft-board__cell:has(.draft-board__cell-flag) .draft-board__cell-value-badge {
+    top: 20px !important;
+  }
+}
+
+/* Flag hidden on desktop — the photo already establishes fighter identity. */
+.draft-board__cell-flag {
+  display: none;
+}
+@media (max-width: 899px) {
+  .draft-board__cell-flag {
+    display: inline-block;
   }
 }

@@ -235,6 +235,35 @@ function setupMockChrome() {
   }
 
   if (startBanner) startBanner.hidden = false;
+
+  // Rebuild the "Your Pick" dropdown whenever the user changes Teams,
+  // so the position list always matches the chosen team count (no slot
+  // #10 option when they pick 4 teams). "Random" stays at the top.
+  var teamCountSel = document.getElementById('draftMockTeamCount');
+  var pickPosSel   = document.getElementById('draftMockPickPos');
+  function repopulatePickPositions() {
+    if (!teamCountSel || !pickPosSel) return;
+    var n = parseInt(teamCountSel.value, 10);
+    if (!isFinite(n) || n < 2) n = 8;
+    var prevValue = pickPosSel.value;
+    pickPosSel.innerHTML = '<option value="random">Random</option>';
+    for (var i = 1; i <= n; i++) {
+      pickPosSel.insertAdjacentHTML(
+        'beforeend',
+        '<option value="' + i + '">#' + i + '</option>'
+      );
+    }
+    // Preserve the user's prior choice when possible; otherwise reset
+    // to Random (the original default).
+    pickPosSel.value = (prevValue === 'random' || parseInt(prevValue, 10) <= n)
+      ? prevValue
+      : 'random';
+  }
+  if (teamCountSel) {
+    teamCountSel.addEventListener('change', repopulatePickPositions);
+    repopulatePickPositions();
+  }
+
   if (startBtn) {
     startBtn.addEventListener('click', function() {
       // Resize the draft to the chosen team count BEFORE flipping
@@ -243,7 +272,16 @@ function setupMockChrome() {
       var sel = document.getElementById('draftMockTeamCount');
       var teamCount = sel ? parseInt(sel.value, 10) : NaN;
       if (!isFinite(teamCount) || teamCount < 2) teamCount = members.length;
-      league.draft_order = buildMockDraftOrder(teamCount);
+
+      // Pick position: numeric 1..N puts the user at that exact slot in
+      // the snake; "random" / invalid falls back to a random slot.
+      var posSel = document.getElementById('draftMockPickPos');
+      var posRaw = posSel ? posSel.value : 'random';
+      var pickPosition = parseInt(posRaw, 10);
+      if (!isFinite(pickPosition) || pickPosition < 1 || pickPosition > teamCount) {
+        pickPosition = null;
+      }
+      league.draft_order = buildMockDraftOrder(teamCount, pickPosition);
 
       mockStarted = true;
       if (startBanner) startBanner.hidden = true;
@@ -264,9 +302,12 @@ function setupMockChrome() {
 // real member id is always included. Up to (teamCount - 1) other real
 // league members are pulled in; any remaining seats get filled with
 // synthetic "Bot N" members which are pushed onto both `members` and
-// `memberMap` so name/colour lookups continue to work. Final order is
-// randomly shuffled so the user's slot isn't always #1.
-function buildMockDraftOrder(teamCount) {
+// `memberMap` so name/colour lookups continue to work.
+//
+// `pickPosition` (optional, 1..teamCount) places the user at exactly
+// that slot in the final snake order. When null/omitted, the order is
+// randomly shuffled and the user lands wherever the shuffle puts them.
+function buildMockDraftOrder(teamCount, pickPosition) {
   var ids = [myMemberId];
 
   // Other real members first, capped at teamCount - 1 so we never exceed
@@ -300,11 +341,26 @@ function buildMockDraftOrder(teamCount) {
     nextBotIdx++;
   }
 
-  // Random shuffle so the user's pick number is unpredictable.
+  // Random shuffle so the bot ordering is unpredictable.
   for (var i = ids.length - 1; i > 0; i--) {
     var j = Math.floor(Math.random() * (i + 1));
     var tmp = ids[i]; ids[i] = ids[j]; ids[j] = tmp;
   }
+
+  // If the user requested a specific slot, swap myMemberId into that
+  // slot post-shuffle. Whatever bot was there moves to where the user
+  // landed, preserving uniqueness in the array.
+  if (typeof pickPosition === 'number' &&
+      pickPosition >= 1 && pickPosition <= ids.length) {
+    var currentIdx = ids.indexOf(myMemberId);
+    var targetIdx  = pickPosition - 1;
+    if (currentIdx !== -1 && currentIdx !== targetIdx) {
+      var swap = ids[targetIdx];
+      ids[targetIdx]  = ids[currentIdx];
+      ids[currentIdx] = swap;
+    }
+  }
+
   return ids;
 }
 
@@ -976,7 +1032,7 @@ async function initDraft() {
       .eq('league_id', leagueId),
     supabaseClient
       .from('fighters')
-      .select('id, name, primary_division, current_rank, is_champion, is_sub_champion, sub_title_type, record_wins, record_losses, record_draws, photo_url')
+      .select('id, name, primary_division, current_rank, is_champion, is_sub_champion, sub_title_type, record_wins, record_losses, record_draws, photo_url, country')
       .order('is_champion', { ascending: false })
       .order('current_rank', { nullsFirst: false }),
     supabaseClient
@@ -2650,7 +2706,14 @@ function renderFighterPool() {
 
   let html = '';
 
-  fighters.forEach(function(f) {
+  fighters.forEach(function(f, idx) {
+    // The top row of the (sorted + filtered) pool gets a "BEST" pill,
+    // replacing the standalone Best Available strip we used to render.
+    // Whoever's first in the user's current sort is their best draft
+    // target right now, by definition.
+    const bestBadge = idx === 0
+      ? '<span class="draft-pool-row__best-badge" title="Best available">BEST</span>'
+      : '';
     const valid       = myTurn && canPick(f, myPickFighters);
     const rankLabel   = f.is_champion ? 'C' : (f.current_rank ? '#' + f.current_rank : 'NR');
     const rankClass   = f.is_champion ? 'rank-champion' : (f.current_rank ? 'rank-ranked' : 'rank-unranked');
@@ -2713,6 +2776,7 @@ function renderFighterPool() {
               '<span class="lineup-roster-row__rank-inline-divider">|</span>' +
               escapeHtml(rankLabel) +
             '</span>' +
+            bestBadge +
             valuePickBadgeHtml(f) +
           '</div>' +
           '<div class="draft-pool-row__sub-line">' +
@@ -2762,61 +2826,14 @@ function renderFighterPool() {
 // search. Removes the "did I miss someone elite?" anxiety mid-draft.
 // Hidden until FV cache loads + the draft is past pre-draft phase.
 // ========================================================================
+// Best Available is now surfaced as a small "BEST" badge on the top
+// fighter row inside renderFighterPool() — the dedicated sticky strip
+// was redundant when the same signal can sit on the first row directly.
+// This function is left as a no-op so existing call sites in initDraft
+// and renderAll keep working without changes.
 function renderBestAvailable() {
   var el = document.getElementById('bestAvailable');
-  if (!el) return;
-
-  // No-op pre-draft (slot info isn't meaningful yet) or once drafting is done.
-  var totalPicks = getTotalPicks();
-  if (!league || !league.draft_started || picks.length >= totalPicks) {
-    el.hidden = true;
-    return;
-  }
-
-  // FV data hasn't resolved yet — hide rather than show a placeholder, since
-  // the strip's whole value is "this is the BEST available right now."
-  if (typeof FantasyValue === 'undefined' || !FantasyValue.scoreFor) {
-    el.hidden = true;
-    return;
-  }
-
-  // Best undrafted fighter by FV score. We don't filter by active fighters
-  // or by the user's roster construction — this is purely "elite still on
-  // the board." If you're up next, your own canPick() check still applies
-  // when you click Draft.
-  var pickedIds = new Set(picks.map(function(p) { return p.fighter_id; }));
-  var best = null;
-  var bestFv = -Infinity;
-  for (var i = 0; i < allFighters.length; i++) {
-    var f = allFighters[i];
-    if (pickedIds.has(f.id)) continue;
-    var fv = FantasyValue.scoreFor(f.id);
-    if (typeof fv !== 'number') continue;
-    if (fv > bestFv) { bestFv = fv; best = f; }
-  }
-  if (!best) { el.hidden = true; return; }
-
-  var rankLabel = best.is_champion ? 'C' : (best.current_rank ? '#' + best.current_rank : 'NR');
-  var rankClass = best.is_champion ? 'rank-champion' : (best.current_rank ? 'rank-ranked' : 'rank-unranked');
-  var divLabel  = DIVISION_LABELS[best.primary_division] || best.primary_division || '';
-  var photoHtml = best.photo_url
-    ? '<img class="lineup-roster-row__photo" src="' + escapeHtml(best.photo_url) + '" alt="" onerror="this.style.display=\'none\'">'
-    : '';
-
-  // Build a row visually similar to the pool rows so the strip feels native,
-  // but with a "BEST AVAILABLE" eyebrow on the left so it doesn't blend in.
-  el.hidden    = false;
-  el.innerHTML =
-    '<span class="draft-best-available__label">Best available</span>' +
-    '<div class="draft-best-available__row" data-open-fighter="' + best.id + '">' +
-      '<div class="lineup-roster-row__photo-wrap">' + photoHtml + '</div>' +
-      '<span class="lineup-roster-row__rank ' + rankClass + '">' + escapeHtml(rankLabel) + '</span>' +
-      '<div class="draft-best-available__name-block">' +
-        '<span class="draft-best-available__name">' + escapeHtml(best.name) + '</span>' +
-        '<span class="draft-best-available__div">' + escapeHtml(divLabel) + '</span>' +
-      '</div>' +
-      '<span class="draft-best-available__fv">' + bestFv.toFixed(1) + ' <span class="draft-best-available__fv-label">FV</span></span>' +
-    '</div>';
+  if (el) el.hidden = true;
 }
 
 // ========================================================================
@@ -3098,7 +3115,9 @@ function divisionAbbrev(div) {
 }
 
 // "Alexander Volkanovski" -> "A. Volkanovski". Single-word names pass
-// through untouched. Whitespace-only inputs return empty.
+// through untouched. Whitespace-only inputs return empty. The mobile
+// cell is sized wide enough (~110px) to fit this format for the longest
+// UFC names without truncation.
 function formatShortName(fullName) {
   if (!fullName) return '';
   var parts = String(fullName).trim().split(/\s+/);
@@ -3186,6 +3205,12 @@ function renderDraftBoard() {
             ' data-open-team-roster="' + escapeHtml(memberId) + '"' +
             ' title="View this team\'s roster">';
     html += '<span class="' + presenceCls + '" aria-label="' + presenceTitle + '" title="' + presenceTitle + '"></span>';
+    // "YOU" pill on the user's column header so the eye finds their
+    // team instantly. Renders before the team name; the cell-level
+    // crimson ring carries the same signal down through every row.
+    if (isMe) {
+      html += '<span class="draft-board__you-badge" aria-label="Your team">YOU</span>';
+    }
     html += escapeHtml(member ? member.team_name : '?');
     html += '</th>';
   });
@@ -3292,6 +3317,14 @@ function renderDraftBoard() {
         // the pick number (top-right) or the reactions bar (bottom).
         const boardValueBadge = valuePickBadgeForPickHtml(fighter, pickNum);
 
+        // Country flag emoji for the top-left of the cell. Only shows
+        // on mobile (CSS-gated) since desktop cells already have the
+        // photo for visual identity. typeof check keeps this safe if
+        // country-flags.js isn't loaded on a given page.
+        const flagGlyph = (typeof countryFlag === 'function')
+          ? countryFlag(fighter.country)
+          : '';
+
         html +=
           '<button class="draft-board__pick" data-open-fighter="' + pickMap[pickNum] + '">' +
             photoHtml +
@@ -3302,6 +3335,9 @@ function renderDraftBoard() {
               '<span class="draft-board__pick-meta draft-board__pick-meta--short">' + escapeHtml(divShort) + ' · ' + rankShort + '</span>' +
             '</div>' +
           '</button>' +
+          (flagGlyph
+            ? '<span class="draft-board__cell-flag" aria-hidden="true">' + flagGlyph + '</span>'
+            : '') +
           (boardValueBadge
             ? '<span class="draft-board__cell-value-badge">' + boardValueBadge + '</span>'
             : '') +

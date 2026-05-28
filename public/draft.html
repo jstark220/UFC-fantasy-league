@@ -15,7 +15,7 @@
   <!-- ?v=2 — cache-bust the stylesheet so Safari picks up the latest
        mobile draft redesign instead of serving a stale copy. Bump this
        when you ship further draft CSS changes. -->
-  <link rel="stylesheet" href="styles/components.css?v=3">
+  <link rel="stylesheet" href="styles/components.css?v=14">
 
   <title>Draft Room - Knockdown Fantasy</title>
   <script src="js/loading-screen.js"></script>
@@ -107,18 +107,39 @@
         <p class="draft-mock-start__eyebrow">Mock draft</p>
         <h2 class="draft-mock-start__title">Ready when you are</h2>
         <p class="draft-mock-start__body">Queue your top picks and review the pool first. Bots auto-pick once you start.</p>
-        <!-- Team count picker. Read on Start click by setupMockChrome();
-             the chosen number drives how big the draft_order is and how
-             many synthetic "Bot N" members get added to fill empty seats. -->
-        <div class="draft-mock-start__teams">
-          <label class="draft-mock-start__teams-label" for="draftMockTeamCount">Teams</label>
-          <select id="draftMockTeamCount" class="draft-mock-start__select">
-            <option value="4">4</option>
-            <option value="6">6</option>
-            <option value="8" selected>8</option>
-            <option value="10">10</option>
-            <option value="12">12</option>
-          </select>
+        <!-- Team count + Pick position pickers. Both read on Start click by
+             setupMockChrome(): team count sets the draft order size + bot
+             fill; pick position places the user at a specific slot in
+             the snake (or random when "Random"). The position dropdown's
+             options rebuild whenever the team count changes so the user
+             can't ask for slot 12 in a 6-team draft. -->
+        <div class="draft-mock-start__options">
+          <div class="draft-mock-start__teams">
+            <label class="draft-mock-start__teams-label" for="draftMockTeamCount">Teams</label>
+            <select id="draftMockTeamCount" class="draft-mock-start__select">
+              <option value="4">4</option>
+              <option value="6">6</option>
+              <option value="8" selected>8</option>
+              <option value="10">10</option>
+              <option value="12">12</option>
+            </select>
+          </div>
+          <div class="draft-mock-start__teams">
+            <label class="draft-mock-start__teams-label" for="draftMockPickPos">Your Pick</label>
+            <select id="draftMockPickPos" class="draft-mock-start__select">
+              <option value="random" selected>Random</option>
+              <!-- Position options injected by setupMockChrome based on
+                   the current Teams value. Defaults to 1-8. -->
+              <option value="1">#1</option>
+              <option value="2">#2</option>
+              <option value="3">#3</option>
+              <option value="4">#4</option>
+              <option value="5">#5</option>
+              <option value="6">#6</option>
+              <option value="7">#7</option>
+              <option value="8">#8</option>
+            </select>
+          </div>
         </div>
         <button class="btn-primary draft-mock-start__btn" id="draftMockStartBtn" type="button">Start mock</button>
       </div>
@@ -134,10 +155,16 @@
 
     <!-- Whose-turn strip + pick counter + countdown timer. Stays compact
          so the panels get room. The timer is anchored server-side via the
-         most recent pick's created_at; draft.js handles the countdown. -->
+         most recent pick's created_at; draft.js handles the countdown.
+         Also hosts the recent-picks ticker (moved up from the draft board
+         panel header so we can hide that header entirely on desktop). -->
     <div class="draft-status">
       <div class="draft-status__inner">
         <p class="draft-status__turn" id="turnInfo">Loading draft...</p>
+        <!-- Pick activity feed: last 3 picks ticker. Populated by
+             renderPickActivityFeed(); auto-hides pre-draft and when no
+             picks yet. Relative timestamps refresh on a 30s interval. -->
+        <div class="draft-pick-feed" id="draftPickFeed" hidden></div>
         <div class="draft-status__right">
           <!-- Always-visible "your next pick" indicator: pick number,
                how many picks until your turn, and an ETA based on the
@@ -180,15 +207,12 @@
          side-by-side beneath. Each section scrolls independently. -->
     <div class="draft-room draft-room--stacked">
 
-      <!-- TOP: snake draft board (full width) -->
+      <!-- TOP: snake draft board (full width).
+           Panel header removed — the "DRAFT BOARD" label was redundant
+           (the board is obviously the board) and the pick-activity feed
+           that used to live in the header has moved up into the status
+           strip. Saves ~50px of vertical chrome above the board. -->
       <div class="draft-panel panel-board waiver-tab--active">
-        <div class="draft-panel__header draft-panel__header--with-action">
-          <p class="section-label">Draft Board</p>
-          <!-- Pick activity feed: last 3 picks ticker. Populated by
-               renderPickActivityFeed(); auto-hides pre-draft and when no
-               picks yet. Relative timestamps refresh on a 30s interval. -->
-          <div class="draft-pick-feed" id="draftPickFeed" hidden></div>
-        </div>
         <div class="draft-panel__body" id="draftBoard"></div>
       </div>
 
@@ -200,12 +224,12 @@
       <!-- BOTTOM: fighter pool + queue/roster, with a resize handle between -->
       <div class="draft-bottom">
 
-        <!-- LEFT: available fighter pool -->
+        <!-- LEFT: available fighter pool.
+             Header row removed — the panel context already makes its purpose
+             obvious, and giving every pixel to the fighter list matters more
+             than a redundant label. The "View All →" button lives inline at
+             the end of the controls row instead. -->
         <div class="draft-panel panel-fighters">
-          <div class="draft-panel__header draft-panel__header--with-action">
-            <p class="section-label">Available Fighters</p>
-            <button class="btn-ghost draft-view-all-btn" id="viewAllBtn">View All →</button>
-          </div>
           <div class="draft-panel__controls">
             <input type="text" id="fighterSearch" class="waiver-search" placeholder="Search fighters...">
             <select id="sortBy" class="waiver-filter">
@@ -225,12 +249,12 @@
               <option value="top10">Top 10</option>
               <option value="unranked">Unranked</option>
             </select>
+            <button class="btn-ghost draft-view-all-btn" id="viewAllBtn">View All →</button>
           </div>
-          <!-- Best Available sticky strip: the highest-FV fighter who's still
-               on the board, always visible regardless of the current filter.
-               Populated by renderBestAvailable() in draft.js. Hidden during
-               pre-draft / when the FV cache hasn't loaded yet. -->
-          <div class="draft-best-available" id="bestAvailable" hidden></div>
+          <!-- Best Available is now inlined as a badge on the top fighter
+               of the pool list (see renderFighterPool). No dedicated strip
+               here — the badge gives the same signal without consuming
+               another row of vertical space. -->
           <div class="draft-panel__body" id="fighterPool"></div>
         </div>
 
@@ -417,11 +441,13 @@
         var startSize  = isHorizontal
           ? panel.getBoundingClientRect().height
           : panel.getBoundingClientRect().width;
-        // The room's total inner height bounds the board's max size on the
-        // vertical drag (we leave at least 160px for the bottom row so the
-        // fighter pool stays usable).
+        // The room bounds the max drag size on both axes. For horizontal
+        // resize (board height) we leave 200px for the bottom row. For
+        // vertical resize (roster width), we leave ~280px for the
+        // fighters panel so the pool stays usable.
         var room = document.querySelector('.draft-room');
-        var roomSize = room.getBoundingClientRect().height;
+        var roomSize  = room.getBoundingClientRect().height;
+        var roomWidth = room.getBoundingClientRect().width;
 
         handle.classList.add('draft-resize-handle--active');
         document.body.style.cursor     = isHorizontal ? 'row-resize' : 'col-resize';
@@ -435,7 +461,19 @@
             panel.style.height = newHeight + 'px';
           } else {
             var deltaX   = startCoord - ev.clientX;
-            var newWidth = Math.max(240, Math.min(560, startSize + deltaX));
+            // Cap by the room width minus a reserved chunk for the
+            // fighters panel — was previously a hard 560px ceiling,
+            // which felt cramped on wide monitors. Now the user can
+            // drag the roster panel up to (roomWidth - 280px), giving
+            // them roughly as much space as the fighters list.
+            var maxWidth = Math.max(560, roomWidth - 280);
+            var newWidth = Math.max(240, Math.min(maxWidth, startSize + deltaX));
+            // Setting flex inline is what actually resizes the panel —
+            // the panel's CSS rule (`flex: 0 0 360px`) hardcodes a
+            // flex-basis that wins over plain `width` in a flex
+            // container. Override flex AND width together so the inline
+            // value is the single source of truth during the drag.
+            panel.style.flex       = '0 0 ' + newWidth + 'px';
             panel.style.width      = newWidth + 'px';
             panel.style.flexShrink = '0';
           }
