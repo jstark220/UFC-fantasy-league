@@ -215,9 +215,11 @@ function setupMockChrome() {
 
   if (badge) badge.hidden = false;
   // Restart visible only after the mock has actually started — before
-  // that there's nothing to restart from.
+  // that there's nothing to restart from. If state was restored from
+  // localStorage (mockStarted already true), the Restart button is
+  // visible from the get-go and the Start banner stays hidden.
   if (reset) {
-    reset.hidden = true;
+    reset.hidden = !mockStarted;
     reset.addEventListener('click', function() {
       if (mockAiTimer) { clearTimeout(mockAiTimer); mockAiTimer = null; }
       picks = [];
@@ -229,12 +231,21 @@ function setupMockChrome() {
       lastClockBand       = 'none';
       draftDoneSounded    = false;
       league.draft_completed = false;
+      // Clear persisted state so the next refresh doesn't restore the
+      // draft the user just wiped, then save the fresh empty state so
+      // pull-to-refresh mid-restart leaves us empty (not on the
+      // pre-Start banner with stale data).
+      clearMockState();
+      saveMockState();
       renderAll();
       maybeScheduleNextAiPick();
     });
   }
 
-  if (startBanner) startBanner.hidden = false;
+  // Show the Start banner only if the mock hasn't been started yet.
+  // If we restored a mid-draft state from localStorage, mockStarted is
+  // already true and the user lands straight back on the board.
+  if (startBanner) startBanner.hidden = !!mockStarted;
 
   // Rebuild the "Your Pick" dropdown whenever the user changes Teams,
   // so the position list always matches the chosen team count (no slot
@@ -286,6 +297,10 @@ function setupMockChrome() {
       mockStarted = true;
       if (startBanner) startBanner.hidden = true;
       if (reset)       reset.hidden       = false;
+      // Persist the freshly-built draft order + bot lineup + mockStarted
+      // flag so a refresh before the first pick still restores the user
+      // to a live draft room (not back to the Start banner).
+      saveMockState();
       // Re-render so the status strip / next-pick indicator reflect the
       // active state (the room was rendered earlier but maybeAutoPickNow
       // / scheduler haven't been allowed to do anything yet).
@@ -362,6 +377,88 @@ function buildMockDraftOrder(teamCount, pickPosition) {
   }
 
   return ids;
+}
+
+// ========================================================================
+// MOCK DRAFT PERSISTENCE
+// Mock state lives entirely in JS memory, so a refresh / accidental
+// pull-to-refresh / iOS tab reload wipes the in-progress board. These
+// helpers serialize the minimum needed state to localStorage and rehydrate
+// it on init so the user can resume mid-draft. Scoped per league so two
+// leagues don't share state.
+// ========================================================================
+function mockStorageKey() {
+  return 'kf_mock_draft_' + leagueId;
+}
+
+// Persist current mock state. Called after every state-changing event
+// (Start click, pick made, restart). Silent on failure — localStorage
+// can throw if storage is full or disabled.
+function saveMockState() {
+  if (!isMockMode) return;
+  try {
+    var payload = {
+      draftOrder:        (league && league.draft_order) || [],
+      picks:             picks,
+      mockStarted:       mockStarted,
+      mockPickIdCounter: mockPickIdCounter,
+      // Just the synthetic bots — real members come from the DB on init.
+      bots: members
+        .filter(function(m) { return m._isMockBot; })
+        .map(function(m) {
+          return {
+            id:        m.id,
+            user_id:   m.user_id,
+            team_name: m.team_name,
+            is_commissioner: m.is_commissioner,
+            _isMockBot: true
+          };
+        })
+    };
+    localStorage.setItem(mockStorageKey(), JSON.stringify(payload));
+  } catch (err) {
+    console.warn('[mock] save failed:', err);
+  }
+}
+
+// Restore mock state from localStorage if any was saved. Returns true
+// when state was restored (caller should skip the fresh-bootstrap path),
+// false when there's nothing to restore. Called early in init.
+function restoreMockState() {
+  if (!isMockMode) return false;
+  var raw;
+  try { raw = localStorage.getItem(mockStorageKey()); }
+  catch (err) { return false; }
+  if (!raw) return false;
+
+  var payload;
+  try { payload = JSON.parse(raw); }
+  catch (err) { return false; }
+
+  // Defensive: if the league no longer has a draft_order array shape,
+  // skip the restore and start fresh.
+  if (!payload || !Array.isArray(payload.draftOrder)) return false;
+
+  // Rehydrate synthetic bot members into both arrays so name/colour
+  // lookups during render don't return "?".
+  (payload.bots || []).forEach(function(bot) {
+    if (memberMap[bot.id]) return; // shouldn't happen but defensive
+    members.push(bot);
+    memberMap[bot.id] = bot;
+  });
+
+  league.draft_order = payload.draftOrder;
+  picks              = payload.picks || [];
+  mockStarted        = !!payload.mockStarted;
+  mockPickIdCounter  = payload.mockPickIdCounter || 0;
+  return true;
+}
+
+// Wipe persisted mock state. Called on Restart Mock so the next
+// pageload doesn't resurrect a draft the user just cleared.
+function clearMockState() {
+  try { localStorage.removeItem(mockStorageKey()); }
+  catch (err) { /* ignore */ }
 }
 
 // One-time setup: mute toggle for the synthesized draft sound effects.
@@ -1106,15 +1203,22 @@ async function initDraft() {
     league.draft_started   = true;
     league.draft_completed = false;
     league.draft_paused_at = null;
-    // Generate a draft order if the league doesn't have one yet — random
-    // shuffle of all members so the user gets a realistic snake. If the
-    // commissioner has already set an order, we honor it so the mock
-    // mirrors what the real draft will look like.
-    if (!league.draft_order || league.draft_order.length === 0) {
-      league.draft_order = members.map(function(m) { return m.id; }).sort(function() { return Math.random() - 0.5; });
-    }
-    // Wipe any real picks — mock is always a clean board.
+    // Wipe any real picks first — mock starts from a clean board.
     picks = [];
+
+    // Attempt to restore a previously-saved mock from localStorage. If
+    // anything is there (draft order, picks, bots, mockStarted flag),
+    // it gets rehydrated and we skip the random-order generation below.
+    // Saves on every pick + on Start click; cleared on Restart Mock.
+    var restored = restoreMockState();
+    if (!restored) {
+      // No saved state — generate a random draft order from the league's
+      // real members. The Start banner's "Teams" picker will REPLACE
+      // this with a properly-sized order before mockStarted flips.
+      if (!league.draft_order || league.draft_order.length === 0) {
+        league.draft_order = members.map(function(m) { return m.id; }).sort(function() { return Math.random() - 0.5; });
+      }
+    }
   }
 
   // No live draft AND no schedule → nothing to render here, bounce back.
@@ -1572,6 +1676,10 @@ function mockInsertPick(memberId, fighter) {
   pickClockResetAt = Date.now();
   renderAll();
   animatePickReveal(pick);
+  // Persist after every pick so a refresh / pull-to-refresh / iOS tab
+  // reload mid-draft doesn't wipe progress. Restoring on next page load
+  // is handled in initDraft via restoreMockState().
+  saveMockState();
   if (picks.length >= getTotalPicks()) {
     handleDraftComplete();
   } else {
@@ -1630,6 +1738,13 @@ async function makePick(fighter) {
 
   const myPickFighters = getMyPickFighters();
   if (!canPick(fighter, myPickFighters)) return;
+
+  // If the fighter modal was open (user tapped a name to preview, then
+  // hit Draft from the row or from inside the modal), close it now —
+  // the pick is committed, the preview is no longer useful, and on
+  // mobile a stuck modal can look like a "stuck hover" since there's
+  // no obvious way to dismiss it after a successful draft.
+  if (typeof closeFighterModal === 'function') closeFighterModal();
 
   // ---- Mock mode short-circuit ----------------------------------------
   // No DB, no realtime, no safety timeout — pick is applied to local
