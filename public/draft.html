@@ -107,6 +107,19 @@
         <p class="draft-mock-start__eyebrow">Mock draft</p>
         <h2 class="draft-mock-start__title">Ready when you are</h2>
         <p class="draft-mock-start__body">Queue your top picks and review the pool first. Bots auto-pick once you start.</p>
+        <!-- Team count picker. Read on Start click by setupMockChrome();
+             the chosen number drives how big the draft_order is and how
+             many synthetic "Bot N" members get added to fill empty seats. -->
+        <div class="draft-mock-start__teams">
+          <label class="draft-mock-start__teams-label" for="draftMockTeamCount">Teams</label>
+          <select id="draftMockTeamCount" class="draft-mock-start__select">
+            <option value="4">4</option>
+            <option value="6">6</option>
+            <option value="8" selected>8</option>
+            <option value="10">10</option>
+            <option value="12">12</option>
+          </select>
+        </div>
         <button class="btn-primary draft-mock-start__btn" id="draftMockStartBtn" type="button">Start mock</button>
       </div>
     </div>

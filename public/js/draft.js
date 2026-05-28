@@ -237,6 +237,14 @@ function setupMockChrome() {
   if (startBanner) startBanner.hidden = false;
   if (startBtn) {
     startBtn.addEventListener('click', function() {
+      // Resize the draft to the chosen team count BEFORE flipping
+      // mockStarted, so the first render after the banner closes already
+      // reflects the right number of slots.
+      var sel = document.getElementById('draftMockTeamCount');
+      var teamCount = sel ? parseInt(sel.value, 10) : NaN;
+      if (!isFinite(teamCount) || teamCount < 2) teamCount = members.length;
+      league.draft_order = buildMockDraftOrder(teamCount);
+
       mockStarted = true;
       if (startBanner) startBanner.hidden = true;
       if (reset)       reset.hidden       = false;
@@ -250,6 +258,54 @@ function setupMockChrome() {
       maybeAutoPickNow();
     });
   }
+}
+
+// Build a mock draft order of exactly `teamCount` member ids. The user's
+// real member id is always included. Up to (teamCount - 1) other real
+// league members are pulled in; any remaining seats get filled with
+// synthetic "Bot N" members which are pushed onto both `members` and
+// `memberMap` so name/colour lookups continue to work. Final order is
+// randomly shuffled so the user's slot isn't always #1.
+function buildMockDraftOrder(teamCount) {
+  var ids = [myMemberId];
+
+  // Other real members first, capped at teamCount - 1 so we never exceed
+  // the chosen size.
+  members
+    .filter(function(m) { return m.id !== myMemberId && !m._isMockBot; })
+    .slice(0, teamCount - 1)
+    .forEach(function(m) { ids.push(m.id); });
+
+  // Reuse any synthetic bots we already minted on a previous Start click
+  // (handles a future "change team count and restart" flow without bloating
+  // the members array with duplicates).
+  members
+    .filter(function(m) { return m._isMockBot; })
+    .slice(0, Math.max(0, teamCount - ids.length))
+    .forEach(function(m) { ids.push(m.id); });
+
+  // Fill the rest with brand-new bots.
+  var nextBotIdx = members.filter(function(m) { return m._isMockBot; }).length + 1;
+  while (ids.length < teamCount) {
+    var bot = {
+      id:               'mock-bot-' + nextBotIdx,
+      user_id:          null,
+      team_name:        'Bot ' + nextBotIdx,
+      is_commissioner:  false,
+      _isMockBot:       true
+    };
+    members.push(bot);
+    memberMap[bot.id] = bot;
+    ids.push(bot.id);
+    nextBotIdx++;
+  }
+
+  // Random shuffle so the user's pick number is unpredictable.
+  for (var i = ids.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = ids[i]; ids[i] = ids[j]; ids[j] = tmp;
+  }
+  return ids;
 }
 
 // One-time setup: mute toggle for the synthesized draft sound effects.
@@ -3016,6 +3072,40 @@ function renderViewAllList() {
   });
 }
 
+// Short division labels used in the mobile draft-board cells. Sized to
+// fit alongside a rank/champion marker inside an ~80px column without
+// truncation. Women's divisions get a "W-" prefix so the gender stays
+// readable when the cell is narrow.
+const DIVISION_ABBREV = {
+  flyweight:         'FLW',
+  bantamweight:      'BW',
+  featherweight:     'FW',
+  lightweight:       'LW',
+  welterweight:      'WW',
+  middleweight:      'MW',
+  light_heavyweight: 'LHW',
+  heavyweight:       'HW',
+  strawweight:       'W-SW',
+  flyweight_w:       'W-FLW',
+  bantamweight_w:    'W-BW'
+};
+function divisionAbbrev(div) {
+  if (!div) return '';
+  if (DIVISION_ABBREV[div]) return DIVISION_ABBREV[div];
+  // Fallback for unrecognized divisions — strip underscores, uppercase,
+  // cap at 6 chars so it doesn't blow up a narrow cell.
+  return String(div).replace(/_/g, ' ').toUpperCase().slice(0, 6);
+}
+
+// "Alexander Volkanovski" -> "A. Volkanovski". Single-word names pass
+// through untouched. Whitespace-only inputs return empty.
+function formatShortName(fullName) {
+  if (!fullName) return '';
+  var parts = String(fullName).trim().split(/\s+/);
+  if (parts.length <= 1) return parts[0] || '';
+  return parts[0].charAt(0).toUpperCase() + '. ' + parts.slice(1).join(' ');
+}
+
 // ========================================================================
 // RENDER DRAFT BOARD
 // Grid with rounds as rows and managers as columns. Each cell shows the
@@ -3051,7 +3141,20 @@ function renderDraftBoard() {
   //     top15 / unranked, so the board reads as "value chart" at a glance
   //   * The whole cell is clickable when a pick has been made (opens the
   //     fighter modal via the existing data-open-fighter delegate)
-  let html = '<div class="draft-board"><table class="draft-board__table"><thead><tr>';
+  // Build the table with an explicit <colgroup>. On mobile the CSS sets
+  // a uniform width on .draft-board__col so every column is exactly the
+  // same size regardless of team-name length — without colgroup, browsers
+  // size columns from the first row's cell content, which lets long
+  // headers ("DANA WHITE PRIVILEGE") inflate their column. Desktop CSS
+  // leaves .draft-board__col without an explicit width so columns still
+  // share viewport width equally.
+  let html = '<div class="draft-board"><table class="draft-board__table">';
+  html += '<colgroup>';
+  for (let i = 0; i < n; i++) {
+    html += '<col class="draft-board__col">';
+  }
+  html += '</colgroup>';
+  html += '<thead><tr>';
 
   // Identify which manager is "on the clock" — used to highlight their entire
   // column so the eye reads the active team at a glance, not just the single
@@ -3163,9 +3266,16 @@ function renderDraftBoard() {
 
       if (fighter) {
         const divLabel  = DIVISION_LABELS[fighter.primary_division] || fighter.primary_division;
+        const divShort  = divisionAbbrev(fighter.primary_division);
         const rankLabel = fighter.is_champion
           ? 'Champion'
           : (fighter.current_rank ? '#' + fighter.current_rank : 'Unranked');
+        const rankShort = fighter.is_champion
+          ? 'C'
+          : (fighter.current_rank ? '#' + fighter.current_rank : 'NR');
+        // Mobile-only "F. LastName" form so the name fills the narrow cell
+        // without truncation. CSS swaps between full / short based on width.
+        const shortName = formatShortName(fighter.name);
         const photoHtml = fighter.photo_url
           ? '<img class="draft-board__cell-photo" src="' + escapeHtml(fighter.photo_url) + '" alt="" onerror="this.style.visibility=\'hidden\'">'
           : '<div class="draft-board__cell-photo draft-board__cell-photo--placeholder"></div>';
@@ -3186,8 +3296,10 @@ function renderDraftBoard() {
           '<button class="draft-board__pick" data-open-fighter="' + pickMap[pickNum] + '">' +
             photoHtml +
             '<div class="draft-board__pick-info">' +
-              '<span class="draft-board__pick-name">' + escapeHtml(fighter.name) + '</span>' +
-              '<span class="draft-board__pick-meta">' + escapeHtml(divLabel) + ' · ' + rankLabel + '</span>' +
+              '<span class="draft-board__pick-name draft-board__pick-name--full">' + escapeHtml(fighter.name) + '</span>' +
+              '<span class="draft-board__pick-name draft-board__pick-name--short">' + escapeHtml(shortName) + '</span>' +
+              '<span class="draft-board__pick-meta draft-board__pick-meta--full">' + escapeHtml(divLabel) + ' · ' + rankLabel + '</span>' +
+              '<span class="draft-board__pick-meta draft-board__pick-meta--short">' + escapeHtml(divShort) + ' · ' + rankShort + '</span>' +
             '</div>' +
           '</button>' +
           (boardValueBadge

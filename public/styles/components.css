@@ -11528,6 +11528,15 @@ label .form-label__hint {
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
 }
 
+/* Each cell carries TWO name spans and TWO meta spans — a full and a
+   short form. CSS picks which to show based on viewport width. The short
+   form ("A. Volkanovski" + "FW · C") only takes over on mobile widths so
+   the name dominates the narrow column without truncating. */
+.draft-board__pick-name--short,
+.draft-board__pick-meta--short {
+  display: none;
+}
+
 .draft-board__pick-meta {
   font-size: 10px;
   color: rgba(255, 255, 255, 0.92);
@@ -11859,10 +11868,13 @@ label .form-label__hint {
     min-height: 0;
   }
 
-  /* Draft board: keep horizontal scroll (the table is naturally wider
-     than the viewport with 8 manager columns), but let vertical flow
-     join the page scroll. -webkit-overflow-scrolling for momentum on
-     iOS. Tighter cells so more managers fit across the visible band. */
+  /* ---- Mobile draft board ----
+     Sleeper-style horizontal-scroll board: ~4 columns visible at a time,
+     swipe sideways to reveal the rest. Works the same whether the league
+     has 6 teams or 12 — the table always grows to its content width and
+     scrolls inside .draft-board. Photos are dropped at this size; cells
+     show fighter name + division + rank only, which is what fits cleanly
+     in an ~84px column on a phone. */
   .draft-board {
     height: auto;
     overflow-x: auto;
@@ -11870,14 +11882,117 @@ label .form-label__hint {
     -webkit-overflow-scrolling: touch;
     padding: 0 0 var(--space-2);
   }
-  .draft-board__cell {
-    min-width: 88px;
-    height: 64px;
+
+  /* Fixed layout + explicit <col> widths via colgroup. The col rule below
+     forces every column to 84px regardless of which header has the
+     longest name — without it, table-layout: fixed falls back to
+     inferring widths from the first row, which still lets long headers
+     dominate. min-width: 100% keeps the table at least as wide as the
+     viewport when there are very few teams. */
+  .draft-board__table {
+    table-layout: fixed;
+    width: max-content;
+    min-width: 100%;
+    border-spacing: 4px 4px;
   }
-  .draft-board__col-header {
-    padding: 8px 6px;
-    font-size: 11px;
+  .draft-board__col {
+    width: 84px;
+  }
+
+  /* Photo is the biggest single piece of horizontal real estate in a cell
+     (36px + gap). Drop it on mobile — name + meta read fine without. */
+  .draft-board__cell-photo {
+    display: none;
+  }
+
+  /* Cell: the column width comes from .draft-board__col above; here we
+     just lock the HEIGHT so every row is the same regardless of whether
+     its cells are filled. `overflow: hidden` is what actually enforces
+     the height — without it, browsers treat `height` on `<td>` as a
+     minimum and let made cells grow taller than empty ones (which is
+     what made rounds 1-3 visibly taller than empty rounds 4+). */
+  .draft-board__cell {
+    height: 48px;
+    max-height: 48px;
+    overflow: hidden;
+  }
+
+  /* The pick button fills the cell. Top padding clears the pick-num /
+     value badges; align-items: stretch lets the info column take all
+     remaining vertical space; justify-content: center vertically centres
+     the name + meta in that space. */
+  .draft-board__pick {
+    padding: 14px 6px 2px;
+    gap: 0;
+    align-items: stretch;
+  }
+  .draft-board__pick-info {
+    justify-content: center;
+    gap: 0;
+  }
+
+  /* Swap full → short forms on mobile. Short name ("A. Volkanovski") fits
+     on a single line at a much larger font size; short meta ("FW · C")
+     reads cleanly at small size. */
+  .draft-board__pick-name--full,
+  .draft-board__pick-meta--full {
+    display: none;
+  }
+  .draft-board__pick-name--short {
+    display: block;
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .draft-board__pick-meta--short {
+    display: block;
+    font-size: 9.5px;
+    line-height: 1.1;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Pick number badge in the corner — shrink and tuck. */
+  .draft-board__pick-num {
+    font-size: 9px;
+    top: 3px;
+    right: 5px;
     letter-spacing: 0.04em;
+  }
+
+  /* Snake arrows clutter narrow cells and the round.position label
+     already conveys order — hide on mobile. */
+  .draft-board__arrow {
+    display: none;
+  }
+
+  /* Value badge (STEAL / VALUE / REACH) — keep visible but smaller so
+     it doesn't dominate. */
+  .draft-board__cell-value-badge {
+    top: 3px;
+    left: 3px;
+  }
+  .draft-board__cell-value-badge .draft-value-badge {
+    font-size: 7px;
+    padding: 1px 3px;
+  }
+
+  /* Column headers: tight padding, same width as cells so they line up
+     with the columns beneath. Sticky on the scroll container so team
+     names stay visible while the user scrolls down through rounds. */
+  .draft-board__col-header {
+    padding: 8px 4px;
+    font-size: 10.5px;
+    letter-spacing: 0.03em;
+    min-width: 84px;
+    width: 84px;
   }
 }
 
@@ -13856,6 +13971,37 @@ label .form-label__hint {
   font-size: 13px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+}
+
+/* Team-count picker sits between the body copy and the Start button.
+   Compact label + native select, centered inside the banner column. */
+.draft-mock-start__teams {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+.draft-mock-start__teams-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+.draft-mock-start__select {
+  padding: 6px 10px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.draft-mock-start__select:focus-visible {
+  outline: 2px solid var(--accent-crimson);
+  outline-offset: 2px;
 }
 
 /* MOCK badge + Restart button — only visible when draft.js is in
