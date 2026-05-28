@@ -201,21 +201,18 @@ function setupAutoDraftToggle() {
 //            and re-fires the scheduler. mockStarted stays true so the
 //            mock just runs again without re-showing the banner.
 function setupMockChrome() {
-  var badge        = document.getElementById('draftMockBadge');
   var reset        = document.getElementById('draftMockResetBtn');
   var newMockBtn   = document.getElementById('draftMockNewBtn');
   var startBanner  = document.getElementById('draftMockStartBanner');
   var startBtn     = document.getElementById('draftMockStartBtn');
 
   if (!isMockMode) {
-    if (badge)       badge.hidden       = true;
     if (reset)       reset.hidden       = true;
     if (newMockBtn)  newMockBtn.hidden  = true;
     if (startBanner) startBanner.hidden = true;
     return;
   }
 
-  if (badge) badge.hidden = false;
   // Restart visible only after the mock has actually started — before
   // that there's nothing to restart from. If state was restored from
   // localStorage (mockStarted already true), the Restart button is

@@ -71,10 +71,6 @@
       </a>
       <div class="top-nav__links">
         <a href="#" class="btn-ghost" id="leagueLink">← League</a>
-        <!-- MOCK badge — only visible when draft.js detects ?mock=1.
-             Toggled by setupMockChrome() in draft.js. Kept as a static
-             element so it doesn't depend on async render timing. -->
-        <span class="draft-mock-badge" id="draftMockBadge" hidden>MOCK DRAFT</span>
         <button class="draft-mock-reset" id="draftMockResetBtn" type="button" hidden title="Restart this mock with the same draft order">Restart mock</button>
         <!-- "New mock" wipes the board, draft order, and bots entirely
              and brings back the Start banner so the user can choose a
@@ -357,7 +353,7 @@
        has, so there's no duplicate league fetch. -->
   <script src="js/page-help-modal.js"></script>
   <script src="js/league-primer.js"></script>
-  <script src="js/draft.js?v=4"></script>
+  <script src="js/draft.js?v=5"></script>
 
   <script>
     // Sync the theme button glyph after theme.js has run
