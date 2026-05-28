@@ -12010,14 +12010,18 @@ label .form-label__hint {
     padding: 6px 8px;
   }
 
-  /* Compact draft pool action buttons (Queue + Draft/No slot) to match
-     the lineup-roster-row mobile button sizing. */
+  /* Mobile touch targets for the action buttons. Apple HIG asks for 44pt;
+     the previous 3px padding + 9.5px font produced an ~18pt tall button,
+     small enough that finger taps frequently landed on the fighter NAME
+     instead — which opens the preview modal. Bumping the buttons to a
+     proper touch target so the user reliably hits Draft / Queue. */
   .draft-pool-row .draft-queue-btn,
   .draft-pool-row .draft-pick-btn {
-    padding: 3px 7px;
-    font-size: 9.5px;
-    letter-spacing: 0;
-    min-height: 0;
+    padding: 8px 14px;
+    font-size: 12px;
+    letter-spacing: 0.02em;
+    min-height: 36px;
+    font-weight: 700;
   }
 
   /* ---- Mobile draft board ----

@@ -2966,21 +2966,26 @@ function renderFighterPool() {
   poolEl.innerHTML = html;
 
   // Wire pick buttons (only present when it's your turn AND the slot is legal).
-  // preventDefault belt-and-suspenders against any default-submit weirdness
-  // some browsers add to <button> clicks.
+  // stopPropagation blocks the document-level data-open-fighter handler
+  // from firing when the user taps Draft — otherwise on mobile the row's
+  // fighter-name button (which DOES have data-open-fighter) can catch the
+  // bubbled click and open the preview modal alongside the actual draft.
   poolEl.querySelectorAll('.draft-pick-btn').forEach(function(btn) {
     btn.addEventListener('click', function(e) {
       e.preventDefault();
+      e.stopPropagation();
       const fighter = fighterMap[btn.getAttribute('data-fighter-id')];
       if (fighter) makePick(fighter);
     });
   });
 
   // Wire queue toggle buttons. Same fighter id either adds or removes
-  // depending on whether it's already in the local queue cache.
+  // depending on whether it's already in the local queue cache. Same
+  // stopPropagation reasoning as the Draft button above.
   poolEl.querySelectorAll('.draft-queue-btn').forEach(function(btn) {
     btn.addEventListener('click', function(e) {
       e.preventDefault();
+      e.stopPropagation();
       const fighterId = btn.getAttribute('data-queue-fighter-id');
       if (isQueued(fighterId)) removeFromQueue(fighterId);
       else                     addToQueue(fighterId);
