@@ -998,6 +998,33 @@ let draftDoneSounded = false;
 let initialPicksLoaded   = false;
 let lastAnimatedPickId   = null;
 
+// Fetch every fighter row, paginating in 1000-row batches. Supabase's
+// default 1000-row cap silently truncates larger SELECTs — the fighters
+// table has 6k+ rows, so an unpaginated query was dropping unranked
+// fighters (e.g., Bo Nickal) from the draft pool entirely. Same pattern
+// waivers.js uses for fight_results.
+async function fetchAllFighters() {
+  var FIGHTER_COLS = 'id, name, primary_division, current_rank, is_champion, ' +
+    'is_sub_champion, sub_title_type, record_wins, record_losses, record_draws, ' +
+    'photo_url, country';
+  var all  = [];
+  var PAGE = 1000;
+  var from = 0;
+  while (true) {
+    var res = await supabaseClient
+      .from('fighters')
+      .select(FIGHTER_COLS)
+      .order('is_champion', { ascending: false })
+      .order('current_rank', { nullsFirst: false })
+      .range(from, from + PAGE - 1);
+    if (res.error || !res.data) break;
+    all = all.concat(res.data);
+    if (res.data.length < PAGE) break;
+    from += PAGE;
+  }
+  return all;
+}
+
 // ========================================================================
 // INIT
 // Loads all required data in parallel, then renders and subscribes.
@@ -1026,11 +1053,12 @@ async function initDraft() {
       .from('league_members')
       .select('id, user_id, team_name, is_commissioner')
       .eq('league_id', leagueId),
-    supabaseClient
-      .from('fighters')
-      .select('id, name, primary_division, current_rank, is_champion, is_sub_champion, sub_title_type, record_wins, record_losses, record_draws, photo_url, country')
-      .order('is_champion', { ascending: false })
-      .order('current_rank', { nullsFirst: false }),
+    // Paginated — the fighters table has 6k+ rows and Supabase silently
+    // caps unpaginated SELECTs at 1000. Without pagination, only the
+    // top-ranked / champion fighters land in allFighters and unranked
+    // free agents (like Bo Nickal at middleweight) get dropped from
+    // search results. See fetchAllFighters() below.
+    fetchAllFighters(),
     supabaseClient
       .from('draft_picks')
       .select('*')
@@ -1045,7 +1073,7 @@ async function initDraft() {
 
   league   = leagueRes.data;
   members  = membersRes.data  || [];
-  allFighters = fightersRes.data || [];
+  allFighters = fightersRes || [];
   picks    = picksRes.data    || [];
 
   // Wire the shared "? How it works" modal now that we have the league
