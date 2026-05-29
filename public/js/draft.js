@@ -2375,49 +2375,57 @@ function animatePickReveal(pick) {
   // here, so the new cell is already in the DOM. We tag each board cell
   // with the pick number it represents to avoid fragile nth-child math.
   // (Adding the attribute happens in renderDraftBoard below.)
-  var cell = document.querySelector('.draft-board__cell[data-pick-num="' + pick.draft_pick + '"]');
-  if (!cell) return;
+  var pickedCell = document.querySelector('.draft-board__cell[data-pick-num="' + pick.draft_pick + '"]');
+  if (!pickedCell) return;
 
-  // Mobile: smooth-scroll the board so the freshly-revealed cell is
-  // centered in the viewport — but only when the cell isn't already
-  // fully on screen. Picks the user can already see don't need a scroll
-  // (the cell-flash animation alone is enough feedback), and yanking the
-  // board every pick reads as a jittery "screen shake".
+  // Mobile: smooth-scroll the board to whichever cell is NOW on the
+  // clock (the next slot to be picked) — that's where the action is
+  // about to happen, so the user wants to see it whether it's their
+  // own pick or another manager's. Scrolling to the JUST-picked cell
+  // instead would leave the user's about-to-pick slot off-screen in
+  // the common case where an AI just finished and it's the user's turn.
+  // Skipped if the target is already fully visible so the board doesn't
+  // shake on every pick.
   if (typeof window.matchMedia === 'function' &&
       window.matchMedia('(max-width: 899px)').matches) {
-    var scrollContainer = cell.closest('.draft-board');
-    // clientWidth==0 means the board panel is hidden (e.g. user is on
-    // the Fighters tab on mobile); skip the scroll in that case so we
-    // don't lock in a bogus position based on a 0-sized container.
-    if (scrollContainer && scrollContainer.clientWidth > 0) {
-      var cellRect = cell.getBoundingClientRect();
-      var contRect = scrollContainer.getBoundingClientRect();
-      // The cell's bounding rect and the container's are both in viewport
-      // coords — a fully-visible cell sits entirely inside the container.
-      var fullyVisible = cellRect.left   >= contRect.left   &&
-                         cellRect.right  <= contRect.right  &&
-                         cellRect.top    >= contRect.top    &&
-                         cellRect.bottom <= contRect.bottom;
-      if (!fullyVisible) {
-        // Convert cell viewport coords into container-scroll coords.
-        var cellLeftInContainer = scrollContainer.scrollLeft + (cellRect.left - contRect.left);
-        var cellTopInContainer  = scrollContainer.scrollTop  + (cellRect.top  - contRect.top);
-        var targetLeft = Math.max(0, cellLeftInContainer - (scrollContainer.clientWidth  - cell.clientWidth)  / 2);
-        var targetTop  = Math.max(0, cellTopInContainer  - (scrollContainer.clientHeight - cell.clientHeight) / 2);
-        smoothScrollDraftBoard(scrollContainer, targetLeft, targetTop);
+    var nextPickNum = getCurrentPickNum();
+    var targetCell  = document.querySelector('.draft-board__cell[data-pick-num="' + nextPickNum + '"]');
+    // Draft completed → no next cell to scroll to; skip.
+    if (targetCell) {
+      var scrollContainer = targetCell.closest('.draft-board');
+      // clientWidth==0 means the board panel is hidden (e.g. user is on
+      // the Fighters tab on mobile); skip the scroll then so we don't
+      // lock in a bogus position based on a 0-sized container.
+      if (scrollContainer && scrollContainer.clientWidth > 0) {
+        var cellRect = targetCell.getBoundingClientRect();
+        var contRect = scrollContainer.getBoundingClientRect();
+        // Both rects are in viewport coords — fully-visible means the
+        // target sits entirely inside the container's box.
+        var fullyVisible = cellRect.left   >= contRect.left   &&
+                           cellRect.right  <= contRect.right  &&
+                           cellRect.top    >= contRect.top    &&
+                           cellRect.bottom <= contRect.bottom;
+        if (!fullyVisible) {
+          var cellLeftInContainer = scrollContainer.scrollLeft + (cellRect.left - contRect.left);
+          var cellTopInContainer  = scrollContainer.scrollTop  + (cellRect.top  - contRect.top);
+          var targetLeft = Math.max(0, cellLeftInContainer - (scrollContainer.clientWidth  - targetCell.clientWidth)  / 2);
+          var targetTop  = Math.max(0, cellTopInContainer  - (scrollContainer.clientHeight - targetCell.clientHeight) / 2);
+          smoothScrollDraftBoard(scrollContainer, targetLeft, targetTop);
+        }
       }
     }
   }
 
   // Re-applying the same class doesn't restart a CSS animation; toggling
   // off → forcing a reflow → toggling on does. The reflow read of
-  // offsetWidth is the standard trick.
-  cell.classList.remove('draft-board__cell--just-picked');
+  // offsetWidth is the standard trick. Flashes the just-picked cell —
+  // separate from the scroll target (above), which follows the clock.
+  pickedCell.classList.remove('draft-board__cell--just-picked');
   // eslint-disable-next-line no-unused-expressions
-  cell.offsetWidth;
-  cell.classList.add('draft-board__cell--just-picked');
+  pickedCell.offsetWidth;
+  pickedCell.classList.add('draft-board__cell--just-picked');
   setTimeout(function() {
-    cell.classList.remove('draft-board__cell--just-picked');
+    pickedCell.classList.remove('draft-board__cell--just-picked');
   }, 900);
 
   // No extra celebration effect — the cell scale-up + photo crossfade
