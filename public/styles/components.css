@@ -9699,8 +9699,10 @@ select.form-input option,
   cursor: pointer;
   user-select: none;
 }
-.draft-queue-header:hover .section-label {
-  color: var(--text-primary);
+@media (hover: hover) {
+  .draft-queue-header:hover .section-label {
+    color: var(--text-primary);
+  }
 }
 /* Chevron rotates 90° when expanded. The character itself stays the same;
    only the rotation changes, which keeps the alignment stable. */
@@ -9758,9 +9760,11 @@ select.form-input option,
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
-.draft-autodraft-toggle:hover {
-  border-color: var(--accent-crimson);
-  color: var(--text-primary);
+@media (hover: hover) {
+  .draft-autodraft-toggle:hover {
+    border-color: var(--accent-crimson);
+    color: var(--text-primary);
+  }
 }
 .draft-autodraft-toggle__dot {
   width: 8px;
@@ -10899,8 +10903,10 @@ label .form-label__hint {
   /* Visually a "row" but it's a div so the parent acts as the click target.
      The fighter-modal delegated handler in initDraft fires on data-open-fighter. */
 }
-.draft-best-available__row:hover .draft-best-available__name {
-  color: var(--accent-crimson);
+@media (hover: hover) {
+  .draft-best-available__row:hover .draft-best-available__name {
+    color: var(--accent-crimson);
+  }
 }
 .draft-best-available__name-block {
   flex: 1;
@@ -11029,9 +11035,11 @@ label .form-label__hint {
   cursor: help;
   transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
-.draft-form__dot:hover {
-  transform: scale(1.5);
-  box-shadow: 0 0 0 2px var(--bg-secondary);
+@media (hover: hover) {
+  .draft-form__dot:hover {
+    transform: scale(1.5);
+    box-shadow: 0 0 0 2px var(--bg-secondary);
+  }
 }
 .draft-form__dot--win  { background: #4ade80; }
 .draft-form__dot--loss { background: var(--accent-crimson); }
@@ -11302,10 +11310,12 @@ label .form-label__hint {
 .draft-board__cell--champion {
   box-shadow: inset 0 0 0 1px rgba(212, 168, 75, 0.5);
 }
-.draft-board__cell--made.draft-board__cell--champion:hover {
-  box-shadow:
-    inset 0 0 0 1px rgba(212, 168, 75, 0.75),
-    0 4px 14px -2px rgba(212, 168, 75, 0.35);
+@media (hover: hover) {
+  .draft-board__cell--made.draft-board__cell--champion:hover {
+    box-shadow:
+      inset 0 0 0 1px rgba(212, 168, 75, 0.75),
+      0 4px 14px -2px rgba(212, 168, 75, 0.35);
+  }
 }
 
 /* Whole-team-tile champion already has a gold rank background; add a faint
@@ -11386,8 +11396,10 @@ label .form-label__hint {
   cursor: pointer;
   transition: filter 0.12s ease;
 }
-.draft-board__col-header:hover {
-  filter: brightness(1.15);
+@media (hover: hover) {
+  .draft-board__col-header:hover {
+    filter: brightness(1.15);
+  }
 }
 /* User's own column gets a strong crimson outer ring + top accent so
    "this is you" reads at a glance even when their team color is similar
@@ -11532,10 +11544,14 @@ label .form-label__hint {
   background: rgba(212, 168, 75, 0.30);
 }
 
-/* Lift on hover for clickable cells */
-.draft-board__cell--made:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+/* Lift on hover for clickable cells. Gated by @media (hover: hover) so
+   touch devices don't end up with cells visually "stuck lifted" after a
+   tap — iOS/Android keep :hover applied until the user taps elsewhere. */
+@media (hover: hover) {
+  .draft-board__cell--made:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  }
 }
 
 /* Pick label "1.1" / "2.5" in the top-right corner */
@@ -13988,10 +14004,12 @@ label .form-label__hint {
   transition: opacity 0.15s ease, transform 0.15s ease;
   pointer-events: none;
 }
-.draft-board__cell--made:hover .draft-react-palette {
-  opacity: 1;
-  transform: translateY(0);
-  pointer-events: auto;
+@media (hover: hover) {
+  .draft-board__cell--made:hover .draft-react-palette {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
 }
 .draft-react-palette__btn {
   width: 22px;
