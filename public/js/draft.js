@@ -1173,6 +1173,11 @@ let lastAnimatedPickId   = null;
 // scrolled to so we only scroll on a genuine clock change, not on every
 // re-render. Starts at 0 (no real pick has number 0).
 let lastScrolledClockPick = 0;
+// Set by renderHeader when the clock moves; consumed at the END of
+// renderAll. The scroll has to wait until renderDraftBoard() has rebuilt
+// the board (it replaces innerHTML and restores the old scroll position,
+// which would otherwise wipe out a pan started mid-render).
+let _pendingClockScroll = false;
 
 // Fetch every fighter row, paginating in 1000-row batches. Supabase's
 // default 1000-row cap silently truncates larger SELECTs — the fighters
@@ -2530,6 +2535,14 @@ function renderAll() {
   // If the View All modal is open, refresh it too so newly drafted fighters
   // disappear from its list in real time.
   if (document.getElementById('viewAllOverlay')) renderViewAllList();
+
+  // Fire any follow-the-clock scroll queued by renderHeader above, now that
+  // renderDraftBoard() has rebuilt the board and restored its scroll. Running
+  // it earlier would be undone by that rebuild.
+  if (_pendingClockScroll) {
+    _pendingClockScroll = false;
+    scrollDraftBoardToClock();
+  }
 }
 
 // ========================================================================
@@ -2790,7 +2803,11 @@ function renderHeader() {
   // yank the board before the user has oriented.
   if (initialPicksLoaded && currentPickNum !== lastScrolledClockPick) {
     lastScrolledClockPick = currentPickNum;
-    scrollDraftBoardToClock();
+    // Don't scroll yet — renderDraftBoard() rebuilds the board later in this
+    // same renderAll() pass and restores the old scroll position, which would
+    // wipe out the pan. Queue it; renderAll() fires it once the fresh board
+    // cells are in the DOM. See _pendingClockScroll.
+    _pendingClockScroll = true;
   }
 }
 
