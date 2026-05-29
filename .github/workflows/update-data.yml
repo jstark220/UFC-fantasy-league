@@ -1,13 +1,14 @@
 # ============================================================================
 # update-data.yml
-# Runs the full data pipeline on a weekly schedule and on manual trigger.
+# Runs the full data pipeline once a day and on manual trigger.
 #
-# Schedule: every Tuesday at 6am UTC (day after most UFC events, which are
-# Saturday nights US time = Sunday UTC). This ensures fresh results and
-# rankings are in the DB before managers check their lineups mid-week.
+# Schedule: every day at 6am UTC. Daily keeps event start times, rankings, and
+# results fresh - in particular enrichEventTimes.js (Step 1.5) re-checks ESPN
+# each day, so a prelim start that shifts during fight week is picked up within
+# 24h rather than waiting for a weekly run.
 #
 # Manual trigger: go to GitHub → Actions → "Update UFC Data" → Run workflow.
-# Use this after a major event if you don't want to wait for the Tuesday run.
+# Use this right after a major event if you don't want to wait for the next run.
 #
 # Required GitHub Secrets (Settings → Secrets → Actions):
 #   SUPABASE_URL              — your Supabase project URL
@@ -18,7 +19,7 @@ name: Update UFC Data
 
 on:
   schedule:
-    - cron: '0 6 * * 2'   # Every Tuesday at 6am UTC
+    - cron: '0 6 * * *'   # Every day at 6am UTC
   workflow_dispatch:        # Allow manual trigger from the GitHub Actions UI
 
 jobs:
@@ -46,6 +47,18 @@ jobs:
       - name: Ingest events (ufcstats)
         run: node ingestEvents.js
         continue-on-error: true   # Don't block the pipeline if ufcstats is down
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      # ---- Step 1.5: Enrich events with real start times from ESPN ----
+      # ufcstats only gives a date; ESPN publishes per-bout times. This sets
+      # prelim_start_time (earliest bout, UTC) and defaults lineup_lock_time to
+      # it when unset. Runs WITHOUT --relock, so manual locks are never clobbered.
+      # Must run after ingestEvents so any newly-seeded events get a time too.
+      - name: Enrich event start times (ESPN)
+        run: node enrichEventTimes.js
+        continue-on-error: true
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
