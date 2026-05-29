@@ -493,6 +493,16 @@ function restoreMockState() {
   picks              = payload.picks || [];
   mockStarted        = !!payload.mockStarted;
   mockPickIdCounter  = payload.mockPickIdCounter || 0;
+
+  // Re-anchor the pick clock to NOW so the timer treats the most recent
+  // restored pick as "just happened". Without this, a mock restored from
+  // a previous session would compute remaining=0 against the original
+  // (potentially hours-old) created_at, immediately playing the expired
+  // buzzer AND firing autoPick the moment the page loads.
+  if (picks.length > 0) {
+    picks[picks.length - 1].created_at = new Date().toISOString();
+  }
+  pickClockResetAt = Date.now();
   return true;
 }
 
@@ -1176,7 +1186,17 @@ async function initDraft() {
   if (!leagueId) { window.location.href = 'dashboard.html'; return; }
 
   // Set back link before data arrives so it's ready immediately
-  document.getElementById('leagueLink').href = 'league.html?id=' + leagueId;
+  var leagueLinkEl = document.getElementById('leagueLink');
+  leagueLinkEl.href = 'league.html?id=' + leagueId;
+  // Exiting the mock to the league wipes persisted mock state so the next
+  // visit to the draft room starts fresh. Avoids whole classes of stale-
+  // state bugs (timer anchored to a hours-old created_at, autodraft loops,
+  // a partially-restored board with bots from a different team count). We
+  // ONLY clear on this explicit "back to league" path — reload/refresh
+  // still restores so the user doesn't lose mid-mock progress accidentally.
+  leagueLinkEl.addEventListener('click', function() {
+    if (isMockMode) clearMockState();
+  });
 
   // Load all four data sets at the same time to minimise wait.
   // Picks come from `draft_picks` (immutable history), NOT from `rosters` —
@@ -2744,6 +2764,20 @@ function startPickTimer() {
   const totalSec = league.pick_timer_seconds || 90;
   containerEl.hidden = false;
 
+  // Seed lastClockBand to whatever band the timer is STARTING in. Without
+  // this, leagues with pick_timer_seconds at or below the warn threshold
+  // (e.g. the minimum 30s setting) would play clockWarn on the very first
+  // tick of every pick — because remaining starts at totalSec, lands
+  // immediately inside the 'warn' band, and the just-reset 'none' counts
+  // it as a transition. Sounds should only fire when the clock DROPS into
+  // a new band, not when it starts there.
+  const initialElapsedSec = (Date.now() - started.getTime()) / 1000;
+  const initialRemaining  = Math.max(0, Math.ceil(totalSec - initialElapsedSec));
+  lastClockBand = initialRemaining === 0    ? 'expired'
+                : initialRemaining <= 10    ? 'urgent'
+                : initialRemaining <= 30    ? 'warn'
+                :                              'none';
+
   function tick() {
     const elapsedSec = (Date.now() - started.getTime()) / 1000;
     const remaining  = Math.max(0, Math.ceil(totalSec - elapsedSec));
@@ -3388,7 +3422,12 @@ function renderDraftBoard() {
   // headers ("DANA WHITE PRIVILEGE") inflate their column. Desktop CSS
   // leaves .draft-board__col without an explicit width so columns still
   // share viewport width equally.
-  let html = '<div class="draft-board"><table class="draft-board__table">';
+  // --col-count drives clamp()-based text/photo sizing in CSS. Every
+  // team-count uses the short form ("A. Volkanovski" + "FW · C"); this
+  // var lets the styles scale fluidly from 4-team (largest) down to
+  // 12-team (smallest) without per-team-count classes.
+  let html = '<div class="draft-board" style="--col-count: ' + n + '">' +
+             '<table class="draft-board__table">';
   html += '<colgroup>';
   for (let i = 0; i < n; i++) {
     html += '<col class="draft-board__col">';
