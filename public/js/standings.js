@@ -424,8 +424,7 @@ async function fetchPointsBreakdown(memberId) {
       'end_round, end_time_seconds, card_position, title_type, is_title_defense, ' +
       'fighter_a_sig_strikes, fighter_a_takedowns, fighter_a_knockdowns, fighter_a_control_seconds, ' +
       'fighter_b_sig_strikes, fighter_b_takedowns, fighter_b_knockdowns, fighter_b_control_seconds, ' +
-      'fighter_a_opponent_rank, fighter_b_opponent_rank, ' +
-      'fight_of_the_night'
+      'fighter_a_opponent_rank, fighter_b_opponent_rank'
     )
     .in('event_id', eventIds);
   var fights = fightRes.data || [];

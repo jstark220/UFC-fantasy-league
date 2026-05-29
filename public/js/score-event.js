@@ -580,7 +580,6 @@ function resetFightForm() {
   document.getElementById('weightClass').value    = 'lightweight';
   document.getElementById('titleType').value      = 'none';
   document.getElementById('isTitleDefense').checked = false;
-  document.getElementById('fightOfTheNight').checked = false;
   document.getElementById('outcome').value        = '';
   document.getElementById('winner').value         = '';
   document.getElementById('endRound').value       = '';
@@ -618,7 +617,6 @@ function populateFightForm(fight) {
   document.getElementById('weightClass').value       = fight.weight_class  || 'lightweight';
   document.getElementById('titleType').value         = fight.title_type    || 'none';
   document.getElementById('isTitleDefense').checked  = !!fight.is_title_defense;
-  document.getElementById('fightOfTheNight').checked = !!fight.fight_of_the_night;
   document.getElementById('outcome').value           = fight.outcome || '';
   // Derive winner dropdown value from winner_id
   if (fight.winner_id && fight.winner_id === fight.fighter_a_id)      document.getElementById('winner').value = 'a';
@@ -703,7 +701,6 @@ async function handleFightFormSubmit(e) {
     card_position:               document.getElementById('cardPosition').value,
     title_type:                  document.getElementById('titleType').value,
     is_title_defense:            document.getElementById('isTitleDefense').checked,
-    fight_of_the_night:          document.getElementById('fightOfTheNight').checked,
     outcome:                     outcome,
     winner_id:                   winnerId,
     end_round:                   endRound,
@@ -915,7 +912,6 @@ async function saveScores() {
       win_bonus:        s.win_bonus,
       title_bonus:      s.title_bonus,
       ranked_opp_bonus: s.ranked_opp_bonus,
-      fotn_bonus:       s.fotn_bonus,
       card_multiplier:  s.card_multiplier,
       total_points:     s.total,
       scoring_detail:   s.scoring_detail,

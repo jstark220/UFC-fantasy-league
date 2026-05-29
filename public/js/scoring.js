@@ -62,11 +62,9 @@
     top10_win:                5,
     top15_win:                3,
 
-    // Performance bonuses. PotN was dropped from the scoring system —
-    // ufcstats / public APIs don't expose it per-fighter, and we don't
-    // want any manual commissioner input on game-day. FotN is still in
-    // because the icon is parseable from ufcstats.
-    fotn:                     4,
+    // Performance bonuses (Fight of the Night / Performance of the Night)
+    // were removed from the scoring system entirely — they were a weak idea
+    // and ESPN (our data source) doesn't expose them anyway.
 
     // Card-position multipliers
     main_event_mult:          1.2,
@@ -99,15 +97,13 @@
   //   fight          — a fight_results row, with both fighter_a_* and
   //                    fighter_b_* prefixed columns plus shared fields
   //                    (outcome, winner_id, end_round, end_time_seconds,
-  //                    title_type, is_title_defense, fight_of_the_night,
-  //                    card_position).
+  //                    title_type, is_title_defense, card_position).
   //   isA            — true if computing for fighter A, false for B
   //   scoringConfig  — JSONB from leagues.scoring_config; null/undefined
   //                    falls back entirely to v1.2 defaults
   //
   // Returns: { fighterId, total, base_points, win_bonus, title_bonus,
-  //            ranked_opp_bonus, fotn_bonus, card_multiplier,
-  //            scoring_detail }
+  //            ranked_opp_bonus, card_multiplier, scoring_detail }
   // -----------------------------------------------------------------------
   function computeFighterScore(fight, isA, scoringConfig) {
     var cfg    = scoringConfig || null;
@@ -204,14 +200,10 @@
       titleBonus = 0;
     }
 
-    // ---- Performance bonuses ----
-    // PotN intentionally dropped — see SCORING_DEFAULTS_V1_2 above.
-    var fotnBonus = fight.fight_of_the_night ? get(cfg, 'fotn') : 0;
-
     // ---- Card-position multiplier ----
     var multiplier = multiplierFor(fight.card_position, cfg);
 
-    var subtotal = base + winBonus + titleBonus + rankedOppBonus + fotnBonus;
+    var subtotal = base + winBonus + titleBonus + rankedOppBonus;
     var total    = Math.round(subtotal * multiplier * 100) / 100;  // 2 decimals
 
     return {
@@ -221,7 +213,6 @@
       win_bonus:        winBonus,
       title_bonus:      titleBonus,
       ranked_opp_bonus: rankedOppBonus,
-      fotn_bonus:       fotnBonus,
       card_multiplier:  multiplier,
       scoring_detail: {
         sig_strikes:      sigStrikes,

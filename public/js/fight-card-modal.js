@@ -73,7 +73,7 @@
       .from('fight_results')
       .select(
         'id, fighter_a_id, fighter_b_id, weight_class, card_position, ' +
-        'fight_order, title_type, outcome, winner_id, fight_of_the_night'
+        'fight_order, title_type, outcome, winner_id'
       )
       .eq('event_id', eventId);
     return res.data || [];

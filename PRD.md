@@ -292,8 +292,6 @@ Trades are explicitly deferred from MVP. Phase 2 feature. If time allows, a bare
 
 | Event | Points |
 |-------|--------|
-| Performance of the Night | +6 |
-| Fight of the Night | +4 (both fighters) |
 | Divisional title win | +10 |
 | Successful divisional title defense | +5 |
 | BMF or interim title win | +5 |

@@ -83,7 +83,7 @@
           divisional_title_win: 12, divisional_title_defense: 12,
           bmf_interim_win: 8, bmf_interim_defense: 8,
           top5_win: 8, top10_win: 5, top15_win: 3,
-          fotn: 4, main_event_mult: 1.2, co_main_mult: 1.1
+          main_event_mult: 1.2, co_main_mult: 1.1
         };
     var scoringCfg = (league && league.scoring_config) || {};
 
@@ -199,10 +199,6 @@
             '</ul>' +
             '<p><em>Title and ranked-opponent bonuses don\'t stack — only the larger of the two counts. ' +
             'Title-holders count as top-5 talent for the ranked-opponent bonus.</em></p>' +
-            '<p class="page-help__subheading"><strong>Performance bonuses</strong></p>' +
-            '<ul>' +
-              '<li>Fight of the Night: <strong>' + fmt(cfg('fotn')) + '</strong></li>' +
-            '</ul>' +
             '<p class="page-help__subheading"><strong>Card-position multiplier</strong></p>' +
             '<p>Main event fights score at <strong>×' + fmtMult(cfg('main_event_mult')) + '</strong>, ' +
             'co-mains at <strong>×' + fmtMult(cfg('co_main_mult')) + '</strong>. ' +

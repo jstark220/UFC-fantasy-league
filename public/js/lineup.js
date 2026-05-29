@@ -168,7 +168,7 @@ let rosterRowIds    = {};       // fighter_id -> rosters table row id (needed to
 // Fight card for the currently selected event. Populated by loadEventData()
 // from fight_results table. Each entry:
 //   { id, redId, blueId, redCorner, blueCorner, weightClass, cardPosition,
-//     badge, outcome, winnerId, titleType, isFotN }
+//     badge, outcome, winnerId, titleType }
 let selectedEventFightCard = [];
 
 // League scoring config (JSONB from leagues.scoring_config). Used to compute
@@ -490,7 +490,7 @@ async function loadEventData() {
       .from('fight_results')
       .select(`
         id, fighter_a_id, fighter_b_id, weight_class, card_position, fight_order,
-        title_type, is_title_defense, outcome, winner_id, fight_of_the_night,
+        title_type, is_title_defense, outcome, winner_id,
         end_round, end_time_seconds,
         fighter_a_sig_strikes, fighter_a_takedowns, fighter_a_knockdowns,
         fighter_a_control_seconds, fighter_a_opponent_rank,
@@ -566,7 +566,6 @@ async function loadEventData() {
       titleType:    f.title_type,
       outcome:      f.outcome,
       winnerId:     f.winner_id,
-      isFotN:       !!f.fight_of_the_night,
       badge:        f.card_position === 'main_event' ? 'Main Event'
                   : f.card_position === 'co_main'    ? 'Co-Main'
                   : f.title_type && f.title_type !== 'none' ? 'Title Fight'

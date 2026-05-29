@@ -204,7 +204,7 @@
   // .select() silently drops everything past the first page otherwise.
   async function fetchAllFightResults() {
     var FIGHT_COLS = 'fighter_a_id,fighter_b_id,outcome,winner_id,end_round,' +
-      'end_time_seconds,title_type,is_title_defense,fight_of_the_night,card_position,' +
+      'end_time_seconds,title_type,is_title_defense,card_position,' +
       'fighter_a_sig_strikes,fighter_a_takedowns,fighter_a_knockdowns,fighter_a_control_seconds,' +
       'fighter_a_opponent_rank,' +
       'fighter_b_sig_strikes,fighter_b_takedowns,fighter_b_knockdowns,fighter_b_control_seconds,' +

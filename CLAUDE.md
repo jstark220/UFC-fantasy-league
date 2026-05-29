@@ -66,7 +66,7 @@ Base scoring: sig strike +0.1, takedown +1, knockdown +2, control +0.01/sec
 
 Win bonuses: R1 finish +18, R2 +14, R3 +9, R4/R5 +8, Decision +6, Quick win (<60s R1) +5 additional
 
-League bonuses: PotN +6, FotN +4, Title win +10, Title defense +5, BMF/interim win +5, BMF/interim defense +3, Top-5 opp win +4, Top-10 +2, Top-15 +1
+League bonuses: Title win +10, Title defense +5, BMF/interim win +5, BMF/interim defense +3, Top-5 opp win +4, Top-10 +2, Top-15 +1 (Performance/Fight of the Night bonuses were removed)
 
 Multipliers: Main event 1.2x, Co-main 1.1x
 
