@@ -634,6 +634,16 @@ function setupFullscreenMode() {
 function setupRowPreviewHover() {
   if (document.getElementById('draftRowPreview')) return;
 
+  // Touch devices have no real "hover" — a tap fires mouseover but never
+  // mouseout (until the user taps elsewhere), so the preview would stick
+  // open after every tap and look like an unwanted modal popping up.
+  // Skip the whole feature on touch-only devices; users still get the
+  // full fighter modal by tapping the fighter name (data-open-fighter).
+  if (typeof window.matchMedia === 'function' &&
+      !window.matchMedia('(hover: hover)').matches) {
+    return;
+  }
+
   var preview = document.createElement('div');
   preview.id        = 'draftRowPreview';
   preview.className = 'draft-row-preview';
@@ -813,6 +823,14 @@ function setupRowPreviewHover() {
 // than once.
 function setupFormDotHover() {
   if (document.getElementById('draftFormPopover')) return;
+
+  // Touch devices: same reasoning as setupRowPreviewHover. mouseover fires
+  // on tap and the popover never goes away. Skip the feature entirely on
+  // touch-only devices; the dots themselves still convey W/L at a glance.
+  if (typeof window.matchMedia === 'function' &&
+      !window.matchMedia('(hover: hover)').matches) {
+    return;
+  }
 
   var popover = document.createElement('div');
   popover.id        = 'draftFormPopover';
