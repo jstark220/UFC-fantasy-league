@@ -228,6 +228,7 @@ function setupMockChrome() {
       lastAnimatedPickId  = null;
       wasMyTurn           = false;
       lastClockBand       = 'none';
+      lastScrolledClockPick = 0;
       draftDoneSounded    = false;
       league.draft_completed = false;
       // Clear persisted state so the next refresh doesn't restore the
@@ -259,6 +260,7 @@ function setupMockChrome() {
       lastAnimatedPickId  = null;
       wasMyTurn           = false;
       lastClockBand       = 'none';
+      lastScrolledClockPick = 0;
       draftDoneSounded    = false;
       league.draft_completed = false;
       league.draft_order     = [];
@@ -1164,6 +1166,13 @@ let draftDoneSounded = false;
 //     twice (own picks land via makePick AND realtime broadcast).
 let initialPicksLoaded   = false;
 let lastAnimatedPickId   = null;
+
+// Mobile auto-scroll tracker. The board follows the clock: whenever a new
+// pick number comes "on the clock" (for ANY manager, not just the viewer),
+// we smooth-scroll that cell into view. This holds the last pick number we
+// scrolled to so we only scroll on a genuine clock change, not on every
+// re-render. Starts at 0 (no real pick has number 0).
+let lastScrolledClockPick = 0;
 
 // Fetch every fighter row, paginating in 1000-row batches. Supabase's
 // default 1000-row cap silently truncates larger SELECTs — the fighters
@@ -2350,6 +2359,47 @@ function smoothScrollDraftBoard(container, targetLeft, targetTop) {
 }
 
 // ========================================================================
+// FOLLOW-THE-CLOCK SCROLL (mobile)
+// Smooth-scroll the board so whichever cell is NOW on the clock is centered.
+// Called from renderHeader() whenever a new manager comes on the clock — so
+// the board tracks the clock for EVERYONE, not just when the viewer is the
+// one selecting a fighter. That's where the action is about to happen, so the
+// user wants to see it whether it's their own pick or another manager's.
+// Skipped if the target is already fully visible so the board doesn't shake.
+// Desktop is left alone (the full board is visible there, nothing to chase).
+// ========================================================================
+function scrollDraftBoardToClock() {
+  // Mobile only — desktop shows the whole board at once.
+  if (typeof window.matchMedia !== 'function' ||
+      !window.matchMedia('(max-width: 899px)').matches) {
+    return;
+  }
+  var pickNum    = getCurrentPickNum();
+  var targetCell = document.querySelector('.draft-board__cell[data-pick-num="' + pickNum + '"]');
+  // Draft completed → no cell on the clock to scroll to; skip.
+  if (!targetCell) return;
+  var scrollContainer = targetCell.closest('.draft-board');
+  // clientWidth==0 means the board panel is hidden (e.g. user is on the
+  // Fighters tab on mobile); skip the scroll then so we don't lock in a
+  // bogus position based on a 0-sized container.
+  if (!scrollContainer || scrollContainer.clientWidth === 0) return;
+  var cellRect = targetCell.getBoundingClientRect();
+  var contRect = scrollContainer.getBoundingClientRect();
+  // Both rects are in viewport coords — fully-visible means the target
+  // sits entirely inside the container's box.
+  var fullyVisible = cellRect.left   >= contRect.left   &&
+                     cellRect.right  <= contRect.right  &&
+                     cellRect.top    >= contRect.top    &&
+                     cellRect.bottom <= contRect.bottom;
+  if (fullyVisible) return;
+  var cellLeftInContainer = scrollContainer.scrollLeft + (cellRect.left - contRect.left);
+  var cellTopInContainer  = scrollContainer.scrollTop  + (cellRect.top  - contRect.top);
+  var targetLeft = Math.max(0, cellLeftInContainer - (scrollContainer.clientWidth  - targetCell.clientWidth)  / 2);
+  var targetTop  = Math.max(0, cellTopInContainer  - (scrollContainer.clientHeight - targetCell.clientHeight) / 2);
+  smoothScrollDraftBoard(scrollContainer, targetLeft, targetTop);
+}
+
+// ========================================================================
 // PICK REVEAL ANIMATION
 // Triggers when a fresh pick lands — locates the cell in the board grid,
 // flashes the reveal animation (cell scale + glow + photo fade-in), and
@@ -2378,48 +2428,16 @@ function animatePickReveal(pick) {
   var pickedCell = document.querySelector('.draft-board__cell[data-pick-num="' + pick.draft_pick + '"]');
   if (!pickedCell) return;
 
-  // Mobile: smooth-scroll the board to whichever cell is NOW on the
-  // clock (the next slot to be picked) — that's where the action is
-  // about to happen, so the user wants to see it whether it's their
-  // own pick or another manager's. Scrolling to the JUST-picked cell
-  // instead would leave the user's about-to-pick slot off-screen in
-  // the common case where an AI just finished and it's the user's turn.
-  // Skipped if the target is already fully visible so the board doesn't
-  // shake on every pick.
-  if (typeof window.matchMedia === 'function' &&
-      window.matchMedia('(max-width: 899px)').matches) {
-    var nextPickNum = getCurrentPickNum();
-    var targetCell  = document.querySelector('.draft-board__cell[data-pick-num="' + nextPickNum + '"]');
-    // Draft completed → no next cell to scroll to; skip.
-    if (targetCell) {
-      var scrollContainer = targetCell.closest('.draft-board');
-      // clientWidth==0 means the board panel is hidden (e.g. user is on
-      // the Fighters tab on mobile); skip the scroll then so we don't
-      // lock in a bogus position based on a 0-sized container.
-      if (scrollContainer && scrollContainer.clientWidth > 0) {
-        var cellRect = targetCell.getBoundingClientRect();
-        var contRect = scrollContainer.getBoundingClientRect();
-        // Both rects are in viewport coords — fully-visible means the
-        // target sits entirely inside the container's box.
-        var fullyVisible = cellRect.left   >= contRect.left   &&
-                           cellRect.right  <= contRect.right  &&
-                           cellRect.top    >= contRect.top    &&
-                           cellRect.bottom <= contRect.bottom;
-        if (!fullyVisible) {
-          var cellLeftInContainer = scrollContainer.scrollLeft + (cellRect.left - contRect.left);
-          var cellTopInContainer  = scrollContainer.scrollTop  + (cellRect.top  - contRect.top);
-          var targetLeft = Math.max(0, cellLeftInContainer - (scrollContainer.clientWidth  - targetCell.clientWidth)  / 2);
-          var targetTop  = Math.max(0, cellTopInContainer  - (scrollContainer.clientHeight - targetCell.clientHeight) / 2);
-          smoothScrollDraftBoard(scrollContainer, targetLeft, targetTop);
-        }
-      }
-    }
-  }
+  // Mobile auto-scroll used to live here (tied to a pick being revealed),
+  // but the board now follows the CLOCK instead — see scrollDraftBoardToClock(),
+  // which renderHeader() calls whenever a new manager comes on the clock. That
+  // way the board tracks whoever is on the clock, not just the act of a fighter
+  // being selected.
 
   // Re-applying the same class doesn't restart a CSS animation; toggling
   // off → forcing a reflow → toggling on does. The reflow read of
   // offsetWidth is the standard trick. Flashes the just-picked cell —
-  // separate from the scroll target (above), which follows the clock.
+  // separate from the follow-the-clock scroll (now driven by renderHeader).
   pickedCell.classList.remove('draft-board__cell--just-picked');
   // eslint-disable-next-line no-unused-expressions
   pickedCell.offsetWidth;
@@ -2764,6 +2782,16 @@ function renderHeader() {
 
   // Restart the pick clock anchored to the current pick's start time.
   startPickTimer();
+
+  // Follow the clock on mobile: whenever the on-the-clock pick number
+  // changes (for ANY manager), pan the board to that cell. Gated on a
+  // genuine change so we don't re-scroll on every render, and on
+  // initialPicksLoaded so the very first paint after page load doesn't
+  // yank the board before the user has oriented.
+  if (initialPicksLoaded && currentPickNum !== lastScrolledClockPick) {
+    lastScrolledClockPick = currentPickNum;
+    scrollDraftBoardToClock();
+  }
 }
 
 // ========================================================================
