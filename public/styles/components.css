@@ -6667,6 +6667,45 @@ body {
     gap: var(--space-4);
   }
 
+  /* League page mobile: keep cards + managers table within the viewport.
+     The COMMISSIONER badge + Remove button + heavy cell/card padding were
+     forcing the table (and thus the whole page) wider than the screen, which
+     clipped the draft buttons and invite row on the right edge. */
+  .league-info-card {
+    padding: var(--space-4);
+  }
+  .league-table th,
+  .league-table td {
+    padding: var(--space-2);
+  }
+  /* Team-name column wraps instead of forcing the table wide. */
+  .league-table td:first-child { word-break: break-word; }
+  /* Role badge stays compact and may wrap rather than push the row out. */
+  .league-table .badge {
+    font-size: 9px;
+    padding: 2px 6px;
+    white-space: normal;
+    line-height: 1.2;
+  }
+  /* Compact Remove button. */
+  .league-table .btn-danger {
+    padding: 4px 8px;
+  }
+  /* Invite code + copy buttons wrap to a second line rather than overflow:
+     code on its own row, the two copy buttons below it. */
+  .invite-code-box {
+    flex-wrap: wrap;
+  }
+  .invite-code-text {
+    flex-basis: 100%;
+  }
+  /* Draft action buttons fill the row and wrap cleanly (no side spill). */
+  .draft-actions > a,
+  .draft-actions > button {
+    flex: 1 1 auto;
+    text-align: center;
+  }
+
   /* League page: "This Week" card. Desktop is a flex row with event
      info left and countdown/CTA right. On mobile, stack vertically so
      the countdown gets its own line and isn't cramped. Padding tightens
