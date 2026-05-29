@@ -11680,10 +11680,11 @@ label .form-label__hint {
 
 .draft-board__cell-photo {
   /* Photo shrinks as columns get narrower. --col-count is set inline on
-     .draft-board by renderDraftBoard; defaults to 8 if missing. Range:
-     ~36px at 4 teams, ~29px at 8, ~22px at 12. */
-  width:  clamp(22px, calc(43px - var(--col-count, 8) * 1.75px), 36px);
-  height: clamp(22px, calc(43px - var(--col-count, 8) * 1.75px), 36px);
+     .draft-board by renderDraftBoard; defaults to 8 if missing. Bumped up
+     ~2px across the board to fill the cell better: ~38px at 4 teams, ~31px
+     at 8, ~24px at 12. */
+  width:  clamp(24px, calc(45px - var(--col-count, 8) * 1.75px), 38px);
+  height: clamp(24px, calc(45px - var(--col-count, 8) * 1.75px), 38px);
   border-radius: 50%;
   object-fit: cover;
   /* UFC fighter photos are full-body with the head at the top of the
@@ -11706,10 +11707,13 @@ label .form-label__hint {
 }
 
 .draft-board__pick-name {
-  /* Fluid sizing keyed to --col-count: ~16px at 4 teams, ~13.5px at 8,
-     ~11px at 12. Keeps the short name ("A. Volkanovski") legible at every
-     team size without ever truncating. */
-  font-size: clamp(11px, calc(18.5px - var(--col-count, 8) * 0.625px), 16px);
+  /* Fluid sizing keyed to --col-count: ~16.5px at 4 teams, ~15px at 8,
+     ~13.75px at 10, with a 13.5px floor that lifts the narrowest boards
+     (11–12 teams) so they don't read tiny — those counts otherwise bottomed
+     out around 12.5px. Sized to fill the cell on desktop while still keeping
+     the short name ("A. Volkanovski") on one line (ellipsis catches the rare
+     long one). Mobile sets its own fixed size, so this is desktop-only. */
+  font-size: clamp(13.5px, calc(20px - var(--col-count, 8) * 0.625px), 16.5px);
   font-weight: 800;
   color: var(--text-primary);
   white-space: nowrap;
@@ -11737,7 +11741,9 @@ label .form-label__hint {
 }
 
 .draft-board__pick-meta {
-  font-size: clamp(9px, calc(13.5px - var(--col-count, 8) * 0.375px), 12px);
+  /* Nudged up alongside the name so the meta line ("FW · C") stays in
+     proportion: ~13px at 4 teams, ~11.5px at 8, ~10px at 12. */
+  font-size: clamp(9.5px, calc(14.5px - var(--col-count, 8) * 0.375px), 13px);
   color: rgba(255, 255, 255, 0.92);
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -11973,13 +11979,16 @@ label .form-label__hint {
     top: var(--nav-height);
     z-index: 40;
   }
-  /* Tight status content on mobile so it stays at a predictable ~46px
-     height (single line) — that's what the sticky-tab offset below
-     assumes. */
+  /* Tight status content on mobile at a predictable 54px height — that's
+     what the sticky-tab offset below assumes (kept in sync). */
   .draft-status__inner {
     padding: var(--space-2) var(--space-3);
     gap: var(--space-3);
     flex-wrap: nowrap;
+    align-items: center;
+    /* Fixed-ish height so the sticky tab bar below can offset to it. The
+       kicker-over-value pills (below) set this; keep the tab `top` in sync. */
+    min-height: 54px;
   }
   .draft-status__turn {
     font-size: 13px;
@@ -11992,12 +12001,52 @@ label .form-label__hint {
     font-size: 11px;
     white-space: nowrap;
   }
+
+  /* ===== Right-side info pills (your-next-pick + pick clock) =====
+     The default baseline-row layout (label beside value) got squeezed by
+     the narrow strip and wrapped each label/value into 2–3 lines, which
+     read as cramped and clunky. On mobile, lay each pill out as a compact
+     kicker-over-value stack: a tiny uppercase label on top, the value
+     below. Lock them from shrinking so they never wrap internally and so
+     the whose-turn text to their left keeps its own room. */
+  .draft-status__right {
+    gap: var(--space-2);
+    flex-shrink: 0;
+  }
+  .draft-next-pick,
+  .draft-timer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+    padding: 4px 9px;
+    flex-shrink: 0;
+    white-space: nowrap;
+    line-height: 1.15;
+  }
+  .draft-next-pick__value {
+    font-size: 14px;
+  }
+  .draft-timer__value {
+    /* The clock is the hero of the strip — keep it a touch larger. Drop the
+       baseline-row min-width/right-align so it sits flush under its label. */
+    font-size: 17px;
+    min-width: 0;
+    text-align: left;
+  }
+  /* The "in N picks" segment just repeats the banner above the strip
+     ("Up in N picks") — drop it (and its trailing separator) on mobile so
+     the pill reads as a clean "pick number · ETA". */
+  .draft-next-pick__count,
+  .draft-next-pick__count + .draft-next-pick__sep {
+    display: none;
+  }
   /* Sticky tabs sit just below the status strip so the user can jump
      between Board / Fighters / My Roster without scrolling to the top. */
   .draft-tabs {
     position: sticky;
-    /* Status strip is ~46px tall with the tightened content above. */
-    top: calc(var(--nav-height) + 46px);
+    /* Status strip is 54px tall (min-height on .draft-status__inner above,
+       sized for the kicker-over-value pills). Keep these in sync. */
+    top: calc(var(--nav-height) + 54px);
     z-index: 35;
     background: var(--bg-primary);
   }
