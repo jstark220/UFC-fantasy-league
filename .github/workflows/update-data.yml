@@ -90,10 +90,13 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
-      # ---- Step 5: Ingest fight results for all events since 2023 ----
-      # Safe to re-run — uses ufcstats_fight_id as the upsert key.
-      - name: Ingest fight results
-        run: node ingestFightResults.js --all
+      # ---- Step 5: Ingest fight results from ESPN ----
+      # Reconciles recent + upcoming ESPN-linked events into fight_results
+      # (stats, method, order, matchups). Go-forward only; historical
+      # ufcstats-sourced rows are left intact. Matches/dedups fighters by
+      # espn_athlete_id -> name -> last-name+initial.
+      - name: Ingest fight results (ESPN)
+        run: node ingestFightResults.js --back=45
         continue-on-error: true
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

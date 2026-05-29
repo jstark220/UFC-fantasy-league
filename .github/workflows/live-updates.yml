@@ -1,7 +1,7 @@
 # ============================================================================
 # live-updates.yml
 # Runs every 5 minutes during typical UFC event windows to pick up fight
-# results as they're posted to ufcstats.com.
+# results from ESPN as they're posted.
 #
 # UFC events run Saturday nights US time:
 #   ~7pm ET prelims start, ~10pm ET main card, ~1am ET event ends
@@ -54,9 +54,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Scrape ufcstats for recent fight results
-      - name: Ingest recent fight results
-        run: node ingestFightResults.js --recent
+      # Pull recent fight results from ESPN (live scoring on event nights).
+      - name: Ingest recent fight results (ESPN)
+        run: node ingestFightResults.js --back=10
         continue-on-error: true
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
