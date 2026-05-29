@@ -218,6 +218,11 @@
         .from('fight_results')
         .select(FIGHT_COLS)
         .not('outcome', 'is', null)
+        // Unique tiebreaker so paginated .range() windows are stable across
+        // queries. Without a deterministic ORDER BY, multi-page fetches can
+        // repeat or skip rows — here that would double-count or drop fights
+        // in the fantasy-value math. (Stable in practice today, but unsafe.)
+        .order('id', { ascending: true })
         .range(from, from + PAGE - 1);
       if (res.error || !res.data) break;
       all = all.concat(res.data);
@@ -235,6 +240,9 @@
       var res = await supabaseClient
         .from('fighters')
         .select('id, name, current_rank, is_champion, is_sub_champion, sub_title_type, is_active')
+        // Unique tiebreaker — see fetchAllFightResults above. Keeps the
+        // paginated fighter fetch from silently dropping/duplicating rows.
+        .order('id', { ascending: true })
         .range(from, from + PAGE - 1);
       if (res.error || !res.data) break;
       all = all.concat(res.data);

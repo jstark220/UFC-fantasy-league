@@ -792,6 +792,10 @@ async function fetchAllFightResults() {
       .from('fight_results')
       .select(FIGHT_COLS)
       .not('outcome', 'is', null)
+      // Unique tiebreaker so paginated .range() windows stay stable across
+      // queries — without a deterministic ORDER BY, multi-page fetches can
+      // repeat or skip rows (here that would corrupt the waiver projections).
+      .order('id', { ascending: true })
       .range(from, from + PAGE - 1);
     if (res.error || !res.data) break;
     all = all.concat(res.data);

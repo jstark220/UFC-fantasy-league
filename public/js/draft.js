@@ -1197,6 +1197,14 @@ async function fetchAllFighters() {
       .select(FIGHTER_COLS)
       .order('is_champion', { ascending: false })
       .order('current_rank', { nullsFirst: false })
+      // CRITICAL: a unique tiebreaker (id) so the sort is fully
+      // deterministic. Without it, the 6k+ unranked non-champions all tie
+      // on the two keys above, and Postgres can order those ties
+      // DIFFERENTLY for each paginated query — so a fighter lands in two
+      // pages (shown twice) while another lands in none (silently dropped).
+      // That's the "two Dooho Choi" / missing-fighter bug. Keep id last so
+      // the visible champ-then-rank order is preserved.
+      .order('id', { ascending: true })
       .range(from, from + PAGE - 1);
     if (res.error || !res.data) break;
     all = all.concat(res.data);
