@@ -56,7 +56,9 @@ body {
   white-space: nowrap;
   box-sizing: border-box;
 }
-.btn-primary:hover    { background: var(--accent-crimson-hover); }
+@media (hover: hover) {
+  .btn-primary:hover    { background: var(--accent-crimson-hover); }
+}
 .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Nav Sign Up: resting glow so it reads as the primary action at a glance */
@@ -65,8 +67,10 @@ body {
   box-shadow: 0 0 18px -4px rgba(193, 59, 46, 0.55);
   transition: background 0.15s ease, box-shadow 0.15s ease;
 }
-.top-nav__actions .btn-primary:hover {
-  box-shadow: 0 0 26px -2px rgba(193, 59, 46, 0.75);
+@media (hover: hover) {
+  .top-nav__actions .btn-primary:hover {
+    box-shadow: 0 0 26px -2px rgba(193, 59, 46, 0.75);
+  }
 }
 
 /* Destructive action button — used for remove/delete operations */
@@ -86,7 +90,9 @@ body {
   text-decoration: none;
   transition: background 0.15s ease;
 }
-.btn-danger:hover    { background: var(--accent-crimson-subtle); }
+@media (hover: hover) {
+  .btn-danger:hover    { background: var(--accent-crimson-subtle); }
+}
 .btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .btn-secondary {
@@ -107,9 +113,14 @@ body {
   white-space: nowrap;
   box-sizing: border-box;
 }
-.btn-secondary:hover {
-  background: var(--bg-tertiary);
-  border-color: var(--text-primary);
+/* Hover gated so touch devices don't leave the Draft button (and every
+   other btn-secondary in the app) visually "stuck active" after a tap —
+   iOS/Android keep :hover applied until the user taps elsewhere. */
+@media (hover: hover) {
+  .btn-secondary:hover {
+    background: var(--bg-tertiary);
+    border-color: var(--text-primary);
+  }
 }
 .btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
 
@@ -129,7 +140,9 @@ body {
   white-space: nowrap;
   position: relative;
 }
-.btn-ghost:hover { color: var(--text-primary); }
+@media (hover: hover) {
+  .btn-ghost:hover { color: var(--text-primary); }
+}
 
 /* Animated underline for nav ghost links — grows from center on hover */
 .top-nav__links .btn-ghost::after {
@@ -143,9 +156,11 @@ body {
   border-radius: 1px;
   transition: left 0.2s ease, right 0.2s ease;
 }
-.top-nav__links .btn-ghost:hover::after {
-  left: 12px;
-  right: 12px;
+@media (hover: hover) {
+  .top-nav__links .btn-ghost:hover::after {
+    left: 12px;
+    right: 12px;
+  }
 }
 
 /* Small icon button for the theme toggle — sits in the nav */
@@ -6065,9 +6080,11 @@ body {
   display: none;
 }
 
-.lineup-roster-row__name:hover {
-  color: var(--accent-crimson);
-  text-decoration: underline;
+@media (hover: hover) {
+  .lineup-roster-row__name:hover {
+    color: var(--accent-crimson);
+    text-decoration: underline;
+  }
 }
 
 .lineup-roster-row__matchup {
