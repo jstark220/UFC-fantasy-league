@@ -2436,20 +2436,68 @@ async function saveEditEvent() {
   saveBtn.disabled = true;
   saveBtn.textContent = 'Saving...';
 
-  // Writes go to league_event_overrides (per-league), NOT ufc_events
-  // (global real schedule). Upsert keyed on (league_id, event_id) so
-  // re-saving updates the same row. RLS restricts this to commissioners.
-  var { error } = await supabaseClient
-    .from('league_event_overrides')
-    .upsert({
-      league_id:         leagueId,
-      event_id:          selectedEvent.id,
-      name:              name,
-      full_name:         fullName,
-      event_date:        date,
-      lineup_lock_time:  lockIso,
-      venue:             venue
-    }, { onConflict: 'league_id,event_id' });
+  // Writes go to league_event_overrides (per-league), NOT ufc_events (global
+  // real schedule). CRUCIAL: only persist fields that actually DIFFER from the
+  // base event. The form is pre-filled from the base, so blindly upserting
+  // every field snapshots the base into the override — and that snapshot then
+  // goes stale the moment the global schedule updates (e.g. the daily ESPN
+  // job refreshing the prelim lock time), silently masking the new value.
+  // That "phantom override" is exactly what froze a lineup-lock countdown at
+  // the old main-card time. Fields equal to the base are stored as null so the
+  // read-time merge falls back to the global row; if NOTHING differs we delete
+  // the override row entirely so no phantom is left behind.
+  var baseRes = await supabaseClient
+    .from('ufc_events')
+    .select('name, full_name, event_date, lineup_lock_time, venue')
+    .eq('id', selectedEvent.id)
+    .single();
+  if (baseRes.error) {
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Save changes';
+    alert('Could not load the event to compare: ' + baseRes.error.message);
+    return;
+  }
+  var base = baseRes.data;
+
+  // Same instant regardless of string format ("+00:00" vs ".000Z").
+  function sameInstant(a, b) {
+    if (!a && !b) return true;
+    if (!a || !b) return false;
+    return new Date(a).getTime() === new Date(b).getTime();
+  }
+  // Treat '' and null as equivalent for nullable text fields.
+  function norm(v) { return (v == null || v === '') ? null : v; }
+
+  // Each field carries the typed value only when it differs from the base.
+  var override = {
+    name:             name           !== base.name              ? name     : null,
+    full_name:        norm(fullName) !== norm(base.full_name)    ? fullName : null,
+    event_date:       date           !== base.event_date        ? date     : null,
+    lineup_lock_time: sameInstant(lockIso, base.lineup_lock_time) ? null    : lockIso,
+    venue:            norm(venue)    !== norm(base.venue)        ? venue    : null
+  };
+  var hasOverride = Object.keys(override).some(function(k) { return override[k] != null; });
+
+  var error;
+  if (hasOverride) {
+    // Upsert keyed on (league_id, event_id) so re-saving updates the same row.
+    // Matching fields are null, which also clears any field that used to
+    // differ but now matches the base. RLS restricts this to commissioners.
+    var up = await supabaseClient
+      .from('league_event_overrides')
+      .upsert(Object.assign({ league_id: leagueId, event_id: selectedEvent.id }, override),
+              { onConflict: 'league_id,event_id' });
+    error = up.error;
+  } else {
+    // Nothing differs from the global event — remove any existing override row
+    // so it doesn't linger and go stale.
+    var del = await supabaseClient
+      .from('league_event_overrides')
+      .delete()
+      .eq('league_id', leagueId)
+      .eq('event_id', selectedEvent.id);
+    error = del.error;
+  }
 
   if (error) {
     saveBtn.disabled = false;
@@ -2467,7 +2515,7 @@ async function saveEditEvent() {
   selectedEvent.event_date        = date;
   selectedEvent.lineup_lock_time  = lockIso;
   selectedEvent.venue             = venue;
-  selectedEvent._hasOverride      = true;
+  selectedEvent._hasOverride      = hasOverride;
   var idx = availableEvents.findIndex(function(e) { return e.id === selectedEvent.id; });
   if (idx !== -1) availableEvents[idx] = selectedEvent;
 
