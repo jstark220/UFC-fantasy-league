@@ -2303,6 +2303,52 @@ function handlePickDelete(payload) {
   maybeAutoPickNow();
 }
 
+// Custom rAF-driven smooth scroll for the mobile draft board. Browser-
+// native `behavior: 'smooth'` on iOS Safari is too snappy and reads as a
+// startling "screen shake" when it fires every pick — this gives us a
+// longer duration (700ms) with ease-in-out cubic so each re-center feels
+// like a deliberate camera pan instead. Cancels any in-flight animation
+// so back-to-back picks (e.g. snake reversal) don't fight each other.
+// Honors prefers-reduced-motion by jumping straight to the target.
+var _draftBoardScrollRAF = null;
+function smoothScrollDraftBoard(container, targetLeft, targetTop) {
+  if (_draftBoardScrollRAF != null) {
+    cancelAnimationFrame(_draftBoardScrollRAF);
+    _draftBoardScrollRAF = null;
+  }
+  // Accessibility: respect the user's reduced-motion preference.
+  if (typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    container.scrollLeft = targetLeft;
+    container.scrollTop  = targetTop;
+    return;
+  }
+  var startLeft  = container.scrollLeft;
+  var startTop   = container.scrollTop;
+  var deltaLeft  = targetLeft - startLeft;
+  var deltaTop   = targetTop  - startTop;
+  if (deltaLeft === 0 && deltaTop === 0) return;
+  var duration   = 700;
+  var startTime  = null;
+  // ease-in-out cubic: gentle on both ends, no hard start/stop.
+  function ease(t) {
+    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  }
+  function step(timestamp) {
+    if (startTime === null) startTime = timestamp;
+    var t = Math.min(1, (timestamp - startTime) / duration);
+    var k = ease(t);
+    container.scrollLeft = startLeft + deltaLeft * k;
+    container.scrollTop  = startTop  + deltaTop  * k;
+    if (t < 1) {
+      _draftBoardScrollRAF = requestAnimationFrame(step);
+    } else {
+      _draftBoardScrollRAF = null;
+    }
+  }
+  _draftBoardScrollRAF = requestAnimationFrame(step);
+}
+
 // ========================================================================
 // PICK REVEAL ANIMATION
 // Triggers when a fresh pick lands — locates the cell in the board grid,
@@ -2331,6 +2377,37 @@ function animatePickReveal(pick) {
   // (Adding the attribute happens in renderDraftBoard below.)
   var cell = document.querySelector('.draft-board__cell[data-pick-num="' + pick.draft_pick + '"]');
   if (!cell) return;
+
+  // Mobile: smooth-scroll the board so the freshly-revealed cell is
+  // centered in the viewport — but only when the cell isn't already
+  // fully on screen. Picks the user can already see don't need a scroll
+  // (the cell-flash animation alone is enough feedback), and yanking the
+  // board every pick reads as a jittery "screen shake".
+  if (typeof window.matchMedia === 'function' &&
+      window.matchMedia('(max-width: 899px)').matches) {
+    var scrollContainer = cell.closest('.draft-board');
+    // clientWidth==0 means the board panel is hidden (e.g. user is on
+    // the Fighters tab on mobile); skip the scroll in that case so we
+    // don't lock in a bogus position based on a 0-sized container.
+    if (scrollContainer && scrollContainer.clientWidth > 0) {
+      var cellRect = cell.getBoundingClientRect();
+      var contRect = scrollContainer.getBoundingClientRect();
+      // The cell's bounding rect and the container's are both in viewport
+      // coords — a fully-visible cell sits entirely inside the container.
+      var fullyVisible = cellRect.left   >= contRect.left   &&
+                         cellRect.right  <= contRect.right  &&
+                         cellRect.top    >= contRect.top    &&
+                         cellRect.bottom <= contRect.bottom;
+      if (!fullyVisible) {
+        // Convert cell viewport coords into container-scroll coords.
+        var cellLeftInContainer = scrollContainer.scrollLeft + (cellRect.left - contRect.left);
+        var cellTopInContainer  = scrollContainer.scrollTop  + (cellRect.top  - contRect.top);
+        var targetLeft = Math.max(0, cellLeftInContainer - (scrollContainer.clientWidth  - cell.clientWidth)  / 2);
+        var targetTop  = Math.max(0, cellTopInContainer  - (scrollContainer.clientHeight - cell.clientHeight) / 2);
+        smoothScrollDraftBoard(scrollContainer, targetLeft, targetTop);
+      }
+    }
+  }
 
   // Re-applying the same class doesn't restart a CSS animation; toggling
   // off → forcing a reflow → toggling on does. The reflow read of

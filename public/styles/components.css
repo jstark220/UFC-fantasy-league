@@ -15126,12 +15126,23 @@ label .form-label__hint {
   }
 }
 
-/* Flag hidden on desktop — the photo already establishes fighter identity. */
+/* Country flag pinned to the top-left of every made cell — same identity
+   hint as on mobile, now on desktop too. The mobile @media block above
+   tightens the position/size further; this base rule covers desktop. */
 .draft-board__cell-flag {
-  display: none;
+  position: absolute;
+  top: 4px;
+  left: 5px;
+  z-index: 2;
+  font-size: 13px;
+  line-height: 1;
+  pointer-events: none;
+  /* Drop shadow so the emoji stays legible across all the division-tinted
+     backgrounds (some are very saturated). */
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.5));
 }
-@media (max-width: 899px) {
-  .draft-board__cell-flag {
-    display: inline-block;
-  }
+/* If both a flag AND a value chip want the top-left, push the value chip
+   down so they stack. Flag wins the prime position. */
+.draft-board__cell:has(.draft-board__cell-flag) .draft-board__cell-value-badge {
+  top: 22px;
 }
