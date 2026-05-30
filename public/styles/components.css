@@ -11517,6 +11517,17 @@ label .form-label__hint {
   border-left: 3px solid var(--div-accent, var(--team-accent, var(--border-subtle)));
 }
 
+/* Commissioner-only: every cell is clickable to assign/replace its pick.
+   A gold ring on hover telegraphs that the board is editable for the commish
+   (mirrors the crimson "Commish Powers" framing elsewhere). */
+.draft-board--commish .draft-board__cell {
+  cursor: pointer;
+}
+.draft-board--commish .draft-board__cell:hover {
+  outline: 2px solid var(--accent-gold);
+  outline-offset: -2px;
+}
+
 /* Picked cells get a strong, division-tinted background (Sleeper-style).
    color-mix blends the division accent at 55% over the page background,
    producing a saturated pastel-on-dark that stays readable for white text.

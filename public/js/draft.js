@@ -1075,6 +1075,14 @@ let viewAllSort     = 'fantasy_value';
 let viewAllDivision = 'all';
 let viewAllStatus   = 'all';
 
+// Commissioner "assign to slot" state. When set, the View All modal renders in
+// assign mode: every available fighter gets an "Assign" button that places the
+// chosen fighter into this board slot (for the slot's manager) via the
+// commish_set_draft_pick RPC. Cleared when the modal closes.
+//   { pickNum, round, memberId, teamName, replacingFighterId | null }
+let commishAssign = null;
+let _commishBoardClickWired = false;
+
 // Next-fight lookup: fighter_id → { event_date, opponent_name, ... }.
 // Populated asynchronously after the initial render; missing entries just
 // mean "no upcoming fight booked" and the row renders without the line.
@@ -1559,8 +1567,16 @@ function getPickInfo(pickNumber) {
 }
 
 function getCurrentPickNum() {
-  // Next pick number is always one more than picks made so far
-  return picks.length + 1;
+  // The current pick is the LOWEST slot number (1-based) not yet filled.
+  // In a normal sequential draft this equals picks.length + 1, but it stays
+  // correct when the commissioner assigns/clears slots out of order (the clock
+  // simply follows the first open slot, so the draft keeps moving normally).
+  var total = getTotalPicks();
+  var filled = new Set(picks.map(function(p) { return p.draft_pick; }));
+  for (var i = 1; i <= total; i++) {
+    if (!filled.has(i)) return i;
+  }
+  return total + 1; // every slot filled → draft complete
 }
 
 function getTotalPicks() {
@@ -3324,6 +3340,17 @@ function openViewAll() {
     renderViewAllList();
   });
 
+  // Commish assign mode: retitle the modal for the target slot.
+  if (commishAssign) {
+    var n = league.draft_order.length;
+    var posInRound = ((commishAssign.pickNum - 1) % n) + 1;
+    var titleEl = document.getElementById('viewAllTitle');
+    if (titleEl) {
+      titleEl.textContent = 'Assign to ' + commishAssign.teamName +
+        ' — Pick ' + commishAssign.round + '.' + posInRound;
+    }
+  }
+
   renderViewAllList();
 }
 
@@ -3331,6 +3358,8 @@ function closeViewAll() {
   var overlay = document.getElementById('viewAllOverlay');
   if (overlay) overlay.remove();
   document.removeEventListener('keydown', _viewAllEscHandler);
+  // Leaving the picker also exits commish assign mode.
+  commishAssign = null;
 }
 
 function _viewAllEscHandler(e) {
@@ -3390,8 +3419,22 @@ function renderViewAllList() {
     return rankA - rankB;
   });
 
+  // Cap the rendered list, same as the side pool (POOL_RENDER_CAP = 350).
+  // Without this the modal built a DOM row for EVERY available fighter (~6k),
+  // each with a sparkline + trend chips + FV chip — which made opening View All
+  // (and the commish assign picker that reuses it) very laggy. The search /
+  // sort / filter controls narrow the set; the cap only limits how many of the
+  // matches actually render.
+  var VIEW_ALL_CAP  = 350;
+  var totalMatching = fighters.length;
+  if (fighters.length > VIEW_ALL_CAP) {
+    fighters = fighters.slice(0, VIEW_ALL_CAP);
+  }
+
   if (count) {
-    count.textContent = fighters.length + ' fighter' + (fighters.length === 1 ? '' : 's');
+    count.textContent = totalMatching > VIEW_ALL_CAP
+      ? 'Showing ' + VIEW_ALL_CAP + ' of ' + totalMatching + ' — refine your search'
+      : totalMatching + ' fighter' + (totalMatching === 1 ? '' : 's');
   }
 
   if (fighters.length === 0) {
@@ -3424,7 +3467,11 @@ function renderViewAllList() {
       : '';
 
     var pickBtn = '';
-    if (myTurn && valid) {
+    if (commishAssign) {
+      // Commish assign mode: every available fighter is assignable, with no
+      // turn/slot gating (commish powers override roster-construction rules).
+      pickBtn = '<button class="btn-secondary lineup-row-btn view-all-assign-btn" data-fighter-id="' + f.id + '">Assign</button>';
+    } else if (myTurn && valid) {
       pickBtn = '<button class="btn-secondary lineup-row-btn view-all-pick-btn" data-fighter-id="' + f.id + '">Draft</button>';
     } else if (myTurn && !valid) {
       pickBtn = '<button class="btn-secondary lineup-row-btn" disabled>No slot</button>';
@@ -3434,12 +3481,17 @@ function renderViewAllList() {
     // fighters while browsing in the modal without having to close it.
     // Reuses the .draft-queue-btn class so the global click handler we
     // wire below behaves the same as in the pool.
+    // In commish assign mode the personal queue is irrelevant (you're setting
+    // someone else's slot), so drop the Queue button — that also gives the row
+    // the same single-button layout as the normal View All modal, so names
+    // stop truncating.
     var inQueue       = isQueued(f.id);
     var queueBtnLabel = inQueue ? 'Queued &#x2715;' : '+ Queue';
     var queueBtnClass = inQueue
       ? 'btn-ghost lineup-row-btn draft-queue-btn draft-queue-btn--queued'
       : 'btn-ghost lineup-row-btn draft-queue-btn';
-    var queueBtn = '<button class="' + queueBtnClass + '" data-queue-fighter-id="' + f.id + '">' +
+    var queueBtn = commishAssign ? '' :
+                   '<button class="' + queueBtnClass + '" data-queue-fighter-id="' + f.id + '">' +
                      queueBtnLabel +
                    '</button>';
 
@@ -3483,6 +3535,88 @@ function renderViewAllList() {
       }
     });
   });
+
+  // Commish assign-mode buttons (one per available fighter, no turn/slot gate).
+  body.querySelectorAll('.view-all-assign-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var fighter = fighterMap[btn.getAttribute('data-fighter-id')];
+      if (fighter) commishAssignFighter(fighter);
+    });
+  });
+}
+
+// ========================================================================
+// COMMISSIONER: ASSIGN A FIGHTER TO ANY BOARD SLOT
+// The commish clicks a cell → the fighter picker opens in "assign mode" →
+// choosing a fighter sets it into that slot (for the slot's manager) via the
+// commish_set_draft_pick RPC. The draft keeps moving because getCurrentPickNum
+// follows the lowest unfilled slot. Realtime updates every other client.
+// ========================================================================
+function onCommishBoardClick(e) {
+  // Commissioner only, real (non-mock) started draft only.
+  if (isMockMode || !league || !league.draft_started || !isCommish()) return;
+  // Leave the reactions bar to its own handlers.
+  if (e.target.closest('.draft-react-bar')) return;
+  var cell = e.target.closest('.draft-board__cell');
+  if (!cell || cell.getAttribute('data-pick-num') == null) return;
+  // Clicking the fighter card itself (photo / name / meta — it carries
+  // data-open-fighter) opens the fighter modal via the global handler; let
+  // that through. Only clicks on the cell's blank space (or any empty cell)
+  // open the assign picker.
+  if (e.target.closest('[data-open-fighter]')) return;
+  e.stopPropagation();
+  e.preventDefault();
+  openCommishAssign(parseInt(cell.getAttribute('data-pick-num'), 10));
+}
+
+function openCommishAssign(pickNum) {
+  if (!pickNum || pickNum < 1 || pickNum > getTotalPicks()) return;
+  var info     = getPickInfo(pickNum);
+  var member   = memberMap[info.activeManagerId];
+  var existing = picks.find(function(p) { return p.draft_pick === pickNum; });
+  commishAssign = {
+    pickNum:            pickNum,
+    round:              info.round,
+    memberId:           info.activeManagerId,
+    teamName:           member ? member.team_name : 'Team',
+    replacingFighterId: existing ? existing.fighter_id : null
+  };
+  openViewAll();
+}
+
+async function commishAssignFighter(fighter) {
+  if (!commishAssign || !isCommish() || !fighter) return;
+  var a = commishAssign;
+
+  // Confirm before overwriting an existing pick (the old fighter is freed).
+  if (a.replacingFighterId) {
+    var oldF = fighterMap[a.replacingFighterId];
+    if (!confirm('Replace ' + (oldF ? oldF.name : 'this pick') + ' with ' +
+                 fighter.name + ' for ' + a.teamName + '?')) return;
+  }
+
+  const { error } = await supabaseClient.rpc('commish_set_draft_pick', {
+    p_league_id:        leagueId,
+    p_draft_pick:       a.pickNum,
+    p_draft_round:      a.round,
+    p_league_member_id: a.memberId,
+    p_fighter_id:       fighter.id
+  });
+  if (error) {
+    alert('Could not assign pick: ' + error.message);
+    return;
+  }
+
+  // Resync immediately so the commish's board updates without waiting on
+  // realtime (which still delivers the INSERT/DELETE to every other client).
+  var res = await supabaseClient
+    .from('draft_picks').select('*').eq('league_id', leagueId).order('draft_pick');
+  if (res.data) picks = res.data;
+  closeViewAll();
+  renderAll();
+  // If that filled the final slot, complete the draft now rather than relying
+  // solely on the realtime echo of our own insert.
+  if (picks.length >= getTotalPicks()) handleDraftComplete();
 
   // Wire queue toggle buttons inside the modal. Same add-or-remove semantics
   // as the side panel; the modal stays open so the user can keep queueing.
@@ -4671,6 +4805,19 @@ function initCommishTools() {
   document.getElementById('commishPauseBtn').addEventListener('click', toggleDraftPause);
   document.getElementById('commishUndoBtn').addEventListener('click', undoLastPick);
   document.getElementById('commishClearBtn').addEventListener('click', clearDraftBoard);
+
+  // Commish-only: clicking any board cell opens the fighter picker to assign
+  // (or replace) the pick in that slot. Mark the board so cells get a pointer
+  // affordance, and wire ONE delegated handler — #draftBoard persists across
+  // re-renders (only its innerHTML is swapped), so this survives every render.
+  var boardEl = document.getElementById('draftBoard');
+  if (boardEl) {
+    boardEl.classList.add('draft-board--commish');
+    if (!_commishBoardClickWired) {
+      _commishBoardClickWired = true;
+      boardEl.addEventListener('click', onCommishBoardClick);
+    }
+  }
 
   // Initial label sync (in case we loaded into a paused draft)
   refreshCommishToolbar();
