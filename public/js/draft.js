@@ -200,6 +200,21 @@ function setupAutoDraftToggle() {
 //   Restart: wipes the in-memory picks, cancels any pending AI timer,
 //            and re-fires the scheduler. mockStarted stays true so the
 //            mock just runs again without re-showing the banner.
+// Fire-and-forget product analytics. Best-effort: not awaited, never blocks
+// the draft, never throws into the caller. RLS lets a user log only their own
+// rows (user_id = auth.uid()); read it back with the service role.
+function logAnalyticsEvent(eventName) {
+  try {
+    supabaseClient.from('analytics_events').insert({
+      user_id:   user ? user.id : null,
+      league_id: leagueId,
+      event:     eventName
+    }).then(function(res) {
+      if (res && res.error) console.warn('[analytics] ' + eventName + ' failed:', res.error.message);
+    }, function() { /* network hiccup — ignore */ });
+  } catch (_) { /* never block the draft */ }
+}
+
 function setupMockChrome() {
   var reset        = document.getElementById('draftMockResetBtn');
   var newMockBtn   = document.getElementById('draftMockNewBtn');
@@ -338,6 +353,8 @@ function setupMockChrome() {
       league.draft_order = buildMockDraftOrder(teamCount, pickPosition);
 
       mockStarted = true;
+      // Record that this user started a mock draft (one row per Start click).
+      logAnalyticsEvent('mock_draft_started');
       if (startBanner) startBanner.hidden = true;
       if (reset)       reset.hidden       = false;
       if (newMockBtn)  newMockBtn.hidden  = false;
