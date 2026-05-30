@@ -1427,6 +1427,13 @@ body {
   border-radius: 12px;
   width: 100%;
   max-width: 420px;
+  /* Cap to the viewport and lay out as a column so the team list scrolls
+     internally while the header + action buttons stay pinned. Without this a
+     12-team order list grew taller than the screen and pushed Save/Cancel
+     off the bottom. */
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   animation: slideUp 0.2s ease;
 }
@@ -1437,6 +1444,7 @@ body {
   justify-content: space-between;
   padding: var(--space-4);
   border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
 }
 
 .draft-order-modal__title {
@@ -1465,6 +1473,9 @@ body {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+  /* Take the space between header and actions; let the list scroll inside. */
+  flex: 1;
+  min-height: 0;
 }
 
 .draft-order-modal__help {
@@ -1480,6 +1491,10 @@ body {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+  /* The scrollable region — fills the body, scrolls when the order is long. */
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .draft-order-edit__item {
@@ -1545,6 +1560,7 @@ body {
   padding: var(--space-3) var(--space-4);
   border-top: 1px solid var(--border-subtle);
   flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 .draft-order-modal__actions-right {
