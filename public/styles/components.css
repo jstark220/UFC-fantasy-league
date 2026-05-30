@@ -14305,6 +14305,20 @@ label .form-label__hint {
   margin-top: var(--space-3);
 }
 
+/* "Use the commissioner's draft order" checkbox row on the mock start banner.
+   inline-flex would defeat the [hidden] attribute, so override it explicitly. */
+.draft-mock-start__league-order {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  font-size: var(--text-body-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.draft-mock-start__league-order input { cursor: pointer; flex-shrink: 0; }
+.draft-mock-start__league-order[hidden] { display: none; }
+
 /* Team-count + pick-position pickers: compact label + native select.
    Reused for both controls inside .draft-mock-start__options. */
 .draft-mock-start__teams {

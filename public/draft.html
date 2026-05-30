@@ -142,6 +142,13 @@
             </select>
           </div>
         </div>
+        <!-- Shown by setupMockChrome only when the commissioner has set a
+             draft order. When checked, the mock uses that real order (real
+             teams, your real slot) and Teams / Your Pick are ignored. -->
+        <label class="draft-mock-start__league-order" id="draftMockLeagueOrderRow" hidden>
+          <input type="checkbox" id="draftMockUseLeagueOrder">
+          <span>Use the commissioner's draft order &mdash; mock the real draft from your slot</span>
+        </label>
         <button class="btn-primary draft-mock-start__btn" id="draftMockStartBtn" type="button">Start mock</button>
       </div>
     </div>

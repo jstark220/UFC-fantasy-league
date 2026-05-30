@@ -333,6 +333,21 @@ function setupMockChrome() {
     repopulatePickPositions();
   }
 
+  // "Use league draft order" — only offered when the commissioner has set one.
+  // When checked, the fixed league order is used, so Teams / Your Pick don't
+  // apply and are disabled.
+  var useLeagueEl  = document.getElementById('draftMockUseLeagueOrder');
+  var useLeagueRow = document.getElementById('draftMockLeagueOrderRow');
+  if (useLeagueRow) useLeagueRow.hidden = commishDraftOrder.length === 0;
+  if (useLeagueEl) {
+    useLeagueEl.addEventListener('change', function() {
+      var disabled = this.checked;
+      if (teamCountSel) teamCountSel.disabled = disabled;
+      var pickSel = document.getElementById('draftMockPickPos');
+      if (pickSel) pickSel.disabled = disabled;
+    });
+  }
+
   if (startBtn) {
     startBtn.addEventListener('click', function() {
       // Resize the draft to the chosen team count BEFORE flipping
@@ -350,7 +365,17 @@ function setupMockChrome() {
       if (!isFinite(pickPosition) || pickPosition < 1 || pickPosition > teamCount) {
         pickPosition = null;
       }
-      league.draft_order = buildMockDraftOrder(teamCount, pickPosition);
+
+      // "Use league draft order": mock the real draft from your real slot —
+      // the commissioner's saved order, real teams, AI picking for everyone
+      // else. Ignores Teams / Your Pick. Falls back to the custom builder when
+      // unchecked or when no league order has been set.
+      var useLeagueEl = document.getElementById('draftMockUseLeagueOrder');
+      if (useLeagueEl && useLeagueEl.checked && commishDraftOrder.length > 0) {
+        league.draft_order = commishDraftOrder.slice();
+      } else {
+        league.draft_order = buildMockDraftOrder(teamCount, pickPosition);
+      }
 
       mockStarted = true;
       // Record that this user started a mock draft (one row per Start click).
@@ -1170,6 +1195,12 @@ let mockAiTimer = null;
 // user clicks "Start mock." Lets them prep their queue first.
 let mockStarted = false;
 
+// The commissioner's real saved draft order (member ids), captured at init
+// before any mock manipulation. Lets the Start banner offer a "use the league's
+// draft order" option so you can mock the actual draft from your real slot.
+// Empty when the commish hasn't set an order.
+let commishDraftOrder = [];
+
 // Sound trigger state. Transition trackers so each sound fires once per
 // state change, not every render or every timer tick.
 //   wasMyTurn:     last-render value of isMyTurn(); flips false→true plays the
@@ -1327,6 +1358,11 @@ async function initDraft() {
   // of any real-draft state. Realtime subscriptions and DB writes are
   // skipped further down via isMockMode guards.
   if (isMockMode) {
+    // Capture the commissioner's real order (if any) before mock setup
+    // overwrites league.draft_order — the Start banner uses it for the
+    // "use league draft order" option.
+    commishDraftOrder = Array.isArray(league.draft_order) ? league.draft_order.slice() : [];
+
     league.draft_started   = true;
     league.draft_completed = false;
     league.draft_paused_at = null;
