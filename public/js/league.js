@@ -12,6 +12,10 @@ let leagueData  = null;
 let membersData = [];
 let userRef     = null;
 let leagueIdRef = null;
+// How many draft picks have been made. The draft order stays editable until
+// the FIRST pick (so a draft accidentally started before the order was set can
+// be fixed). Loaded once; the order-save path re-checks before writing.
+let picksMade   = 0;
 let myMemberId  = null;  // current user's league_members.id, needed for roster inserts
 
 // Builds the absolute shareable join URL for an invite code, derived from
@@ -75,6 +79,17 @@ async function initLeague() {
     return;
   }
   leagueData = league;
+
+  // How many picks exist? Only matters once the draft has started — it's what
+  // keeps the "Set Draft Order" button available until someone actually picks.
+  picksMade = 0;
+  if (league.draft_started && !league.draft_completed) {
+    const { count } = await supabaseClient
+      .from('draft_picks')
+      .select('id', { count: 'exact', head: true })
+      .eq('league_id', leagueId);
+    picksMade = count || 0;
+  }
 
   // ---- Fetch member list ----
   // Declared with let so the remove handler can update the local copy without reloading
@@ -255,6 +270,26 @@ function renderDraftSection() {
   }
 
   if (leagueData.draft_started) {
+    // The draft order stays editable until the FIRST pick is made. This rescues
+    // a draft that was started before an order was set (the draft room is
+    // broken with no pick order) and lets the commish reorder right up until
+    // someone actually drafts.
+    if (isCommissioner && picksMade === 0) {
+      const noOrder = !leagueData.draft_order || leagueData.draft_order.length === 0;
+      el.innerHTML =
+        '<p class="draft-status-note">' +
+          (noOrder
+            ? 'The draft has started but no draft order is set yet. Set the order below, then enter the draft room.'
+            : 'The draft has started but no picks have been made yet — you can still change the draft order.') +
+        '</p>' +
+        '<div id="draftOrderPreview">' + renderDraftOrderList() + '</div>' +
+        '<div class="draft-actions">' +
+          '<button class="btn-secondary" id="setOrderBtn">Set Draft Order</button>' +
+          (noOrder ? '' : '<a href="draft.html?id=' + leagueIdRef + '" class="btn-primary">Enter Draft Room</a>') +
+        '</div>';
+      document.getElementById('setOrderBtn').addEventListener('click', openDraftOrderModal);
+      return;
+    }
     el.innerHTML =
       '<p class="draft-status-note">Draft is currently in progress.</p>' +
       '<div class="draft-actions">' +
@@ -483,6 +518,22 @@ async function saveDraftOrderFromModal() {
   const saveBtn = document.getElementById('draftOrderSaveBtn');
   saveBtn.disabled    = true;
   saveBtn.textContent = 'Saving...';
+
+  // Safety: never reorder once a pick has been made (the page's pick count
+  // could be stale if someone drafted while this was open). Re-check live.
+  if (leagueData.draft_started) {
+    const { count } = await supabaseClient
+      .from('draft_picks')
+      .select('id', { count: 'exact', head: true })
+      .eq('league_id', leagueIdRef);
+    if ((count || 0) > 0) {
+      picksMade = count;
+      alert('A pick has already been made, so the draft order can no longer be changed.');
+      closeDraftOrderModal();
+      renderDraftSection();
+      return;
+    }
+  }
 
   const { error } = await supabaseClient
     .from('leagues')
