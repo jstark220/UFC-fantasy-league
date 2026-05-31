@@ -10925,6 +10925,22 @@ label .form-label__hint {
   opacity: 0.45;
 }
 
+/* Draft button: crimson fill with black-outlined white text so it reads as
+   the primary action and stays legible on any division-colored row. The
+   four-way text-shadow draws the black outline around each letter. */
+.draft-pool-row .draft-pick-btn,
+.draft-pool-row .draft-pick-btn:hover,
+.draft-pool-row .draft-pick-btn:focus {
+  background: var(--accent-crimson);
+  border-color: var(--accent-crimson);
+  color: #fff;
+  text-shadow:
+    -1px -1px 0 #000,
+     1px -1px 0 #000,
+    -1px  1px 0 #000,
+     1px  1px 0 #000;
+}
+
 /* ----- Best Available sticky strip --------------------------------------
    Pinned above the pool body. Compact crimson-accented row showing the
    highest-FV fighter still on the board so it stays visible even when the
