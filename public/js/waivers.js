@@ -1285,7 +1285,10 @@ function renderAvailableFighters() {
     var statVal, statLabel, statFvId;
     if (sortBy === 'fantasy_value') {
       statVal   = pts ? computeFantasyValue(f).toFixed(1) : '—';
-      statLabel = 'FV score';
+      // Overall FV rank (same source the draft board uses), shown next to the
+      // score as "· #N" when the rank cache is available.
+      var fvRankObj = (typeof FantasyValue !== 'undefined' && FantasyValue.rankFor) ? FantasyValue.rankFor(f.id) : null;
+      statLabel = (fvRankObj && fvRankObj.rank) ? 'FV score · #' + fvRankObj.rank : 'FV score';
       statFvId  = f.id;  // flag so we wrap in a clickable button
     } else if (sortBy === 'avg_pts') {
       statVal   = pts ? pts.avgPts.toFixed(1) : '—';
@@ -1366,7 +1369,7 @@ function renderAvailableFighters() {
     }
 
     html +=
-      '<div class="lineup-roster-row">' +
+      '<div class="lineup-roster-row lineup-roster-row--fa">' +
         '<span class="lineup-roster-row__pos">' + (idx + 1) + '</span>' +
         '<div class="lineup-roster-row__photo-wrap">' + photoHtml + '</div>' +
         '<span class="lineup-roster-row__rank ' + rankClass + '">' + rankLabel + subBadge + '</span>' +

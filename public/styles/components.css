@@ -5671,6 +5671,56 @@ body {
 
 .lineup-roster-row:last-child { border-bottom: none; }
 
+/* ---- Free-agency (waivers) mobile rows ----
+   Rows tagged .lineup-roster-row--fa swap the FV stat and the Add button vs.
+   the default: the FV score + overall rank drops UNDER the name, and the Add /
+   Claim button becomes a tall crimson button pinned to the right edge (same
+   treatment as the draft board's Draft button). Scoped to --fa so the lineup
+   page's rows are untouched. Doubled class (.lineup-roster-row.lineup-roster-row--fa)
+   keeps specificity above the base mobile grid rules that come later in the file. */
+@media (max-width: 720px) {
+  .lineup-roster-row.lineup-roster-row--fa {
+    position: relative;
+    padding-right: 84px;
+  }
+  /* FV stat (or the "On {owner}" label) moves under the name, left-aligned. */
+  .lineup-roster-row.lineup-roster-row--fa .lineup-roster-row__record {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: start;
+    text-align: left;
+    margin-top: 2px;
+  }
+  /* Add / Claim button: tall, pinned to the right edge, vertically centered. */
+  .lineup-roster-row.lineup-roster-row--fa .lineup-roster-row__actions {
+    position: absolute;
+    top: 10px;
+    right: 8px;
+    bottom: 10px;
+    display: flex;
+    align-items: stretch;
+  }
+  .lineup-roster-row.lineup-roster-row--fa .lineup-roster-row__actions .lineup-row-btn {
+    min-width: 66px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+  }
+  /* Crimson fill + black-outlined white text for the active Add / Claim button
+     (disabled 'Claimed' / pre-draft states keep their default muted look). */
+  .lineup-roster-row.lineup-roster-row--fa .lineup-roster-row__actions .lineup-row-btn:not(:disabled) {
+    background: var(--accent-crimson);
+    border: 2px solid #000;
+    color: #fff;
+    text-shadow:
+      -1px -1px 0 #000,
+       1px -1px 0 #000,
+      -1px  1px 0 #000,
+       1px  1px 0 #000;
+  }
+}
+
 /* Subtle lift on hover — the row tilts forward by 1px and gets a soft
    shadow under it, signaling "you can click into this fighter".
    Gated by @media (hover: hover) so touch devices never trigger this
@@ -7977,6 +8027,38 @@ body {
 .standings-th--team  { text-align: left; }
 .standings-th--trend { width: 100px; text-align: center; }
 .standings-th--pts   { width: 110px; text-align: right; }
+
+/* ---- Mobile standings fit ----
+   On phones the table hides the move / trend / last-event / last-30d columns
+   (see the max-width:720px block earlier), leaving rank / team / total pts.
+   Those were still sizing to content and spilling past the screen edge, so
+   lock the table to the viewport width, trim the rank + pts column widths,
+   and tighten cell padding. The team column takes up the remaining slack.
+   Breakpoint matches the column-hiding block above (max-width: 767px). */
+@media (max-width: 767px) {
+  .standings-table {
+    width: 100%;
+    max-width: 100%;
+    table-layout: fixed;
+  }
+  .standings-th--rank,
+  .standings-rank-cell { width: 36px; }
+  .standings-th--pts:first-of-type,
+  .standings-pts-cell { width: 70px; }
+  .standings-th,
+  .standings-table td {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+  /* The base rule sets white-space: nowrap on every cell, which would let a
+     long team name overflow its (now fixed-width) column and spill off the
+     screen. Allow the team name to wrap instead. Higher specificity than
+     ".standings-table td" so it actually wins. */
+  .standings-table .standings-team-cell {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
 
 .standings-row {
   border-bottom: 1px solid var(--border-subtle);
