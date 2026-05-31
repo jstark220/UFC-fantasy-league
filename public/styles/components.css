@@ -12232,6 +12232,8 @@ label .form-label__hint {
   .draft-pool-row {
     margin-bottom: 4px;
     padding: 6px 8px;
+    /* Stronger divider between fighter cells on mobile. */
+    border-bottom-color: var(--border-strong);
   }
 
   /* Mobile touch targets for the action buttons. Apple HIG asks for 44pt;
