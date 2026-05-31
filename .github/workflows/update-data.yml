@@ -102,6 +102,18 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
+      # ---- Step 5.5: Score events into standings ----
+      # Turns the fight_results just ingested into fantasy points in the `scores`
+      # table (only for fighters each team STARTED). The Vercel cron already does
+      # this live during a card; this daily pass is the safety net so any later
+      # stat correction or manual fight edit also flows to standings within 24h.
+      - name: Score events into standings
+        run: node scoreEvents.js --back=45
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
       # ---- Step 6: Merge any duplicate fighters created by ingestion ----
       # ingestFightResults.js auto-creates fighters with "ufcstats-" prefix
       # when it can't match a name. Periodically these accumulate alongside

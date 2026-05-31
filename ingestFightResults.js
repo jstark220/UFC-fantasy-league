@@ -73,7 +73,9 @@ async function loadFighters() {
   while (true) {
     const res = await supabaseClient
       .from('fighters')
-      .select('id, name, espn_athlete_id, ufc_id, primary_division')
+      // current_rank feeds fighter_*_opponent_rank below, which the scoring
+      // engine turns into the top-5/10/15 "beat a ranked opponent" bonus.
+      .select('id, name, espn_athlete_id, ufc_id, primary_division, current_rank')
       .order('id', { ascending: true })
       .range(from, from + PAGE - 1);
     if (res.error || !res.data) break;
@@ -173,7 +175,7 @@ async function processEvent(dbEvent) {
   // Existing rows for this event, to reconcile against (avoid duplicates).
   const ex = await supabaseClient
     .from('fight_results')
-    .select('id, fighter_a_id, fighter_b_id, espn_competition_id')
+    .select('id, fighter_a_id, fighter_b_id, espn_competition_id, fighter_a_opponent_rank, fighter_b_opponent_rank')
     .eq('event_id', dbEvent.id);
   const existing = ex.data || [];
 
@@ -192,6 +194,15 @@ async function processEvent(dbEvent) {
       || (byId.get(bId) && byId.get(bId).primary_division)
       || null;
 
+    // Opponent rank for the scoring engine's "beat a ranked fighter" bonus.
+    // A's opponent is B and vice-versa, so each side stores the OTHER fighter's
+    // current divisional rank (null = unranked/champion; the scorer infers the
+    // champion case from title context). Captured here at ingest time and then
+    // frozen on later runs (see the UPDATE path) so scores never drift when
+    // rankings shift after the fight.
+    const aRank = (byId.get(aId) && byId.get(aId).current_rank != null) ? byId.get(aId).current_rank : null;
+    const bRank = (byId.get(bId) && byId.get(bId).current_rank != null) ? byId.get(bId).current_rank : null;
+
     const payload = {
       event_id: dbEvent.id,
       espn_competition_id: f.espnCompetitionId,
@@ -205,6 +216,8 @@ async function processEvent(dbEvent) {
       fight_order: f.fightOrder,
       weight_class: weightClass,
       title_type: f.titleType,
+      fighter_a_opponent_rank: bRank,
+      fighter_b_opponent_rank: aRank,
       fighter_a_sig_strikes: f.competitors[0].sigStrikes,
       fighter_a_takedowns: f.competitors[0].takedowns,
       fighter_a_knockdowns: f.competitors[0].knockdowns,
@@ -227,6 +240,11 @@ async function processEvent(dbEvent) {
     if (match) {
       // Never overwrite an existing row's weight_class with null.
       if (payload.weight_class == null) delete payload.weight_class;
+      // Freeze opponent rank at first capture: only fill it when the existing
+      // row hasn't got one yet. Preserves both fight-night ranks and any value
+      // the commissioner set by hand, and stops re-ingests from drifting scores.
+      if (match.fighter_a_opponent_rank != null) delete payload.fighter_a_opponent_rank;
+      if (match.fighter_b_opponent_rank != null) delete payload.fighter_b_opponent_rank;
       upd++;
       console.log(`  UPDATE ${label}`);
       if (!DRY_RUN) {

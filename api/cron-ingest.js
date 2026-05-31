@@ -18,6 +18,7 @@
 
 const { createClient } = require('@supabase/supabase-js');
 const { runIngest } = require('../ingestFightResults');
+const { scoreEvents } = require('../scoreEvents');
 
 module.exports = async function handler(req, res) {
   // Only Vercel's cron may trigger this. Vercel sends this header when the
@@ -39,7 +40,7 @@ module.exports = async function handler(req, res) {
   const hi = new Date(now + 2 * 3600 * 1000).toISOString();
   const { data: active, error } = await supabase
     .from('ufc_events')
-    .select('full_name, prelim_start_time')
+    .select('id, full_name, prelim_start_time')
     .not('espn_event_id', 'is', null)
     .gte('prelim_start_time', lo)
     .lte('prelim_start_time', hi);
@@ -49,12 +50,24 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({ ok: true, skipped: true, reason: 'no event in window' });
   }
 
-  // An event is live (or imminent) — ingest recent results from ESPN.
+  // An event is live (or imminent). Two steps, in order:
+  //   1. Pull the latest fight results + stats from ESPN into fight_results.
+  //   2. Turn those results into fantasy points in the `scores` table for the
+  //      events in this window — but only for fighters each team STARTED.
+  // Standings reads `scores`, so this is what makes the leaderboard move on its
+  // own as the card unfolds. Both steps are idempotent, so running every couple
+  // of minutes just refreshes the numbers.
   try {
-    const summary = await runIngest({ back: 2 });
-    return res.status(200).json({ ok: true, active: active.map((e) => e.full_name), ...summary });
+    const ingest = await runIngest({ back: 2 });
+    const scoring = await scoreEvents({ supabase, eventIds: active.map((e) => e.id) });
+    return res.status(200).json({
+      ok: true,
+      active: active.map((e) => e.full_name),
+      ...ingest,
+      scoring
+    });
   } catch (err) {
-    console.error('[cron-ingest] ingest failed:', err);
+    console.error('[cron-ingest] ingest/scoring failed:', err);
     return res.status(500).json({ error: String((err && err.message) || err) });
   }
 };
