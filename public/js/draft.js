@@ -3257,6 +3257,7 @@ function renderFighterPool() {
         // implicit rows beneath the photo).
         '<div class="lineup-roster-row__actions">' +
           queueBtn +
+          '<span class="draft-pool-row__dots">' + formSparkline(f) + '</span>' +
           pickBtn +
         '</div>' +
       '</div>';

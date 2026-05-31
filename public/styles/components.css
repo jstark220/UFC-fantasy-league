@@ -11090,7 +11090,8 @@ label .form-label__hint {
 /* FV-rank badge + inline record are mobile-only; on desktop the fuller FV
    chip and the standalone record column carry this info instead. */
 .draft-pool-row__fvrank,
-.draft-pool-row__record-inline {
+.draft-pool-row__record-inline,
+.draft-pool-row__dots {
   display: none;
 }
 
@@ -12229,6 +12230,46 @@ label .form-label__hint {
     letter-spacing: 0.02em;
     min-height: 36px;
     font-weight: 700;
+  }
+
+  /* Bottom strip: Queue on the left, small W/L dots beside it (where the
+     Draft button used to sit). */
+  .draft-pool-row .lineup-roster-row__actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .draft-pool-row__dots {
+    display: inline-flex;
+    align-items: center;
+  }
+  .draft-pool-row__dots .draft-form {
+    display: inline-flex;
+  }
+  .draft-pool-row__dots .draft-form__dot {
+    width: 5px;
+    height: 5px;
+  }
+
+  /* Draft button: pulled out to a tall button pinned to the right edge,
+     vertically centered. Only on rows where it's your turn AND the fighter
+     is a legal pick (those rows get .draft-pool-row--pickable + the real
+     .draft-pick-btn). Other rows keep the normal bottom-strip flow. */
+  .draft-pool-row--pickable {
+    position: relative;
+    padding-right: 80px;
+  }
+  .draft-pool-row--pickable .draft-pick-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    bottom: 8px;
+    width: 68px;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
   }
 
   /* ---- Mobile draft board ----
