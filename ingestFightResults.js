@@ -37,10 +37,12 @@ if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
 }
 const supabaseClient = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-const DRY_RUN = process.argv.includes('--dry-run');
-const backArg = process.argv.find((a) => a.startsWith('--back='));
-const DAYS_BACK = backArg ? parseInt(backArg.split('=')[1], 10) : 21;
-const singleEspnId = process.argv.slice(2).find((a) => !a.startsWith('--'));
+// Run options. Defaults here; the CLI block at the bottom fills them from argv
+// when run directly, and runIngest(opts) overrides them when imported (the
+// Vercel cron function calls runIngest({ back: 2 })).
+let DRY_RUN = false;
+let DAYS_BACK = 21;
+let singleEspnId = null;
 
 function normalizeName(s) {
   return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
@@ -247,7 +249,20 @@ async function processEvent(dbEvent) {
 // ----------------------------------------------------------------------------
 // MAIN
 // ----------------------------------------------------------------------------
-(async () => {
+async function runIngest(opts = {}) {
+  // Apply caller options (CLI passes none and uses the argv-set module vars;
+  // the Vercel function passes { back } / { singleEspnId }).
+  if (opts.back != null)         DAYS_BACK = opts.back;
+  if (opts.singleEspnId != null) singleEspnId = opts.singleEspnId;
+  if (opts.dryRun != null)       DRY_RUN = !!opts.dryRun;
+
+  // Reset module-level state. Serverless containers reuse the loaded module
+  // across invocations, so stale fighter maps / counters would leak between
+  // runs without this.
+  byEspnId.clear(); byName.clear(); byId.clear(); byLastFirst.clear();
+  pendingIdWrites.length = 0;
+  createdCount = 0;
+
   console.log(`ingestFightResults (ESPN)${DRY_RUN ? ' [DRY RUN]' : ''}\n`);
   await loadFighters();
 
@@ -256,7 +271,7 @@ async function processEvent(dbEvent) {
     const r = await supabaseClient.from('ufc_events')
       .select('id, name, full_name, espn_event_id').eq('espn_event_id', singleEspnId);
     events = r.data || [];
-    if (!events.length) { console.error('No ufc_events row with espn_event_id ' + singleEspnId + ' (run ingestEvents.js first).'); process.exit(1); }
+    if (!events.length) throw new Error('No ufc_events row with espn_event_id ' + singleEspnId + ' (run ingestEvents.js first).');
   } else {
     const cutoff = new Date(Date.now() - DAYS_BACK * 86400000).toISOString().slice(0, 10);
     const r = await supabaseClient.from('ufc_events')
@@ -264,7 +279,7 @@ async function processEvent(dbEvent) {
       .not('espn_event_id', 'is', null)
       .gte('event_date', cutoff)
       .order('event_date', { ascending: true });
-    if (r.error) { console.error('Failed to load events: ' + r.error.message); process.exit(1); }
+    if (r.error) throw new Error('Failed to load events: ' + r.error.message);
     events = r.data || [];
   }
   console.log(`Events to process: ${events.length}`);
@@ -274,4 +289,17 @@ async function processEvent(dbEvent) {
 
   console.log(`\nDone.${createdCount ? ' Created ' + createdCount + ' new fighters.' : ''}`);
   if (DRY_RUN) console.log('(dry run - nothing written)');
-})().catch((err) => { console.error('Fatal error:', err); process.exit(1); });
+  return { eventsProcessed: events.length, createdFighters: createdCount };
+}
+
+module.exports = { runIngest };
+
+// CLI entry — only when run directly (node ingestFightResults.js ...), not when
+// imported by the Vercel cron function.
+if (require.main === module) {
+  DRY_RUN = process.argv.includes('--dry-run');
+  const backArg = process.argv.find((a) => a.startsWith('--back='));
+  if (backArg) DAYS_BACK = parseInt(backArg.split('=')[1], 10);
+  singleEspnId = process.argv.slice(2).find((a) => !a.startsWith('--')) || null;
+  runIngest().catch((err) => { console.error('Fatal error:', err); process.exit(1); });
+}
