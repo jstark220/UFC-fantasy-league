@@ -10932,7 +10932,7 @@ label .form-label__hint {
 .draft-pool-row .draft-pick-btn:hover,
 .draft-pool-row .draft-pick-btn:focus {
   background: var(--accent-crimson);
-  border-color: var(--accent-crimson);
+  border: 2px solid #000;
   color: #fff;
   text-shadow:
     -1px -1px 0 #000,
@@ -12277,9 +12277,9 @@ label .form-label__hint {
   }
   .draft-pool-row--pickable .draft-pick-btn {
     position: absolute;
-    top: 8px;
+    top: 14px;
     right: 8px;
-    bottom: 8px;
+    bottom: 14px;
     width: 68px;
     min-height: 0;
     display: flex;
