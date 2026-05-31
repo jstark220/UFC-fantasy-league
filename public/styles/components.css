@@ -11087,6 +11087,13 @@ label .form-label__hint {
   flex-wrap: wrap;
 }
 
+/* FV-rank badge + inline record are mobile-only; on desktop the fuller FV
+   chip and the standalone record column carry this info instead. */
+.draft-pool-row__fvrank,
+.draft-pool-row__record-inline {
+  display: none;
+}
+
 /* ----- Form sparkline (W/L/D dots) -------------------------------------
    5 small inline dots showing the fighter's most-recent fight outcomes,
    newest on the left. Green = win, red = loss, gray = draw / no-contest.
@@ -12130,7 +12137,38 @@ label .form-label__hint {
      fighter modal carries them). */
   .draft-pool-row .lineup-roster-row__matchup,
   .draft-pool-row .lineup-roster-row__matchup.waiver-next-fight {
-    display: none;
+    display: block;
+    font-size: 9px;
+    line-height: 1.2;
+    margin-top: 2px;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* FV overall-rank badge on line 1 (mobile-only). */
+  .draft-pool-row__fvrank {
+    display: inline-flex;
+    align-items: center;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    color: var(--accent-gold);
+    background: rgba(212, 168, 75, 0.12);
+    border: 1px solid rgba(212, 168, 75, 0.4);
+    border-radius: 4px;
+    padding: 1px 5px;
+    flex-shrink: 0;
+  }
+
+  /* Record moves onto line 2 (division, record, streak). */
+  .draft-pool-row__record-inline {
+    display: inline;
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
   }
 
   /* Show the sub-line (division + form + chips) inline at small size */
@@ -12149,7 +12187,7 @@ label .form-label__hint {
   }
   /* Form sparkline dots — shrink */
   .draft-pool-row .draft-form {
-    gap: 3px;
+    display: none;
   }
   .draft-pool-row .draft-form__dot {
     width: 6px;
@@ -12160,9 +12198,10 @@ label .form-label__hint {
     font-size: 8px;
     padding: 1px 4px;
   }
-  /* Record fits inline with the actions on row 2 */
+  /* Standalone record column is hidden on mobile — the record now rides
+     inline on line 2 via .draft-pool-row__record-inline. */
   .draft-pool-row .lineup-roster-row__record {
-    font-size: 10px;
+    display: none;
   }
   /* Value-pick badge stays inline next to the name; shrink it. */
   .draft-pool-row .value-pick-badge,

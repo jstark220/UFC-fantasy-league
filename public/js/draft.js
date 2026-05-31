@@ -3148,10 +3148,10 @@ function renderFighterPool() {
   // table has 6k+ rows; without this cap, every render (per pick, per
   // queue change, per search keystroke) built 6k+ row HTML strings and
   // dropped them into the DOM via innerHTML. Result: visible UI lag on
-  // every interaction. 350 is far more than a user could browse without
+  // every interaction. 200 is far more than a user could browse without
   // sorting/filtering, and the existing "View All →" button surfaces
   // the full pool in a dedicated modal when needed.
-  var POOL_RENDER_CAP = 350;
+  var POOL_RENDER_CAP = 200;
   var totalMatching   = fighters.length;
   if (fighters.length > POOL_RENDER_CAP) {
     fighters = fighters.slice(0, POOL_RENDER_CAP);
@@ -3177,8 +3177,14 @@ function renderFighterPool() {
                           : '';
     const divLabel    = DIVISION_LABELS[f.primary_division] || f.primary_division;
     const record      = f.record_wins + '-' + f.record_losses + (f.record_draws ? '-' + f.record_draws : '');
+    // Overall fantasy-value rank (1 = best FV available). Shown on the
+    // mobile cell's name line; desktop keeps the fuller FV chip instead.
+    const fvRankObj   = (typeof FantasyValue !== 'undefined' && FantasyValue.rankFor) ? FantasyValue.rankFor(f.id) : null;
+    const fvRankBadge = (fvRankObj && fvRankObj.rank)
+      ? '<span class="draft-pool-row__fvrank">FV #' + fvRankObj.rank + '</span>'
+      : '';
     const photoHtml   = f.photo_url
-      ? '<img class="lineup-roster-row__photo" src="' + escapeHtml(f.photo_url) + '" alt="' + escapeHtml(f.name) + '" onerror="this.style.display=\'none\'">'
+      ? '<img class="lineup-roster-row__photo" src="' + escapeHtml(f.photo_url) + '" alt="' + escapeHtml(f.name) + '" loading="lazy" decoding="async" onerror="this.style.display=\'none\'">'
       : '';
 
     let rowMods = ' draft-pool-row';
@@ -3228,6 +3234,7 @@ function renderFighterPool() {
             '<button class="lineup-roster-row__name" data-open-fighter="' + f.id + '">' +
               escapeHtml(f.name) +
             '</button>' +
+            fvRankBadge +
             '<span class="lineup-roster-row__rank-inline ' + rankClass + '" aria-hidden="true">' +
               '<span class="lineup-roster-row__rank-inline-divider">|</span>' +
               escapeHtml(rankLabel) +
@@ -3237,6 +3244,7 @@ function renderFighterPool() {
           '</div>' +
           '<div class="draft-pool-row__sub-line">' +
             '<span class="lineup-roster-row__division draft-pool-row__division">' + escapeHtml(divLabel) + '</span>' +
+            '<span class="draft-pool-row__record-inline">' + record + '</span>' +
             formSparkline(f) +
             trendChipsHtml(f) +
           '</div>' +
@@ -3516,7 +3524,7 @@ function renderViewAllList() {
     var divLabel  = DIVISION_LABELS[f.primary_division] || f.primary_division;
     var record    = f.record_wins + '-' + f.record_losses + (f.record_draws ? '-' + f.record_draws : '');
     var photoHtml = f.photo_url
-      ? '<img class="lineup-roster-row__photo" src="' + escapeHtml(f.photo_url) + '" alt="' + escapeHtml(f.name) + '" onerror="this.style.display=\'none\'">'
+      ? '<img class="lineup-roster-row__photo" src="' + escapeHtml(f.photo_url) + '" alt="' + escapeHtml(f.name) + '" loading="lazy" decoding="async" onerror="this.style.display=\'none\'">'
       : '';
 
     var pickBtn = '';
@@ -3900,7 +3908,7 @@ function renderDraftBoard() {
         // without truncation. CSS swaps between full / short based on width.
         const shortName = formatShortName(fighter.name);
         const photoHtml = fighter.photo_url
-          ? '<img class="draft-board__cell-photo" src="' + escapeHtml(fighter.photo_url) + '" alt="" onerror="this.style.visibility=\'hidden\'">'
+          ? '<img class="draft-board__cell-photo" src="' + escapeHtml(fighter.photo_url) + '" alt="" loading="lazy" decoding="async" onerror="this.style.visibility=\'hidden\'">'
           : '<div class="draft-board__cell-photo draft-board__cell-photo--placeholder"></div>';
 
         // Look up the actual draft_picks row to get its UUID — reactions
@@ -4016,7 +4024,7 @@ function renderMyRoster() {
                           : '';
       const divLabel  = DIVISION_LABELS[f.primary_division] || f.primary_division;
       const photoHtml = f.photo_url
-        ? '<img class="lineup-roster-row__photo" src="' + escapeHtml(f.photo_url) + '" alt="' + escapeHtml(f.name) + '" onerror="this.style.display=\'none\'">'
+        ? '<img class="lineup-roster-row__photo" src="' + escapeHtml(f.photo_url) + '" alt="' + escapeHtml(f.name) + '" loading="lazy" decoding="async" onerror="this.style.display=\'none\'">'
         : '';
       const champClass = f.is_champion ? ' draft-pool-row--champion' : '';
       html +=
