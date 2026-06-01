@@ -6794,14 +6794,7 @@ body {
     gap: var(--space-4);
   }
 
-  /* Hide the Whole-Team button on mobile — the roster section below
-     already shows every fighter the user has drafted, so the modal
-     button is duplicate work on a small screen. Keep desktop. */
-  .lineup-banner-actions #viewWholeTeamBtn {
-    display: none;
-  }
-
-  /* Pack the remaining banner actions onto a single horizontal row at
+  /* Pack the banner actions onto a single horizontal row at
      a smaller font so the user can see all of them at once instead of
      wrapping to multiple lines. */
   .lineup-banner-actions {
