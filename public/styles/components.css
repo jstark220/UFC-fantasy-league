@@ -14993,11 +14993,11 @@ label .form-label__hint {
 .wt-mcell {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   width: 100%;
   min-width: 0;
   text-align: left;
-  padding: 5px 7px;
+  padding: 6px 9px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-subtle);
   border-left: 3px solid transparent;  /* recolored for starter / champion */
@@ -15015,9 +15015,9 @@ label .form-label__hint {
 .wt-mcell__photo-wrap {
   position: relative;
   flex: 0 0 auto;
-  width: 40px;
-  height: 46px;
-  border-radius: 5px;
+  width: 52px;
+  height: 62px;
+  border-radius: 6px;
   overflow: hidden;
   background: var(--bg-tertiary);
 }
@@ -15027,27 +15027,28 @@ label .form-label__hint {
   object-fit: cover;
   object-position: top center;  /* keep the face in frame on a short crop */
 }
-/* Starter mark, mirroring the desktop tile's bottom-left star */
+/* Starter mark, mirroring the desktop tile's bottom-left star. Sits in the
+   bottom corner (over the chest), clear of the face at the top. */
 .wt-mcell__star {
   position: absolute;
-  bottom: 1px;
-  left: 1px;
-  width: 15px;
-  height: 15px;
+  bottom: 3px;
+  left: 3px;
+  width: 17px;
+  height: 17px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--accent-crimson);
   color: #fff;
   border-radius: 50%;
-  font-size: 9px;
+  font-size: 10px;
   line-height: 1;
 }
 
 .wt-mcell__body { flex: 1 1 auto; min-width: 0; }
 .wt-mcell__name {
   margin: 0;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--text-primary);
   white-space: nowrap;
@@ -15056,8 +15057,8 @@ label .form-label__hint {
 }
 .wt-mcell__flag { font-size: 0.95em; }
 .wt-mcell__meta {
-  margin: 1px 0 0;
-  font-size: 10px;
+  margin: 2px 0 0;
+  font-size: 11px;
   font-weight: 600;
   color: var(--text-tertiary);
   white-space: nowrap;
@@ -15067,21 +15068,22 @@ label .form-label__hint {
 .wt-mcell__rank { font-weight: 800; color: var(--text-secondary); }
 .wt-mcell__rank--champion { color: var(--accent-gold); }
 
-/* Slot badge overlays the photo's top-right corner (like the desktop tile)
-   rather than taking a column, so the name gets the full remaining width. */
+/* Slot badge overlays the photo's bottom-right corner (over the chest) so it
+   stays clear of the face at the top, while still freeing the body for the
+   full name rather than taking its own column. */
 .wt-mcell__slot {
   position: absolute;
-  top: 2px;
-  right: 2px;
-  padding: 1px 3px;
-  background: rgba(0, 0, 0, 0.72);
+  bottom: 3px;
+  right: 3px;
+  padding: 1px 4px;
+  background: rgba(0, 0, 0, 0.78);
   color: #fff;
   border-radius: 3px;
-  font-size: 8px;
+  font-size: 8.5px;
   font-weight: 800;
   letter-spacing: 0.03em;
   text-transform: uppercase;
-  line-height: 1.25;
+  line-height: 1.3;
 }
 .wt-mcell__slot--womens  { background: #6b46c1; }
 .wt-mcell__slot--anyflex { background: var(--accent-crimson); }
