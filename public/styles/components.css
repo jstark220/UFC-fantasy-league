@@ -15658,10 +15658,17 @@ label .form-label__hint {
     color: #fff;
   }
 }
-/* On narrow screens the centered absolute button risks colliding with the
-   nav's side groups — drop the label to just the icon. */
+/* On narrow screens the centered absolute button collides with the "League"
+   link, so drop the absolute centering and let it flow to the right of the
+   nav (just left of the theme/menu icons, since .top-nav__links has flex: 1
+   and pushes everything after it rightward). Icon-only to save width. */
 @media (max-width: 720px) {
-  .draft-export-trigger { padding: 7px 9px; gap: 0; }
+  .draft-export-trigger {
+    position: static;
+    transform: none;
+    padding: 7px 9px;
+    gap: 0;
+  }
   .draft-export-trigger__label { display: none; }
 }
 
