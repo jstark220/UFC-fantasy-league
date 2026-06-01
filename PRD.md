@@ -1,9 +1,13 @@
 # UFC Fantasy League — Product Requirements Document
 
-**Version:** 1.1
-**Last Updated:** May 9, 2026
+**Version:** 1.2
+**Last Updated:** June 1, 2026
 **Owner:** Jacob Stark
-**Status:** MVP in Development
+**Status:** MVP live; first Season 1 draft completed (May 31, 2026)
+
+**Companion doc:** `PRIORITIES.md` tracks the post-draft bug-fix and cleanup
+list coming out of the first live draft. This PRD remains the source of truth
+for scope and rules; PRIORITIES.md is the running task queue.
 
 ---
 
@@ -153,7 +157,9 @@ RLS policies protect user data; reference data (fighters, events, results) is pu
 - Snake draft default: 8 managers × 20 rounds = 160 total picks
 - Turn timer: 90 seconds per pick
 - Auto-draft: if timer expires, pick top-ranked available player from manager's queue (or highest overall rank if queue is empty)
+  - **Known gap (post-draft, June 2026):** the current implementation only fires the expiry auto-pick from the on-clock manager's own awake browser tab, so an inactive manager (sleeping phone, closed tab) stalls the whole draft until the commissioner assigns a pick manually. This must become device-independent (any connected client, or a server-side trigger) before the next live draft. See PRIORITIES.md P0.1.
 - Draft board shows all teams' picks in real-time
+  - **Known gap (post-draft, June 2026):** picks/turn changes sometimes do not propagate to other managers without a full page refresh. See PRIORITIES.md P0.2.
 - Roster construction constraints:
   - 20 fighters total per manager
   - 2 per men's weight class (including flyweight)
@@ -171,12 +177,12 @@ RLS policies protect user data; reference data (fighters, events, results) is pu
 
 **User stories:**
 - As a manager, I want to see all fights on the upcoming UFC card
-- As a manager, I want to select 3 starters from my roster for each card
+- As a manager, I want to select my starters from my roster for each card
 - As a manager, I want to see which of my fighters are scheduled on this card
 
 **Requirements:**
 - Lineup lock at first prelim fight start time
-- 3 starters per card, must be from manager's roster
+- Starters per card depends on event type: 3 for numbered PPVs (UFC 329, UFC 330, etc.), 2 for Fight Nights. Starters must be from the manager's roster. (Note: the all-lineups summary view in lineups.js currently hardcodes "/ 3 set"; see PRIORITIES.md P1.1.)
 - Starter must be competing on this card (enforced)
 - Visual indicator of which fighters on roster are scheduled
 - Last lineup persists if no change made before lock
@@ -328,7 +334,7 @@ Multiplier applies to total points scored in that fight (base + bonuses).
 
 - 8 managers per league (default)
 - 20 fighters per roster
-- 3 starters per card
+- Starters per card by event type: 3 for numbered PPVs, 2 for Fight Nights
 
 ### 6.2 Roster Construction Requirements
 
@@ -439,6 +445,7 @@ These are flagged for future discussion and tracked here:
 - **Scoring timing:** Post-event only for v1 is recommended
 - **Notifications strategy:** Email + in-app for v1 recommended
 - **Trade UI:** Counter-proposals supported or not?
+- **Waiver model rethink (raised after Season 1 draft, June 2026):** Should the +3 temporary roster slots be available all the time instead of only during the Thu-to-Sun event window, and should waivers process after fights rather than on the current Thu/Fri/Sun/Tue cutoffs? This is a v1.3 rules proposal, not yet decided. It rewrites the locked event-window waiver model (Sections 4.6 and 6.4), so the full rule (caps, cutoffs, priority reset) needs to be written out before any code changes. Tracked in PRIORITIES.md R.1.
 
 ---
 
@@ -495,13 +502,16 @@ These are ideas captured for future consideration. They are NOT scoped, prioriti
 - **Fighter API.** Auto-update fighter records, weight class, status (active / cut / retired / injured).
 - **Polymarket API.** Pull live fight odds for display on the lineup and fight card pages.
 - **Rankings sync.** Keep the official UFC rankings current automatically and surface them on fighter cards.
+- **Improved / manual rankings.** (Raised after Season 1 draft, June 2026.) Beyond the synced official rankings, allow a curated or manually overridden ranking (commissioner or per-manager) to drive draft-pool order and the fantasy-value list, since the official rankings miss prospects and lag reality.
 - **Projections.** Per-fighter projected fantasy points per upcoming fight, shown during lineup-setting.
 
 ### 10.7 Format & Engagement
 
-- **Playoffs format option.** Optional bracket-style playoffs instead of (or after) cumulative-points season. Currently 6.3 explicitly says no playoffs.
+- **Playoffs format option.** Optional bracket-style playoffs (or head-to-head matchups) instead of, or after, the cumulative-points season. Currently 6.3 explicitly says no playoffs. (Re-raised after Season 1 draft, June 2026.)
+- **Trade block.** (Raised after Season 1 draft, June 2026.) A public "available for trade" shelf where managers can list fighters they will move, visible league-wide. Sits alongside the deferred trade system (4.8), not a replacement for it.
+- **Notifications: text, email, and in-app/push.** (Re-raised after Season 1 draft, June 2026.) Phase 2 (Section 8) already plans email notifications; expand the plan to also cover SMS/text and in-app or push notifications for lineup reminders, your turn in the draft, and waiver results.
 - **Winner / loser animations.** Celebratory animation for matchup or weekly winner, commiseration animation for the worst score.
-- **Mobile integration.** Deeper mobile UX work beyond responsive polish (possible PWA install, push notifications, lineup-setting from phone optimized for fight night).
+- **Mobile integration.** Deeper mobile UX work beyond responsive polish (possible PWA install or native iPhone app, push notifications, lineup-setting from phone optimized for fight night). (Native iPhone app re-raised after Season 1 draft, June 2026.)
 
 ---
 

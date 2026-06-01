@@ -2156,30 +2156,43 @@ function showWholeTeamModal() {
     ? 'My Roster &middot; ' + escapeHtml(selectedEvent.name)
     : 'My Roster';
 
-  // Group fighters by slot type using the same assignment the main roster
-  // list uses, so the modal mirrors how the user already thinks about
-  // their team (one section per weight class, plus the any-flex bucket).
-  var assigned = assignSlots(myRoster);
-  var groups = {};
-  ALL_DIVISIONS.forEach(function(d) { groups[d] = []; });
-  groups['any_flex'] = [];
+  // Build a flat, dense grid of slot cells (one per construction slot: each
+  // men's division, the women's flex, then the any-division flex slots) so
+  // this view matches the draft's "Whole Roster" grid. assignSlots() does the
+  // same bucketing the main roster list uses, so a fighter lands in exactly
+  // the slot the user expects, and overflow spills to any-flex.
+  var assigned   = assignSlots(myRoster);
+  var inDiv      = {};
+  MENS_DIVISIONS.forEach(function(d) { inDiv[d] = []; });
+  var womensFlex = [];
+  var anyFlex    = [];
   assigned.forEach(function(item) {
-    if (groups[item.slotType]) groups[item.slotType].push(item.fighter);
+    if (item.slotType === 'any_flex')         anyFlex.push(item.fighter);
+    else if (item.slotType === 'womens_flex') womensFlex.push(item.fighter);
+    else if (inDiv[item.slotType])            inDiv[item.slotType].push(item.fighter);
   });
 
-  // Section options:
-  //   showDivision — print the fighter's actual division on the tile.
-  //                  Useful in the flex section (where it's not implied
-  //                  by the section header), redundant elsewhere.
-  var sectionsHtml = '';
-  ALL_DIVISIONS.forEach(function(div) {
-    if (groups[div].length > 0) {
-      sectionsHtml += renderTeamSection(DIVISION_LABELS[div], groups[div], {});
+  // Order the slots: men's divisions, then women's flex, then enough any-flex
+  // slots to cover both the league's configured cap and the actual count (so a
+  // post-draft overflow from trades/waivers is never silently truncated).
+  var anyFlexSlotCount = Math.max(
+    (typeof getAnyFlexSlots === 'function' ? getAnyFlexSlots(league) : ROSTER_FLEX_SLOTS),
+    anyFlex.length
+  );
+  var slotEntries = [];
+  MENS_DIVISIONS.forEach(function(div) {
+    for (var i = 0; i < ROSTER_SLOTS_PER_DIVISION; i++) {
+      slotEntries.push({ slotLabel: shortSlotLabel(div), tint: null, fighter: inDiv[div][i] || null });
     }
   });
-  if (groups['any_flex'].length > 0) {
-    sectionsHtml += renderTeamSection('Any-Division Flex', groups['any_flex'], { showDivision: true });
+  for (var w = 0; w < ROSTER_WOMENS_FLEX_SLOTS; w++) {
+    slotEntries.push({ slotLabel: 'W-F', tint: 'womens', showDivision: true, fighter: womensFlex[w] || null });
   }
+  for (var a = 0; a < anyFlexSlotCount; a++) {
+    slotEntries.push({ slotLabel: 'ANY', tint: 'anyflex', showDivision: true, fighter: anyFlex[a] || null });
+  }
+
+  var cellsHtml = slotEntries.map(renderWholeTeamCell).join('');
 
   var modal = document.createElement('div');
   modal.id = 'wholeTeamModal';
@@ -2196,7 +2209,7 @@ function showWholeTeamModal() {
       '<div class="fight-card-modal__body whole-team-modal__body">' +
         (myRoster.length === 0
           ? EmptyState.html({ kind: 'roster', title: 'No fighters yet', body: 'Your drafted fighters will live here once the draft completes.' })
-          : '<div class="whole-team-sections">' + sectionsHtml + '</div>') +
+          : '<div class="draft-roster-grid">' + cellsHtml + '</div>') +
       '</div>' +
     '</div>';
 
@@ -2229,35 +2242,48 @@ function handleWholeTeamEscape(e) {
   if (e.key === 'Escape') closeWholeTeamModal();
 }
 
-// One section = a weight-class label with its fighters laid out below.
-// Pads to 2 slots with dashed empty placeholders so a section with only
-// one fighter doesn't look lopsided next to a fully-filled neighbor.
-function renderTeamSection(label, fighters, opts) {
-  opts = opts || {};
-  var slotCount = 2;
-  var tilesHtml = fighters.map(function(f) { return renderTeamTile(f, opts); }).join('');
-  for (var i = fighters.length; i < slotCount; i++) {
-    tilesHtml += '<div class="whole-team-tile-empty" aria-hidden="true"></div>';
+// Short slot label shown in the grid badge (FLY/BAN/.../LHW/HW). Women's flex
+// and any-flex get their own labels ('W-F' / 'ANY') assigned where the slot
+// entries are built, so this only needs to cover the men's divisions. Mirrors
+// the same helper on the draft page so both grids read identically.
+function shortSlotLabel(division) {
+  switch (division) {
+    case 'flyweight':         return 'FLY';
+    case 'bantamweight':      return 'BAN';
+    case 'featherweight':     return 'FEA';
+    case 'lightweight':       return 'LIG';
+    case 'welterweight':      return 'WEL';
+    case 'middleweight':      return 'MID';
+    case 'light_heavyweight': return 'LHW';
+    case 'heavyweight':       return 'HW';
+    default:                  return '';
   }
-  return (
-    '<div class="whole-team-section">' +
-      '<p class="whole-team-section__label">' + escapeHtml(label) + '</p>' +
-      '<div class="whole-team-section__tiles">' + tilesHtml + '</div>' +
-    '</div>'
-  );
 }
 
-// One tile = photo + rank badge + starter mark + name (and optional division).
-// Champion gets a gold accent on the rank badge; starter gets a crimson border.
-// `opts.showDivision` adds a division line beneath the name — only useful in
-// flex sections where the section header doesn't already imply the division.
-function renderTeamTile(fighter, opts) {
-  opts = opts || {};
+// One cell in the dense roster grid. A filled slot renders the same
+// .whole-team-tile look used elsewhere (photo + rank badge + name), plus a
+// slot-type badge in the top-right corner and the lineup-only extras: starter
+// star, event points, INT/BMF badge, and an inline country flag. An empty slot
+// renders as a dashed placeholder that still shows its slot badge so the user
+// can see which slot is unfilled. `entry.showDivision` prints the fighter's
+// actual division beneath the name (used for the flex slots, where the slot
+// badge alone doesn't say which weight class the fighter actually fights at).
+function renderWholeTeamCell(entry) {
+  var badgeClass = 'draft-roster-tile__slot-badge';
+  if (entry.tint === 'womens')  badgeClass += ' draft-roster-tile__slot-badge--womens';
+  if (entry.tint === 'anyflex') badgeClass += ' draft-roster-tile__slot-badge--anyflex';
+  var badgeHtml = '<span class="' + badgeClass + '">' + escapeHtml(entry.slotLabel) + '</span>';
+
+  if (!entry.fighter) {
+    return '<div class="draft-roster-empty" aria-hidden="true">' + badgeHtml + '</div>';
+  }
+
+  var fighter   = entry.fighter;
   var isStarter = selections.has(fighter.id);
   var rankLabel = fighter.is_champion ? 'C' : (fighter.current_rank ? '#' + fighter.current_rank : 'NR');
-  // Strip the "Men's "/"Women's " prefix — the section header already
-  // establishes that context and the long version overflows narrow tiles.
-  var rawDiv  = DIVISION_LABELS[fighter.primary_division] || fighter.primary_division || '';
+  // Strip the "Men's "/"Women's " prefix — the slot badge already establishes
+  // that context and the long version overflows narrow tiles.
+  var rawDiv   = DIVISION_LABELS[fighter.primary_division] || fighter.primary_division || '';
   var divLabel = rawDiv.replace(/^Men's\s+/, '').replace(/^Women's\s+/, '');
   var photoHtml = fighter.photo_url
     ? '<img class="whole-team-tile__photo" src="' + fighter.photo_url + '" alt="" onerror="this.style.display=\'none\'">'
@@ -2287,14 +2313,15 @@ function renderTeamTile(fighter, opts) {
   var nameHtml = (flag ? '<span class="whole-team-tile__flag">' + flag + '</span> ' : '') + escapeHtml(fighter.name);
 
   var classes = 'whole-team-tile';
-  if (isStarter)            classes += ' whole-team-tile--starter';
-  if (fighter.is_champion)  classes += ' whole-team-tile--champion';
+  if (isStarter)           classes += ' whole-team-tile--starter';
+  if (fighter.is_champion) classes += ' whole-team-tile--champion';
 
   return (
     '<button class="' + classes + '" data-team-tile-id="' + fighter.id + '" type="button">' +
       '<div class="whole-team-tile__photo-wrap">' +
         photoHtml +
         '<span class="whole-team-tile__rank">' + escapeHtml(rankLabel) + '</span>' +
+        badgeHtml +
         subBadgeHtml +
         (isStarter
           ? '<span class="whole-team-tile__badge" title="Starter" aria-label="Starter">&#9733;</span>'
@@ -2303,7 +2330,7 @@ function renderTeamTile(fighter, opts) {
       '</div>' +
       '<div class="whole-team-tile__info">' +
         '<p class="whole-team-tile__name" title="' + escapeHtml(fighter.name) + '">' + nameHtml + '</p>' +
-        (opts.showDivision
+        (entry.showDivision
           ? '<p class="whole-team-tile__div">' + escapeHtml(divLabel) + '</p>'
           : '') +
       '</div>' +

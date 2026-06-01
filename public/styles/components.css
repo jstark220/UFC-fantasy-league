@@ -5102,11 +5102,13 @@ body {
   color: #1a1a1a;
 }
 
-/* Starter mark — filled crimson circle with a star. */
+/* Starter mark: filled crimson circle with a star. Pinned to the bottom-left
+   so it clears the slot-type badge that now sits in the top-right corner of
+   each whole-team grid tile (rank badge owns the top-left). */
 .whole-team-tile__badge {
   position: absolute;
-  top: 6px;
-  right: 6px;
+  bottom: 6px;
+  left: 6px;
   width: 24px;
   height: 24px;
   display: flex;
