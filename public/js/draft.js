@@ -1465,6 +1465,10 @@ async function initDraft() {
   // which the act of clicking around the draft naturally provides.
   setupSoundToggle();
 
+  // "Export board" trigger — wire its click once. Visibility is toggled in
+  // renderHeader (shown only when the draft is complete).
+  setupDraftExport();
+
   // Reveal the MOCK badge and Restart button when we're in mock mode.
   // No-op in real draft.
   setupMockChrome();
@@ -2791,6 +2795,13 @@ function renderHeader() {
   const turnInfoEl    = document.getElementById('turnInfo');
   const pickCounterEl = document.getElementById('pickCounter');
 
+  // Reveal the "Export board" trigger only once the draft is finished, so the
+  // shareable-board feature appears exactly when there's a full board to share.
+  const exportTrigger = document.getElementById('draftExportTrigger');
+  if (exportTrigger) {
+    exportTrigger.hidden = !(league.draft_completed || picks.length >= totalPicks);
+  }
+
   // Personal turn banner — separate concern, but always re-rendered with
   // the rest of the header so it stays in sync.
   renderDraftBanner();
@@ -3969,6 +3980,250 @@ function renderDraftBoard() {
   if (newScrollContainer) {
     newScrollContainer.scrollTop  = savedScrollTop;
     newScrollContainer.scrollLeft = savedScrollLeft;
+  }
+}
+
+// ========================================================================
+// EXPORT DRAFT BOARD (post-draft)
+// A "Export board" trigger in the top nav (shown only once the draft is
+// complete) opens a modal with a clean, screenshot-ready render of the whole
+// board and a "Save PNG" action. The export render is deliberately photo-free:
+// fighter photos are hosted cross-origin (ufc.com) without CORS headers, so
+// html2canvas can't capture them without tainting the canvas. A crisp grid of
+// team-colored columns + pick number + name + division/rank reads cleanly as a
+// shareable draft summary and always renders.
+// ========================================================================
+
+// Wire the trigger click once. renderHeader() handles showing/hiding it.
+function setupDraftExport() {
+  var trigger = document.getElementById('draftExportTrigger');
+  if (trigger) trigger.addEventListener('click', showDraftExportModal);
+}
+
+// Lazy-load html2canvas from CDN the first time the user saves an image, so
+// the (~50KB) library never loads for anyone who doesn't export. Resolves
+// immediately if it's already present.
+var _html2canvasLoad = null;
+function loadHtml2Canvas() {
+  if (typeof html2canvas !== 'undefined') return Promise.resolve();
+  if (_html2canvasLoad) return _html2canvasLoad;
+  _html2canvasLoad = new Promise(function(resolve, reject) {
+    var s = document.createElement('script');
+    var settled = false;
+    // Hard timeout so a blocked/slow CDN can never leave the button stuck on
+    // "Rendering…" forever — it rejects and the caller shows an error instead.
+    var timer = setTimeout(function() {
+      if (settled) return;
+      settled = true; _html2canvasLoad = null;
+      reject(new Error('html2canvas load timed out'));
+    }, 15000);
+    s.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+    s.onload  = function() { if (settled) return; settled = true; clearTimeout(timer); resolve(); };
+    s.onerror = function() { if (settled) return; settled = true; clearTimeout(timer); _html2canvasLoad = null; reject(new Error('Failed to load html2canvas')); };
+    document.head.appendChild(s);
+  });
+  return _html2canvasLoad;
+}
+
+// Normalize a computed color into something html2canvas 1.4.1 can parse.
+// Browsers resolve color-mix(in srgb, ...) to the modern color(srgb r g b)
+// function, which html2canvas can't read; convert that to rgb()/rgba(). Plain
+// rgb()/rgba()/hex values pass through unchanged.
+function toRenderableColor(c) {
+  if (!c) return c;
+  var m = c.match(/^color\(srgb\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)(?:\s*\/\s*([-\d.]+))?\s*\)$/i);
+  if (!m) return c;
+  var to255 = function(x) { return Math.max(0, Math.min(255, Math.round(parseFloat(x) * 255))); };
+  var r = to255(m[1]), g = to255(m[2]), b = to255(m[3]);
+  var a = m[4] != null ? parseFloat(m[4]) : 1;
+  return a < 1 ? 'rgba(' + r + ', ' + g + ', ' + b + ', ' + a + ')'
+               : 'rgb(' + r + ', ' + g + ', ' + b + ')';
+}
+
+// Build the clean, photo-free export board. Mirrors renderDraftBoard's snake
+// pick-number math and reuses teamColor / divisionAbbrev so the colors and
+// labels match the live board.
+function buildExportBoardHTML() {
+  var n           = league.draft_order.length;
+  var totalRounds = league.roster_size;
+  var totalPicks  = getTotalPicks();
+
+  var pickMap = {};
+  picks.forEach(function(p) { pickMap[p.draft_pick] = p.fighter_id; });
+
+  var leagueName = (league && league.name) ? league.name : 'Draft';
+  var dateStr = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+
+  var html = '<div class="dbx">';
+  html += '<div class="dbx__head">' +
+            '<span class="dbx__league">' + escapeHtml(leagueName) + '</span>' +
+            '<span class="dbx__sub">Draft Board &middot; ' + escapeHtml(dateStr) + '</span>' +
+          '</div>';
+  html += '<table class="dbx__table"><colgroup>';
+  for (var c = 0; c < n; c++) html += '<col>';
+  html += '</colgroup><thead><tr>';
+  league.draft_order.forEach(function(memberId) {
+    var member = memberMap[memberId];
+    html += '<th class="dbx__th" style="--team-accent: ' + teamColor(memberId) + '">' +
+              escapeHtml(member ? member.team_name : '?') +
+            '</th>';
+  });
+  html += '</tr></thead><tbody>';
+
+  for (var round = 1; round <= totalRounds; round++) {
+    html += '<tr>';
+    for (var managerIdx = 0; managerIdx < n; managerIdx++) {
+      var pickNum = round % 2 === 1
+        ? (round - 1) * n + managerIdx + 1
+        : (round - 1) * n + (n - managerIdx);
+      var positionInRound = ((pickNum - 1) % n) + 1;
+      var memberId = league.draft_order[managerIdx];
+      var fighter  = pickMap[pickNum] ? fighterMap[pickMap[pickNum]] : null;
+
+      // Match the live board exactly: copy the rendered cell's resolved
+      // background + division-accent left border. The board tints cells via
+      // color-mix(--div-accent ...), which html2canvas can't parse, but
+      // getComputedStyle hands us a plain rgb() it renders fine. (The board is
+      // always rendered by the time this runs, since export is post-draft.)
+      var cellStyle = '--team-accent: ' + teamColor(memberId);
+      if (fighter) {
+        var liveCell = document.querySelector('#draftBoard .draft-board__cell[data-pick-num="' + pickNum + '"]');
+        if (liveCell) {
+          var lcs = getComputedStyle(liveCell);
+          cellStyle += '; background: ' + toRenderableColor(lcs.backgroundColor) +
+                       '; border-left-color: ' + toRenderableColor(lcs.borderLeftColor);
+        }
+      }
+      html += '<td class="dbx__cell' + (fighter ? ' dbx__cell--made' : '') +
+              '" style="' + cellStyle + '">';
+      html += '<span class="dbx__pick">' + round + '.' + positionInRound + '</span>';
+      if (fighter) {
+        var divShort  = (typeof divisionAbbrev === 'function') ? divisionAbbrev(fighter.primary_division) : '';
+        var rankShort = fighter.is_champion ? 'C' : (fighter.current_rank ? '#' + fighter.current_rank : 'NR');
+        var flag      = (typeof countryFlag === 'function') ? countryFlag(fighter.country) : '';
+        if (flag) html += '<span class="dbx__flag" aria-hidden="true">' + flag + '</span>';
+        html += '<span class="dbx__name">' + escapeHtml(fighter.name) + '</span>';
+        html += '<span class="dbx__meta">' + escapeHtml(divShort) + ' &middot; ' + rankShort + '</span>';
+      }
+      // Snake-direction arrow to the next pick (bottom-right), matching the
+      // live board: odd rounds flow right, even rounds left, end of a round
+      // turns down. The final pick gets none (nothing comes after it).
+      if (pickNum < totalPicks) {
+        var arrowGlyph = (positionInRound === n) ? '&darr;'
+                       : (round % 2 === 1)       ? '&rarr;'
+                       :                           '&larr;';
+        html += '<span class="dbx__arrow" aria-hidden="true">' + arrowGlyph + '</span>';
+      }
+      html += '</td>';
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table>';
+  html += '<div class="dbx__foot">Knockdown Fantasy</div>';
+  html += '</div>';
+  return html;
+}
+
+function showDraftExportModal() {
+  var existing = document.getElementById('draftExportModal');
+  if (existing) existing.remove();
+
+  var modal = document.createElement('div');
+  modal.id = 'draftExportModal';
+  modal.className = 'fight-card-modal-overlay';
+  modal.innerHTML =
+    '<div class="fight-card-modal draft-export-modal" role="dialog" aria-modal="true" aria-label="Draft board">' +
+      '<div class="fight-card-modal__header">' +
+        '<div>' +
+          '<p class="fight-card-modal__eyebrow">Draft Complete</p>' +
+          '<p class="fight-card-modal__title">Draft Board</p>' +
+        '</div>' +
+        '<div class="draft-export-modal__actions">' +
+          '<button class="btn-primary draft-export-save-btn" id="draftExportSaveBtn" type="button">Save PNG</button>' +
+          '<button class="fight-card-modal__close" id="draftExportCloseBtn" aria-label="Close">&times;</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="fight-card-modal__body draft-export-modal__body">' +
+        '<div class="draft-export-scroll">' + buildExportBoardHTML() + '</div>' +
+      '</div>' +
+    '</div>';
+
+  document.body.appendChild(modal);
+
+  document.getElementById('draftExportCloseBtn').addEventListener('click', closeDraftExportModal);
+  document.getElementById('draftExportSaveBtn').addEventListener('click', saveDraftBoardImage);
+  modal.addEventListener('click', function(e) { if (e.target === modal) closeDraftExportModal(); });
+  document.addEventListener('keydown', handleDraftExportEscape);
+}
+
+function closeDraftExportModal() {
+  var modal = document.getElementById('draftExportModal');
+  if (modal) modal.remove();
+  document.removeEventListener('keydown', handleDraftExportEscape);
+}
+
+function handleDraftExportEscape(e) {
+  if (e.key === 'Escape') closeDraftExportModal();
+}
+
+// Render the export board to a PNG and trigger a download. Builds a fresh copy
+// of the board in a detached, unclipped offscreen container and captures THAT,
+// rather than the in-modal copy. The modal copy lives inside an overflow:auto
+// scroller and is taller than the viewport, which makes html2canvas seam at the
+// scroll/viewport fold (the "break after round 8"). A flat, unclipped clone
+// plus explicit full dimensions renders the whole board in one piece.
+async function saveDraftBoardImage() {
+  var btn = document.getElementById('draftExportSaveBtn');
+  var origLabel = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Rendering…'; }
+
+  var pageBg = getComputedStyle(document.body).backgroundColor || '#0d0d0d';
+  var holder = null;
+
+  try {
+    await loadHtml2Canvas();
+
+    // Detached, unclipped container (behind the modal overlay, no overflow
+    // ancestor) so the board lays out flat at full height.
+    holder = document.createElement('div');
+    holder.style.cssText = 'position: fixed; left: 0; top: 0; z-index: -1; ' +
+                           'background: ' + pageBg + ';';
+    holder.innerHTML = buildExportBoardHTML();
+    document.body.appendChild(holder);
+    var target = holder.querySelector('.dbx');
+
+    var canvas = await html2canvas(target, {
+      backgroundColor: pageBg,
+      scale: 2,             // 2x for a crisp, retina-quality image
+      useCORS: true,
+      imageTimeout: 4000,
+      logging: false,
+      // Capture the element's full box, anchored at (0,0), so a board taller
+      // than the window doesn't seam at the viewport fold.
+      width:        target.scrollWidth,
+      height:       target.scrollHeight,
+      windowWidth:  target.scrollWidth,
+      windowHeight: target.scrollHeight,
+      scrollX: 0,
+      scrollY: 0,
+      // html2canvas clones the whole document; skip the live draft room
+      // (#pageContent) so its hundreds of cross-origin ufc.com photos don't
+      // stall the clone. The board clone is a sibling and has no images.
+      ignoreElements: function(el) { return el && el.id === 'pageContent'; }
+    });
+
+    var base = (league && league.name ? league.name : 'draft')
+      .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'draft';
+    var link = document.createElement('a');
+    link.download = base + '-draft-board.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  } catch (err) {
+    console.error('Draft board export failed', err);
+    alert('Sorry, the board image could not be generated. Please try again.');
+  } finally {
+    if (holder) holder.remove();
+    if (btn) { btn.disabled = false; btn.textContent = origLabel; }
   }
 }
 

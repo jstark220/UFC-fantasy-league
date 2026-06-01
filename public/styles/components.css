@@ -15617,3 +15617,193 @@ label .form-label__hint {
 .draft-board__cell:has(.draft-board__cell-flag) .draft-board__cell-value-badge {
   top: 22px;
 }
+
+/* ========================================================================
+   EXPORT DRAFT BOARD
+   The "Export board" nav trigger (post-draft only), the modal that holds a
+   clean screenshot-ready board, and the .dbx board itself. See the matching
+   JS section in draft.js.
+   ======================================================================== */
+
+/* Trigger: absolutely centered in the sticky top-nav's empty middle. Hidden
+   until renderHeader() reveals it on draft completion. */
+.draft-export-trigger {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px;
+  background: var(--accent-crimson-subtle, rgba(224, 101, 62, 0.12));
+  color: var(--accent-crimson);
+  border: 1px solid var(--accent-crimson);
+  border-radius: 999px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.draft-export-trigger__icon { flex: 0 0 auto; }
+/* The class sets display:inline-flex, which would otherwise beat the [hidden]
+   UA rule (display:none) and leave the button visible pre-completion. */
+.draft-export-trigger[hidden] { display: none; }
+@media (hover: hover) {
+  .draft-export-trigger:hover {
+    background: var(--accent-crimson);
+    color: #fff;
+  }
+}
+/* On narrow screens the centered absolute button risks colliding with the
+   nav's side groups — drop the label to just the icon. */
+@media (max-width: 720px) {
+  .draft-export-trigger { padding: 7px 9px; gap: 0; }
+  .draft-export-trigger__label { display: none; }
+}
+
+/* Modal: wider than the standard fight-card modal to fit a full board. */
+.fight-card-modal.draft-export-modal {
+  max-width: 1500px;
+  width: 96vw;
+}
+.draft-export-modal__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.draft-export-save-btn {
+  padding: 8px 16px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.draft-export-save-btn:disabled { opacity: 0.6; cursor: progress; }
+/* Scroll wrapper lets the user pan a wide board inside the modal; the capture
+   targets the inner .dbx at full size regardless of scroll position. */
+.draft-export-scroll {
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
+}
+
+/* The exportable board itself. Self-contained styling (no dependency on the
+   live .draft-board CSS) so it renders identically inside html2canvas. */
+.dbx {
+  display: inline-block;        /* shrink-wrap to the table so the PNG has no dead space */
+  background: var(--bg-primary);
+  padding: 20px;
+  box-sizing: border-box;
+}
+.dbx__head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.dbx__league {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text-primary);
+}
+.dbx__sub {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-tertiary);
+}
+.dbx__table {
+  border-collapse: separate;
+  border-spacing: 4px;
+  table-layout: fixed;
+  width: auto;          /* size to the fixed column widths, not the container */
+}
+.dbx__table col { width: 132px; }
+.dbx__th {
+  background: var(--team-accent, var(--bg-tertiary));
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  text-align: left;
+  padding: 7px 9px;
+  border-radius: 6px 6px 0 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 132px;
+}
+.dbx__cell {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--team-accent, var(--border-strong));
+  border-radius: 4px;
+  padding: 6px 8px 7px;
+  vertical-align: top;
+  height: 50px;
+  position: relative;
+}
+.dbx__pick {
+  display: block;
+  font-size: 9px;
+  font-weight: 700;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 2px;
+}
+/* Country flag, pinned to the cell's top-right corner. */
+.dbx__flag {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font-size: 13px;
+  line-height: 1;
+}
+/* Snake-direction arrow to the next pick, bottom-right corner. */
+.dbx__arrow {
+  position: absolute;
+  bottom: 5px;
+  right: 7px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.6);
+}
+.dbx__name {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dbx__meta {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-top: 1px;
+}
+/* Made cells get their background + division-accent left border inlined per
+   cell (copied from the live board, see buildExportBoardHTML) so the export
+   matches the real board's division coloring exactly. */
+.dbx__foot {
+  margin-top: 14px;
+  font-family: var(--font-display);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-tertiary);
+  text-align: right;
+}
+.dbx__foot::before { content: ''; }

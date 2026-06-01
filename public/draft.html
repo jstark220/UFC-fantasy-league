@@ -85,6 +85,20 @@
           <span class="page-help-trigger__label">How it works</span>
         </button>
       </div>
+      <!-- "Export board" — absolutely centered in the nav. Revealed by
+           renderHeader() only once the draft is complete; opens a modal with
+           a clean, screenshot-ready draft board and a Save-PNG action. -->
+      <button id="draftExportTrigger" class="draft-export-trigger" type="button" hidden
+              title="Open a shareable image of the full draft board">
+        <svg class="draft-export-trigger__icon" width="15" height="15" viewBox="0 0 24 24"
+             fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+             stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="7 10 12 15 17 10"></polyline>
+          <line x1="12" y1="15" x2="12" y2="3"></line>
+        </svg>
+        <span class="draft-export-trigger__label">Export board</span>
+      </button>
       <div class="top-nav__actions">
         <!-- Sound toggle: mute/unmute the synthesized draft sound effects.
              Wired by setupSoundToggle() in draft.js; mute state persists
