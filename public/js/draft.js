@@ -599,6 +599,7 @@ function setupLobbyEnterButton() {
 
   enterBtn.addEventListener('click', function() {
     lobby.hidden = true;
+    lobby.dataset.dismissed = '1';
     // Only show the "Lobby" pill while we're still in pre-draft. If the
     // draft started in the middle of the user reading the lobby (page
     // would reload anyway), this is defensive.
@@ -607,6 +608,8 @@ function setupLobbyEnterButton() {
 
   showBtn.addEventListener('click', function() {
     if (!inPreDraft()) { showBtn.hidden = true; return; }
+    // Clear dismissed so renderDraftLobby can show updated content.
+    delete lobby.dataset.dismissed;
     // Re-render in case anything changed (presence, schedule) since the
     // lobby was dismissed.
     renderDraftLobby();
@@ -4762,7 +4765,13 @@ function renderDraftLobby() {
     orderEl.innerHTML = html;
   }
 
-  el.hidden = false;
+  // Only show the lobby if it hasn't been explicitly dismissed by the user
+  // (setupLobbyEnterButton sets hidden=true when they click "Enter draft room").
+  // Presence events call renderDraftLobby to update the avatar tiles, but
+  // should not override the user's choice to view the draft pool instead.
+  if (!el.dataset.dismissed) {
+    el.hidden = false;
+  }
 }
 
 function stopPredraftCountdown() {
