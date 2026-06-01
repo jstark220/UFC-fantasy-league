@@ -6794,21 +6794,10 @@ body {
     gap: var(--space-4);
   }
 
-  /* Pack the banner actions onto a single horizontal row at
-     a smaller font so the user can see all of them at once instead of
-     wrapping to multiple lines. */
-  .lineup-banner-actions {
-    flex-wrap: nowrap;
-    gap: var(--space-2);
-    margin-top: var(--space-2);
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-  .lineup-banner-actions .fight-card-btn {
-    flex-shrink: 0;
-    padding: 4px 8px;
-    font-size: 11px;
-  }
+  /* The banner-action buttons (and their mobile 2-column grid) are styled
+     next to the desktop .lineup-banner-actions rules below, so the mobile
+     overrides come later in source order and actually win the cascade. */
+
   /* Trim the event metadata so the card itself is shorter on mobile */
   .this-week-card__eyebrow { font-size: 10px; }
   .this-week-card__name    { font-size: 1.6rem; line-height: 1.05; }
@@ -13065,10 +13054,50 @@ label .form-label__hint {
   flex-wrap: wrap;
   gap: var(--space-3);
   align-items: center;
-  margin-top: var(--space-2);
+  margin-top: var(--space-3);
 }
+/* Render the banner actions as real (secondary-style) buttons: bordered,
+   rounded, brighter label — overriding the .btn-ghost text-link look. One
+   padding/font value is shared by desktop and mobile so the mobile media
+   query below only has to handle layout (grid) and wrapping, which avoids
+   source-order specificity fights with this rule. */
 .lineup-banner-actions .fight-card-btn {
+  margin: 0;
+  padding: 9px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
   text-decoration: none;
+}
+@media (hover: hover) {
+  .lineup-banner-actions .fight-card-btn:hover {
+    background: var(--bg-tertiary);
+    border-color: var(--text-primary);
+  }
+}
+
+/* Mobile: a tidy 2-column grid of full-width buttons, all visible at once
+   (no horizontal scroll). Labels center and wrap rather than overflow. An
+   odd last button (the common 3-button, non-commissioner case) spans the
+   full width so the row isn't left lopsided. */
+@media (max-width: 720px) {
+  .lineup-banner-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-2);
+  }
+  .lineup-banner-actions .fight-card-btn {
+    justify-content: center;
+    text-align: center;
+    white-space: normal;
+    line-height: 1.2;
+  }
+  .lineup-banner-actions .fight-card-btn:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
 }
 
 /* ============================================================
