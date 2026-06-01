@@ -5102,23 +5102,22 @@ body {
   color: #1a1a1a;
 }
 
-/* Starter mark: filled crimson circle with a star. Pinned to the bottom-left
-   so it clears the slot-type badge that now sits in the top-right corner of
-   each whole-team grid tile (rank badge owns the top-left). */
+/* Starter mark: a crimson "STARTING" pill. Pinned to the bottom-left so it
+   clears the slot-type badge in the top-right corner of each whole-team grid
+   tile (rank badge owns the top-left). */
 .whole-team-tile__badge {
   position: absolute;
   bottom: 6px;
   left: 6px;
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  padding: 3px 8px;
   background: var(--accent-crimson);
   color: white;
-  border-radius: 50%;
-  font-size: 14px;
-  line-height: 1;
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  line-height: 1.2;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
   z-index: 1;
 }
@@ -15056,22 +15055,20 @@ label .form-label__hint {
   object-fit: cover;
   object-position: top center;  /* keep the face in frame on a short crop */
 }
-/* Starter mark, mirroring the desktop tile's bottom-left star. Sits in the
-   bottom corner (over the chest), clear of the face at the top. */
-.wt-mcell__star {
-  position: absolute;
-  bottom: 3px;
-  left: 3px;
-  width: 17px;
-  height: 17px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+/* Starter mark: a compact crimson "STARTING" pill that leads the meta line.
+   (The mobile photo is too small to hold a text pill without covering the
+   face, and the cell's crimson left border already flags the starter.) */
+.wt-mcell__starting {
+  display: inline-block;
+  padding: 0 4px;
   background: var(--accent-crimson);
   color: #fff;
-  border-radius: 50%;
-  font-size: 10px;
-  line-height: 1;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  vertical-align: middle;
 }
 
 .wt-mcell__body { flex: 1 1 auto; min-width: 0; }

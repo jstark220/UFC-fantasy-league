@@ -2330,7 +2330,7 @@ function renderWholeTeamCell(entry) {
         badgeHtml +
         subBadgeHtml +
         (isStarter
-          ? '<span class="whole-team-tile__badge" title="Starter" aria-label="Starter">&#9733;</span>'
+          ? '<span class="whole-team-tile__badge" aria-label="Starter">Starting</span>'
           : '') +
         ptsHtml +
       '</div>' +
@@ -2399,11 +2399,11 @@ function renderWholeTeamMobileCell(entry) {
       '<div class="wt-mcell__photo-wrap">' +
         photoHtml +
         slotBadge +
-        (isStarter ? '<span class="wt-mcell__star" title="Starter" aria-label="Starter">&#9733;</span>' : '') +
       '</div>' +
       '<div class="wt-mcell__body">' +
         '<p class="wt-mcell__name" title="' + escapeHtml(fighter.name) + '">' + nameHtml + '</p>' +
         '<p class="wt-mcell__meta">' +
+          (isStarter ? '<span class="wt-mcell__starting">Starting</span> ' : '') +
           '<span class="wt-mcell__rank' + rankClass + '">' + escapeHtml(rankLabel) + '</span>' + subTag +
           ' &middot; ' + escapeHtml(divLabel) +
         '</p>' +
