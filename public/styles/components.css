@@ -14988,6 +14988,139 @@ label .form-label__hint {
 }
 
 /* ========================================================================
+   WHOLE TEAM MODAL — mobile cell list
+   On phones the desktop tile grid (.wt-desktop-grid) is hidden and this
+   compact 2-column list shows instead, so a manager's entire roster fits on
+   one screenshottable screen. Each cell is a condensed horizontal row
+   (small photo + name + rank/division + slot badge), echoing the lineup
+   page's roster rows stripped to a read-only overview.
+   ======================================================================== */
+.wt-mobile-list { display: none; }  /* desktop: hidden; the tile grid shows */
+
+.wt-mcell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+  padding: 5px 7px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-left: 3px solid transparent;  /* recolored for starter / champion */
+  border-radius: 8px;
+  cursor: pointer;
+}
+.wt-mcell--starter  { border-left-color: var(--accent-crimson); }
+.wt-mcell--champion { border-left-color: var(--accent-gold); }
+.wt-mcell--empty {
+  cursor: default;
+  border-style: dashed;
+  opacity: 0.5;
+}
+
+.wt-mcell__photo-wrap {
+  position: relative;
+  flex: 0 0 auto;
+  width: 40px;
+  height: 46px;
+  border-radius: 5px;
+  overflow: hidden;
+  background: var(--bg-tertiary);
+}
+.wt-mcell__photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;  /* keep the face in frame on a short crop */
+}
+/* Starter mark, mirroring the desktop tile's bottom-left star */
+.wt-mcell__star {
+  position: absolute;
+  bottom: 1px;
+  left: 1px;
+  width: 15px;
+  height: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-crimson);
+  color: #fff;
+  border-radius: 50%;
+  font-size: 9px;
+  line-height: 1;
+}
+
+.wt-mcell__body { flex: 1 1 auto; min-width: 0; }
+.wt-mcell__name {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wt-mcell__flag { font-size: 0.95em; }
+.wt-mcell__meta {
+  margin: 1px 0 0;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wt-mcell__rank { font-weight: 800; color: var(--text-secondary); }
+.wt-mcell__rank--champion { color: var(--accent-gold); }
+
+/* Slot badge overlays the photo's top-right corner (like the desktop tile)
+   rather than taking a column, so the name gets the full remaining width. */
+.wt-mcell__slot {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  padding: 1px 3px;
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+  border-radius: 3px;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  line-height: 1.25;
+}
+.wt-mcell__slot--womens  { background: #6b46c1; }
+.wt-mcell__slot--anyflex { background: var(--accent-crimson); }
+/* Event score pill (past / live events only), trailing the cell on the right. */
+.wt-mcell__pts {
+  flex: 0 0 auto;
+  padding: 2px 5px;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.wt-mcell__pts--starter { background: var(--accent-crimson); }
+
+/* Swap presentations at the same 720px breakpoint the old whole-team mobile
+   layout used: hide the desktop tile grid, show the condensed cell list. */
+@media (max-width: 720px) {
+  .wt-desktop-grid { display: none; }
+  .wt-mobile-list {
+    display: grid;
+    /* minmax(0, 1fr), not 1fr: 1fr has a min-content floor, which lets the
+       nowrap name/meta push a column wider than the container and clip the
+       right edge. minmax(0, ...) lets the cells shrink so ellipsis kicks in. */
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    max-width: 100%;
+  }
+}
+
+/* ========================================================================
    COMMISH POWERS PAGE
    Standalone admin surface for roster / score / trade overrides. Three
    tabs share the same baseline styles; per-tab quirks are below each

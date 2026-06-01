@@ -2192,7 +2192,12 @@ function showWholeTeamModal() {
     slotEntries.push({ slotLabel: 'ANY', tint: 'anyflex', showDivision: true, fighter: anyFlex[a] || null });
   }
 
-  var cellsHtml = slotEntries.map(renderWholeTeamCell).join('');
+  // Two presentations of the same slots: the desktop tile grid (matches the
+  // draft's Whole Roster view) and a condensed mobile cell list. CSS hides one
+  // or the other by viewport, so the mobile list fits a whole roster on a
+  // single screenshottable screen (see .wt-mobile-list in components.css).
+  var cellsHtml       = slotEntries.map(renderWholeTeamCell).join('');
+  var mobileCellsHtml = slotEntries.map(renderWholeTeamMobileCell).join('');
 
   var modal = document.createElement('div');
   modal.id = 'wholeTeamModal';
@@ -2209,7 +2214,8 @@ function showWholeTeamModal() {
       '<div class="fight-card-modal__body whole-team-modal__body">' +
         (myRoster.length === 0
           ? EmptyState.html({ kind: 'roster', title: 'No fighters yet', body: 'Your drafted fighters will live here once the draft completes.' })
-          : '<div class="draft-roster-grid">' + cellsHtml + '</div>') +
+          : '<div class="draft-roster-grid wt-desktop-grid">' + cellsHtml + '</div>' +
+            '<div class="wt-mobile-list">' + mobileCellsHtml + '</div>') +
       '</div>' +
     '</div>';
 
@@ -2334,6 +2340,75 @@ function renderWholeTeamCell(entry) {
           ? '<p class="whole-team-tile__div">' + escapeHtml(divLabel) + '</p>'
           : '') +
       '</div>' +
+    '</button>'
+  );
+}
+
+// Mobile counterpart to renderWholeTeamCell: a condensed horizontal cell
+// (small photo + name + rank/division + slot badge) so the whole roster fits
+// on one screenshottable phone screen. Echoes the lineup page's roster rows,
+// stripped to a read-only overview. Same data-team-tile-id as the desktop tile
+// so the existing click-to-open-fighter-modal handler covers both.
+function renderWholeTeamMobileCell(entry) {
+  var slotClass = 'wt-mcell__slot';
+  if (entry.tint === 'womens')  slotClass += ' wt-mcell__slot--womens';
+  if (entry.tint === 'anyflex') slotClass += ' wt-mcell__slot--anyflex';
+  var slotBadge = '<span class="' + slotClass + '">' + escapeHtml(entry.slotLabel) + '</span>';
+
+  if (!entry.fighter) {
+    return (
+      '<div class="wt-mcell wt-mcell--empty" aria-hidden="true">' +
+        '<div class="wt-mcell__photo-wrap">' + slotBadge + '</div>' +
+        '<div class="wt-mcell__body"><p class="wt-mcell__meta">Empty</p></div>' +
+      '</div>'
+    );
+  }
+
+  var fighter   = entry.fighter;
+  var isStarter = selections.has(fighter.id);
+  var rankLabel = fighter.is_champion ? 'C' : (fighter.current_rank ? '#' + fighter.current_rank : 'NR');
+  var rankClass = fighter.is_champion ? ' wt-mcell__rank--champion' : '';
+  var rawDiv    = DIVISION_LABELS[fighter.primary_division] || fighter.primary_division || '';
+  var divLabel  = rawDiv.replace(/^Men's\s+/, '').replace(/^Women's\s+/, '');
+  var photoHtml = fighter.photo_url
+    ? '<img class="wt-mcell__photo" src="' + fighter.photo_url + '" alt="" onerror="this.style.display=\'none\'">'
+    : '';
+
+  // Interim / BMF appended inline after the rank to stay on one meta line.
+  var subTag = '';
+  if (fighter.is_sub_champion && fighter.sub_title_type === 'interim') subTag = ' &middot; INT';
+  else if (fighter.is_sub_champion && fighter.sub_title_type === 'bmf') subTag = ' &middot; BMF';
+
+  // Event score pill (past / live events with results), stacked under the slot.
+  var ptsHtml = '';
+  var computed = selectedEventComputedScores[fighter.id];
+  if (computed != null) {
+    var ptsStr = (Math.round(computed * 100) / 100).toFixed(2);
+    ptsHtml = '<span class="wt-mcell__pts' + (isStarter ? ' wt-mcell__pts--starter' : '') + '">' + ptsStr + '</span>';
+  }
+
+  var flag = (typeof countryFlag === 'function') ? countryFlag(fighter.country) : '';
+  var nameHtml = (flag ? '<span class="wt-mcell__flag">' + flag + '</span> ' : '') + escapeHtml(fighter.name);
+
+  var classes = 'wt-mcell';
+  if (isStarter)           classes += ' wt-mcell--starter';
+  if (fighter.is_champion) classes += ' wt-mcell--champion';
+
+  return (
+    '<button class="' + classes + '" data-team-tile-id="' + fighter.id + '" type="button">' +
+      '<div class="wt-mcell__photo-wrap">' +
+        photoHtml +
+        slotBadge +
+        (isStarter ? '<span class="wt-mcell__star" title="Starter" aria-label="Starter">&#9733;</span>' : '') +
+      '</div>' +
+      '<div class="wt-mcell__body">' +
+        '<p class="wt-mcell__name" title="' + escapeHtml(fighter.name) + '">' + nameHtml + '</p>' +
+        '<p class="wt-mcell__meta">' +
+          '<span class="wt-mcell__rank' + rankClass + '">' + escapeHtml(rankLabel) + '</span>' + subTag +
+          ' &middot; ' + escapeHtml(divLabel) +
+        '</p>' +
+      '</div>' +
+      ptsHtml +
     '</button>'
   );
 }
