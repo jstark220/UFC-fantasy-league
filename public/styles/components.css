@@ -4829,6 +4829,66 @@ body {
   font-weight: 700;
 }
 
+/* ========================================================================
+   ADD-TO-HOME-SCREEN BUTTON  (league header, mobile only)
+   A crimson-tinted CTA pill. Hidden on desktop — installing to a home
+   screen is a phone/tablet affordance — and revealed inside the mobile
+   header block (@media max-width: 720px). In the header flex row it sits
+   after the "How it works" trigger, whose margin-right:auto pushes this
+   to the right edge. margin-left:auto is a belt-and-suspenders so it stays
+   right-aligned even if the help trigger is ever removed.
+   ======================================================================== */
+.install-app-btn {
+  display: none;            /* shown only at the mobile breakpoint */
+  align-items: center;
+  gap: 7px;
+  margin-left: auto;
+  padding: 7px 14px;
+  border: 1px solid var(--accent-crimson);
+  border-radius: 999px;
+  background: rgba(193, 59, 46, 0.10);
+  color: var(--accent-crimson);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s ease;
+}
+.install-app-btn__icon { flex-shrink: 0; display: block; }
+.install-app-btn:active { background: rgba(193, 59, 46, 0.20); }
+
+/* iOS "how to install" modal — reuses .fight-card-modal chrome. */
+.a2hs-modal { max-width: 460px; }
+.a2hs-modal__body { padding-top: 4px; }
+.a2hs-intro {
+  margin: 0 0 var(--space-4);
+  color: var(--text-secondary);
+  font-size: var(--text-body);
+  line-height: 1.5;
+}
+.a2hs-steps {
+  margin: 0;
+  padding-left: 1.25em;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  color: var(--text-primary);
+  font-size: var(--text-body);
+  line-height: 1.5;
+}
+.a2hs-steps strong { color: var(--text-primary); font-weight: 700; }
+/* Inline the iOS share glyph with the step text so it reads naturally. */
+.a2hs-share-icon {
+  display: inline-flex;
+  vertical-align: middle;
+  color: var(--accent-crimson);
+  margin: 0 1px;
+}
+
 /* Modal card override — slightly narrower than the fight card modal since
    this is a reading experience, not a side-by-side comparison. */
 .fight-card-modal.page-help-modal {
@@ -6712,6 +6772,11 @@ body {
      that resets display on the container. */
   .league-header .league-header__actions { display: none !important; }
   .league-header .nav-tabs { display: none !important; }
+
+  /* Reveal the Add-to-Home-Screen CTA only on mobile. The desktop header
+     hides it; here it sits at the right edge of the header, across from the
+     "How it works" trigger. */
+  .league-header .install-app-btn { display: inline-flex; }
 
   /* Keep the back link visible inline (no need to open the drawer to
      go back). Every member-area page puts the back link first inside

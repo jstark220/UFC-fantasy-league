@@ -3,6 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- iOS home-screen app: icon + full-screen (standalone) launch. -->
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Knockdown">
+  <meta name="theme-color" content="#0E0E10">
 
   <script src="js/theme.js"></script>
   <script src="js/mobile-nav.js" defer></script>
@@ -12,7 +18,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="styles/tokens.css">
-  <link rel="stylesheet" href="styles/components.css">
+  <link rel="stylesheet" href="styles/components.css?v=1">
 
   <title>League - Knockdown Fantasy</title>
   <script src="js/loading-screen.js"></script>
@@ -45,6 +51,20 @@
       <div class="league-header__inner">
         <h1 class="league-header__name" id="leagueName"></h1>
         <!-- The "? How it works" trigger is injected by js/league-primer.js -->
+        <!-- Add-to-Home-Screen button: mobile only (hidden on desktop via CSS),
+             behavior wired by js/add-to-home.js. Sits at the right edge of the
+             header on mobile, across from the "How it works" trigger. -->
+        <button id="installAppBtn" class="install-app-btn" type="button"
+                aria-label="Add Knockdown Fantasy to your home screen">
+          <svg class="install-app-btn__icon" viewBox="0 0 24 24" width="16" height="16"
+               fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 3v12"/>
+            <path d="m7 10 5 5 5-5"/>
+            <path d="M5 21h14"/>
+          </svg>
+          <span class="install-app-btn__label">Add to Home Screen</span>
+        </button>
         <div class="league-header__actions" id="headerActions"></div>
       </div>
     </div>
@@ -287,7 +307,8 @@
   <script src="js/page-help-modal.js"></script>
   <script src="js/league-primer.js"></script>
   <script src="js/league-nav.js"></script>
-  <script src="js/league.js"></script>
+  <script src="js/add-to-home.js?v=1"></script>
+  <script src="js/league.js?v=1"></script>
 
   <script>
     // Theme toggle icon sync
