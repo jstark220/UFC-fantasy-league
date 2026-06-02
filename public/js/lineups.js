@@ -296,7 +296,8 @@ function renderLineupsGrid() {
   }).join('');
 }
 
-// One manager's card: header (team name + total) + 3 starter slots.
+// One manager's card: header (team name + total) + starter slots (2 on a
+// Fight Night, 3 on a numbered card — see currentStarterCount).
 function renderManagerCard(member, totalScore, anyScoresThisEvent) {
   const isMe        = member.id === myMember.id;
   const selectionIds = selectionsByMember[member.id] || [];
@@ -317,7 +318,9 @@ function renderManagerCard(member, totalScore, anyScoresThisEvent) {
 
   const totalLabel = anyScoresThisEvent
     ? '<span class="lineups-card__total">' + (Math.round(totalScore * 100) / 100).toFixed(1) + ' pts</span>'
-    : '<span class="lineups-card__total lineups-card__total--muted">' + selectionIds.length + ' / 3 set</span>';
+    // "x / N set" where N is the event's starter count (2 on Fight Nights,
+    // 3 on numbered cards) — matches the number of slots rendered above.
+    : '<span class="lineups-card__total lineups-card__total--muted">' + Math.min(selectionIds.length, starterCount) + ' / ' + starterCount + ' set</span>';
 
   // Click target: the whole card links to the per-member lineup view so the
   // user can see bench + roster construction. Own card links back to "your"
