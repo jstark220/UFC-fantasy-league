@@ -742,9 +742,15 @@ function renderEventBanner() {
   var ICON_TEAM = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
   var ICON_GRID = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>';
   var ICON_EDIT = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
-  function bannerBtnInner(icon, label) {
+  // shortLabel (optional) is a tighter label shown only on mobile, where the
+  // full label doesn't fit — CSS swaps the two at the 720px breakpoint.
+  function bannerBtnInner(icon, label, shortLabel) {
+    var labelHtml = shortLabel
+      ? '<span class="fight-card-btn__label fight-card-btn__label--full">' + label + '</span>' +
+        '<span class="fight-card-btn__label fight-card-btn__label--short">' + shortLabel + '</span>'
+      : '<span class="fight-card-btn__label">' + label + '</span>';
     return '<span class="fight-card-btn__icon" aria-hidden="true">' + icon + '</span>' +
-           '<span class="fight-card-btn__label">' + label + '</span>' +
+           labelHtml +
            '<span class="fight-card-btn__arrow" aria-hidden="true">&rarr;</span>';
   }
 
@@ -763,7 +769,7 @@ function renderEventBanner() {
         (eventDate    ? '<p class="this-week-card__date">'    + eventDate + '</p>' : '') +
         (eventMatchup ? '<p class="this-week-card__matchup">' + escapeHtml(eventMatchup) + '</p>' : '') +
         '<div class="lineup-banner-actions">' +
-          '<button class="btn-ghost fight-card-btn" id="viewFightCardBtn">' + bannerBtnInner(ICON_CARD, 'View fight card') + '</button>' +
+          '<button class="btn-ghost fight-card-btn" id="viewFightCardBtn">' + bannerBtnInner(ICON_CARD, 'View fight card', 'Fight card') + '</button>' +
           '<button class="btn-ghost fight-card-btn" id="viewWholeTeamBtn">' + bannerBtnInner(ICON_TEAM, 'Whole team') + '</button>' +
           // Lets the user pop over to the all-members lineups view for the
           // same event. We pass ?event= so they land on the same card they
@@ -771,7 +777,7 @@ function renderEventBanner() {
           '<a class="btn-ghost fight-card-btn" id="viewAllLineupsLink" href="lineups.html?id=' +
               encodeURIComponent(leagueId) +
               (selectedEvent ? '&event=' + encodeURIComponent(selectedEvent.id) : '') +
-              '">' + bannerBtnInner(ICON_GRID, 'View all lineups') + '</a>' +
+              '">' + bannerBtnInner(ICON_GRID, 'View all lineups', 'All lineups') + '</a>' +
           editEventBtn +
         '</div>' +
       '</div>' +

@@ -13249,6 +13249,9 @@ label .form-label__hint {
   flex-shrink: 0;
   transition: color 0.15s ease, transform 0.15s ease;
 }
+/* Responsive label: full text on desktop, the shorter variant on mobile
+   where "View fight card" / "View all lineups" don't fit. */
+.lineup-banner-actions .fight-card-btn__label--short { display: none; }
 /* A lone trailing link (the 3-link, non-commissioner case) spans the full
    width so the grid isn't left with an awkward empty cell. */
 .lineup-banner-actions .fight-card-btn:last-child:nth-child(odd) {
@@ -13285,6 +13288,10 @@ label .form-label__hint {
   .event-countdown__time { gap: 8px; }
   .event-countdown__num { font-size: 1.2rem; }
   .event-countdown__hint { font-size: 10px; }
+
+  /* Tighter labels on the action links where the full text doesn't fit. */
+  .lineup-banner-actions .fight-card-btn__label--full { display: none; }
+  .lineup-banner-actions .fight-card-btn__label--short { display: block; }
 }
 
 /* ============================================================
