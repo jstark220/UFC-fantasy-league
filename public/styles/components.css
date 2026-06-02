@@ -13185,54 +13185,66 @@ label .form-label__hint {
    The "View fight card" / "View all lineups" buttons live in
    the same row of the event banner on the lineup page.
    ============================================================ */
+/* Equal-width 2-up grid on BOTH desktop and mobile so every banner button is
+   the same size. minmax(0, 1fr) (not plain 1fr) forces the two columns to be
+   exactly equal even when a label is longer than the other. The grid fills
+   the banner column rather than being capped, so the buttons read as an
+   intentional block instead of being stranded in a corner on desktop. */
 .lineup-banner-actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-3);
-  align-items: center;
+  /* start (not stretch) so the rows stay exactly the button height instead
+     of growing to fill any extra height in the card's flex layout — that
+     row-stretch was making the bottom row taller than the top. */
+  align-items: start;
+  align-content: start;
   margin-top: var(--space-3);
 }
-/* Render the banner actions as real (secondary-style) buttons: bordered,
-   rounded, brighter label — overriding the .btn-ghost text-link look. One
-   padding/font value is shared by desktop and mobile so the mobile media
-   query below only has to handle layout (grid) and wrapping, which avoids
-   source-order specificity fights with this rule. */
+/* Crimson CTA buttons, identical on desktop + mobile. Flex-centered with a
+   min-height so every button is the same height (and rows match via the
+   grid's stretch), and the label centers + wraps instead of overflowing. */
 .lineup-banner-actions .fight-card-btn {
   margin: 0;
-  padding: 9px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  /* Fixed height on desktop so every button is EXACTLY the same size — the
+     grid's default vertical stretch was letting the card's flex layout pull
+     them to uneven/oversized heights. (Mobile relaxes this to min-height so
+     a wrapped 2-line label isn't clipped — see the @media block below.) */
+  height: 48px;
+  padding: 0 14px;
   font-size: 13px;
   font-weight: 600;
-  color: var(--text-primary);
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-strong);
+  line-height: 1.2;
+  white-space: normal;
+  color: #fff;
+  background: var(--accent-crimson);
+  border: 1px solid var(--accent-crimson);
   border-radius: 8px;
   text-decoration: none;
 }
+/* A lone trailing button (the 3-button, non-commissioner case) spans the
+   full width so the grid isn't left with an awkward empty cell. */
+.lineup-banner-actions .fight-card-btn:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
 @media (hover: hover) {
   .lineup-banner-actions .fight-card-btn:hover {
-    background: var(--bg-tertiary);
-    border-color: var(--text-primary);
+    background: var(--accent-crimson-hover);
+    border-color: var(--accent-crimson-hover);
   }
 }
 
-/* Mobile: a tidy 2-column grid of full-width buttons, all visible at once
-   (no horizontal scroll). Labels center and wrap rather than overflow. An
-   odd last button (the common 3-button, non-commissioner case) spans the
-   full width so the row isn't left lopsided. */
+/* Mobile: everything (equal-width grid, fixed 48px height, crimson, centering)
+   is shared from the base above so the buttons stay identical here too; we
+   only tighten the gap. The labels are short enough that they never wrap at
+   the 2-up column width, so the fixed height never clips. */
 @media (max-width: 720px) {
   .lineup-banner-actions {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
     gap: var(--space-2);
-  }
-  .lineup-banner-actions .fight-card-btn {
-    justify-content: center;
-    text-align: center;
-    white-space: normal;
-    line-height: 1.2;
-  }
-  .lineup-banner-actions .fight-card-btn:last-child:nth-child(odd) {
-    grid-column: 1 / -1;
   }
 }
 
