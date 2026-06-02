@@ -6913,6 +6913,14 @@ body {
     padding: var(--space-4) var(--space-4) var(--space-3);
     min-height: 0;
   }
+  /* Full width so the event text + button grid span the whole card instead
+     of shrinking to content width and leaving dead space on the right (the
+     base flex: 0 0 60% is a desktop 2-column split; on a stacked mobile card
+     the event column should be full width). */
+  .this-week-card__event {
+    width: 100%;
+    flex: 0 0 auto;
+  }
   .this-week-card__right {
     width: 100%;
     align-items: flex-start;
@@ -13213,25 +13221,23 @@ label .form-label__hint {
   /* Fixed height so every button is EXACTLY the same size — the grid's default
      vertical stretch was letting the card's flex layout pull them to uneven
      heights. The labels are short enough that they never wrap at the 2-up
-     column width, so a fixed height never clips. */
-  height: 50px;
-  padding: 0 16px;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+     column width, so a fixed height never clips. Kept compact so the 2x2
+     doesn't feel chunky/crowded. */
+  height: 42px;
+  padding: 0 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
   line-height: 1.2;
   white-space: normal;
   color: #fff;
-  /* Sleeker than a flat fill: a subtle top-to-bottom crimson gradient for
-     depth, a crisp rim-light border to define the edge against the dark card,
-     a soft lift shadow, and an inset top highlight so it reads as a real,
-     pressable button rather than a colored block. */
-  background: linear-gradient(180deg, var(--accent-crimson) 0%, var(--accent-crimson-hover) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 10px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  /* Clean flat crimson with a thin rim border to define the edge against the
+     dark card — lighter and less "clunky" than a gradient + drop shadow. */
+  background: var(--accent-crimson);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
   text-decoration: none;
-  transition: transform 0.12s ease, box-shadow 0.15s ease, filter 0.15s ease;
+  transition: background 0.15s ease, transform 0.1s ease;
 }
 /* A lone trailing button (the 3-button, non-commissioner case) spans the
    full width so the grid isn't left with an awkward empty cell. */
@@ -13240,15 +13246,11 @@ label .form-label__hint {
 }
 @media (hover: hover) {
   .lineup-banner-actions .fight-card-btn:hover {
-    filter: brightness(1.08);
-    transform: translateY(-1px);
-    box-shadow: 0 5px 14px rgba(193, 59, 46, 0.30), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+    background: var(--accent-crimson-hover);
   }
 }
-/* Pressed: settle back down with an inset shadow so the tap feels physical. */
 .lineup-banner-actions .fight-card-btn:active {
-  transform: translateY(0);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), inset 0 2px 4px rgba(0, 0, 0, 0.22);
+  transform: translateY(1px);
 }
 
 /* Mobile: everything (equal-width grid, fixed 48px height, crimson, centering)
