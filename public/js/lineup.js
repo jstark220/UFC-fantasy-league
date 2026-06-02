@@ -1431,6 +1431,18 @@ function renderSlotSection(title, fighters, totalSlots, ctx, slotType) {
 // Returns the HTML for a single roster row.
 function renderRosterRow(fighter, ctx, slotType) {
   const isStarted  = selections.has(fighter.id);
+  // Short date for the currently-selected event, e.g. "Jul 11". Fighters on
+  // THIS event get the gold matchup line, which historically carried no date
+  // (so on mobile, where that line is the only matchup line, they showed no
+  // fight date at all — unlike fighters booked for a LATER event, who get a
+  // dated "Fights <date>" line from rosterNextFightMap). Prepending the event
+  // date here gives every upcoming fighter a consistent "Fights <date>" line.
+  // Skipped for past events, where "Fights" would be the wrong tense.
+  let evtDateShort = '';
+  if (selectedEvent && selectedEvent.event_date && !isPastEvent) {
+    const _ed = new Date(selectedEvent.event_date + 'T12:00:00');
+    if (!isNaN(_ed)) evtDateShort = _ed.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
   const rankLabel  = fighter.is_champion ? 'C' : (fighter.current_rank ? '#' + fighter.current_rank : 'NR');
   const rankClass  = fighter.is_champion ? 'rank-champion' : (fighter.current_rank ? 'rank-ranked' : 'rank-unranked');
   let subBadge = '';
@@ -1629,6 +1641,7 @@ function renderRosterRow(fighter, ctx, slotType) {
         '</span>' +
         (fightInfo
           ? '<span class="lineup-roster-row__matchup">' +
+              (evtDateShort ? 'Fights ' + escapeHtml(evtDateShort) + ' ' : '') +
               'vs. ' + escapeHtml(fightInfo.opponent) +
               (fightInfo.badge ? ' <span class="lineup-roster-row__matchup-badge">' + escapeHtml(fightInfo.badge) + '</span>' : '') +
               (oddsChip ? ' ' + oddsChip : '') +

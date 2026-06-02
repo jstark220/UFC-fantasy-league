@@ -5696,9 +5696,20 @@ body {
      vertically centered against the whole cell. Using top:50% + translateY
      (rather than top/bottom stretch) keeps the button a consistent height
      no matter how tall the row grows once the next-fight line is showing —
-     stretch-to-fill would balloon it on those taller rows. */
+     stretch-to-fill would balloon it on those taller rows.
+
+     grid-column/grid-row are reset to auto on purpose: the generic mobile
+     rule places .lineup-roster-row__actions into the grid area at (col 2 /
+     span 2, row 2). For an absolutely-positioned grid item, that grid area
+     becomes its containing block — so right/top would be measured from the
+     content box (inset by padding-right) and from row 2 only, leaving the
+     button ~94px short of the edge and sitting low. Clearing the placement
+     makes the containing block the row's full padding box, so it pins flush
+     right and centers against the whole cell. */
   .lineup-roster-row.lineup-roster-row--fa .lineup-roster-row__actions {
     position: absolute;
+    grid-column: auto;
+    grid-row: auto;
     top: 50%;
     right: 10px;
     transform: translateY(-50%);
@@ -5954,29 +5965,32 @@ body {
     text-overflow: ellipsis;
   }
 
-  /* Hide the gold current-event matchup line on mobile (the "vs. Opponent"
-     line for the selected card) — context already makes that clear, and it
-     has no date. Specificity bumped for the same cascade reason as the
-     rank rules above. */
-  .lineup-roster-row .lineup-roster-row__matchup { display: none; }
-  /* ...but DO surface the NEXT-FIGHT line (date · vs opponent) so each row
-     shows when the fighter next competes. Ordered last inside the info
-     column (under the division line), dimmed, and clamped to one line.
-     The odds chip + projection pill inside it are hidden on mobile so the
-     line stays a tidy "Fights May 30 vs Pereira" instead of wrapping. */
-  .lineup-roster-row .lineup-roster-row__matchup.waiver-next-fight {
+  /* Surface BOTH matchup lines on mobile so every fighter shows a fight date:
+     - the gold current-event line ("Fights <date> vs Opponent") for fighters
+       on the event being viewed, and
+     - the dimmer next-fight line ("Fights <date> vs Opponent") for fighters
+       booked at a LATER event.
+     Both are clamped to one line and ordered last inside the info column
+     (under the division). The odds chip + projection pill inside them are
+     hidden on mobile so each stays a tidy single line instead of wrapping.
+     Specificity bumped for the same cascade reason as the rank rules above. */
+  .lineup-roster-row .lineup-roster-row__matchup {
     display: block;
     order: 3;
     font-size: 10px;
     font-weight: 500;
     line-height: 1.3;
-    color: var(--text-tertiary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .lineup-roster-row .lineup-roster-row__matchup.waiver-next-fight .fight-odds,
-  .lineup-roster-row .lineup-roster-row__matchup.waiver-next-fight .fight-projection {
+  /* Next-fight (later event) line reads as supplementary, so dim it; the
+     gold current-event line keeps its accent color from the base rule. */
+  .lineup-roster-row .lineup-roster-row__matchup.waiver-next-fight {
+    color: var(--text-tertiary);
+  }
+  .lineup-roster-row .lineup-roster-row__matchup .fight-odds,
+  .lineup-roster-row .lineup-roster-row__matchup .fight-projection {
     display: none;
   }
   /* Keep the division line as line 2 so the order reads name / division /
