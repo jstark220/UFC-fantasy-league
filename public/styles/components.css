@@ -13198,69 +13198,93 @@ label .form-label__hint {
    exactly equal even when a label is longer than the other. The grid fills
    the banner column rather than being capped, so the buttons read as an
    intentional block instead of being stranded in a corner on desktop. */
+/* Equal-width 2-up grid of quiet utility links (identical desktop + mobile).
+   minmax(0,1fr) keeps the two columns exactly equal; start alignment keeps
+   each tile its own height instead of the grid stretching rows unevenly. */
 .lineup-banner-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-3);
-  /* start (not stretch) so the rows stay exactly the button height instead
-     of growing to fill any extra height in the card's flex layout — that
-     row-stretch was making the bottom row taller than the top. */
+  gap: var(--space-2);
   align-items: start;
   align-content: start;
-  margin-top: var(--space-3);
+  margin-top: var(--space-4);
 }
-/* Crimson CTA buttons, identical on desktop + mobile. Flex-centered with a
-   min-height so every button is the same height (and rows match via the
-   grid's stretch), and the label centers + wraps instead of overflowing. */
+/* Quiet "utility link" tile, NOT a loud crimson CTA: a near-transparent fill
+   with a hairline border, a crimson icon as the only color accent, the label,
+   and a muted trailing arrow. Reads as navigation and stays calm so the real
+   task (the starters below) leads. Fixed height so all four are identical. */
 .lineup-banner-actions .fight-card-btn {
   margin: 0;
   display: flex;
   align-items: center;
-  justify-content: center;
-  text-align: center;
-  /* Fixed height so every button is EXACTLY the same size — the grid's default
-     vertical stretch was letting the card's flex layout pull them to uneven
-     heights. The labels are short enough that they never wrap at the 2-up
-     column width, so a fixed height never clips. Kept compact so the 2x2
-     doesn't feel chunky/crowded. */
-  height: 42px;
-  padding: 0 12px;
-  font-size: 12.5px;
+  gap: 10px;
+  height: 44px;
+  padding: 0 12px 0 14px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.01em;
-  line-height: 1.2;
-  white-space: normal;
-  color: #fff;
-  /* Clean flat crimson with a thin rim border to define the edge against the
-     dark card — lighter and less "clunky" than a gradient + drop shadow. */
-  background: var(--accent-crimson);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 8px;
+  text-align: left;
   text-decoration: none;
-  transition: background 0.15s ease, transform 0.1s ease;
+  transition: border-color 0.15s ease, background 0.15s ease;
 }
-/* A lone trailing button (the 3-button, non-commissioner case) spans the
-   full width so the grid isn't left with an awkward empty cell. */
+.lineup-banner-actions .fight-card-btn__icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--accent-crimson);
+  flex-shrink: 0;
+}
+.lineup-banner-actions .fight-card-btn__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lineup-banner-actions .fight-card-btn__arrow {
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+  transition: color 0.15s ease, transform 0.15s ease;
+}
+/* A lone trailing link (the 3-link, non-commissioner case) spans the full
+   width so the grid isn't left with an awkward empty cell. */
 .lineup-banner-actions .fight-card-btn:last-child:nth-child(odd) {
   grid-column: 1 / -1;
 }
 @media (hover: hover) {
   .lineup-banner-actions .fight-card-btn:hover {
-    background: var(--accent-crimson-hover);
+    border-color: rgba(193, 59, 46, 0.55);
+    background: rgba(193, 59, 46, 0.08);
+  }
+  .lineup-banner-actions .fight-card-btn:hover .fight-card-btn__arrow {
+    color: var(--accent-crimson);
+    transform: translateX(2px);
   }
 }
 .lineup-banner-actions .fight-card-btn:active {
-  transform: translateY(1px);
+  background: rgba(193, 59, 46, 0.14);
 }
 
-/* Mobile: everything (equal-width grid, fixed 48px height, crimson, centering)
-   is shared from the base above so the buttons stay identical here too; we
-   only tighten the gap. The labels are short enough that they never wrap at
-   the 2-up column width, so the fixed height never clips. */
+/* Mobile: slim the prominent countdown down to a tidy single strip so it
+   stops eating half the screen (the big stacked block is desktop-only). The
+   eyebrow takes its own line, then the time + "x/y set" hint flow together
+   underneath at a much smaller size. Comes after the 56em rule above so it
+   wins the cascade at phone widths. */
 @media (max-width: 720px) {
-  .lineup-banner-actions {
-    gap: var(--space-2);
+  .event-countdown {
+    flex-flow: row wrap;
+    align-items: baseline;
+    justify-content: flex-start;
+    column-gap: 10px;
+    row-gap: 2px;
   }
+  .event-countdown__eyebrow { flex-basis: 100%; font-size: 10px; }
+  .event-countdown__time { gap: 8px; }
+  .event-countdown__num { font-size: 1.2rem; }
+  .event-countdown__hint { font-size: 10px; }
 }
 
 /* ============================================================
