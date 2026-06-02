@@ -6962,8 +6962,15 @@ body {
 
   /* Auth pages (signup/login/forgot/reset): the card has 32px internal
      padding which steals 64px of horizontal room. Tighten to leave more
-     room for the form. The page-level 16px padding stays for the gutter. */
+     room for the form. The page-level 16px padding stays for the gutter.
+     box-sizing:border-box is the actual spillage fix: .card has no
+     box-sizing of its own and there's no global reset, so it defaulted to
+     content-box — width:100% PLUS this padding overflowed the viewport and
+     pushed the card off the right edge. border-box folds the padding back
+     inside the 100% so the card sits within its gutters. Scoped to mobile
+     so the desktop card width is unchanged. */
   .auth-page .card {
+    box-sizing: border-box;
     padding: var(--space-6) var(--space-5);
   }
 
