@@ -5682,7 +5682,7 @@ body {
 @media (max-width: 720px) {
   .lineup-roster-row.lineup-roster-row--fa {
     position: relative;
-    padding-right: 84px;
+    padding-right: 94px;
   }
   /* FV stat (or the "On {owner}" label) moves under the name, left-aligned. */
   .lineup-roster-row.lineup-roster-row--fa .lineup-roster-row__record {
@@ -5692,21 +5692,28 @@ body {
     text-align: left;
     margin-top: 2px;
   }
-  /* Add / Claim button: tall, pinned to the right edge, vertically centered. */
+  /* Add / Claim button: a tall crimson CTA pinned to the right edge and
+     vertically centered against the whole cell. Using top:50% + translateY
+     (rather than top/bottom stretch) keeps the button a consistent height
+     no matter how tall the row grows once the next-fight line is showing —
+     stretch-to-fill would balloon it on those taller rows. */
   .lineup-roster-row.lineup-roster-row--fa .lineup-roster-row__actions {
     position: absolute;
-    top: 10px;
-    right: 8px;
-    bottom: 10px;
+    top: 50%;
+    right: 10px;
+    transform: translateY(-50%);
     display: flex;
-    align-items: stretch;
+    align-items: center;
   }
   .lineup-roster-row.lineup-roster-row--fa .lineup-roster-row__actions .lineup-row-btn {
-    min-width: 66px;
+    min-width: 74px;
+    height: 46px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 14px;
+    font-size: 15px;
+    font-weight: 700;
+    border-radius: 8px;
   }
   /* Crimson fill + black-outlined white text for the active Add / Claim button
      (disabled 'Claimed' / pre-draft states keep their default muted look). */
@@ -5803,9 +5810,29 @@ body {
     background: rgba(193, 59, 46, 0.40);
   }
 }
-/* On narrow rows, hide the FV chip so the stat + buttons keep priority. */
 @media (max-width: 720px) {
-  .lineup-roster-row__fv { display: none; }
+  /* FV rank, mobile: strip the desktop pill down to plain text and park it
+     in the top-right of the row, directly above the record. Reads as
+     "#18 FV" — the fighter's league rank by Fantasy Value score. The score
+     value + divider are hidden on mobile to keep it to the rank (the full
+     chip with the numeric score still shows on desktop). */
+  .lineup-roster-row__fv {
+    display: inline-flex;
+    align-items: baseline;
+    grid-column: 3;
+    grid-row: 1;
+    justify-self: end;
+    align-self: start;
+    gap: 4px;
+    padding: 0;
+    background: none;
+    border: none;
+    border-radius: 0;
+  }
+  .lineup-roster-row__fv-divider,
+  .lineup-roster-row__fv-val { display: none; }
+  .lineup-roster-row__fv-rank { font-size: 12px; color: var(--text-primary); }
+  .lineup-roster-row__fv-label { font-size: 8px; }
 
   /* ===== Mobile roster row redesign =====
      Goal: uniform, scannable rows. The previous mobile layout had a
@@ -5927,10 +5954,34 @@ body {
     text-overflow: ellipsis;
   }
 
-  /* Hide the matchup + next-fight lines entirely — the previous "row 1
-     can grow tall" cause. Both reachable via fighter modal. Specificity
-     bumped for the same cascade reason as the rank rules above. */
+  /* Hide the gold current-event matchup line on mobile (the "vs. Opponent"
+     line for the selected card) — context already makes that clear, and it
+     has no date. Specificity bumped for the same cascade reason as the
+     rank rules above. */
   .lineup-roster-row .lineup-roster-row__matchup { display: none; }
+  /* ...but DO surface the NEXT-FIGHT line (date · vs opponent) so each row
+     shows when the fighter next competes. Ordered last inside the info
+     column (under the division line), dimmed, and clamped to one line.
+     The odds chip + projection pill inside it are hidden on mobile so the
+     line stays a tidy "Fights May 30 vs Pereira" instead of wrapping. */
+  .lineup-roster-row .lineup-roster-row__matchup.waiver-next-fight {
+    display: block;
+    order: 3;
+    font-size: 10px;
+    font-weight: 500;
+    line-height: 1.3;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .lineup-roster-row .lineup-roster-row__matchup.waiver-next-fight .fight-odds,
+  .lineup-roster-row .lineup-roster-row__matchup.waiver-next-fight .fight-projection {
+    display: none;
+  }
+  /* Keep the division line as line 2 so the order reads name / division /
+     next-fight (the next-fight node sits before division in the DOM). */
+  .lineup-roster-row__division { order: 2; }
 
   /* Right column: stat sits at top (row 1), actions sit below (row 2),
      both in col 3. Stacking them in the same column instead of side by

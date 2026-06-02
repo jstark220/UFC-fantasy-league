@@ -212,6 +212,18 @@ async function initWaivers() {
   renderMyClaims();
   renderRosterActivity();
 
+  // Fantasy Value rank cache: each free-agent row shows the fighter's overall
+  // FV rank ("FV score - #N") next to the score (see renderAvailableFighters).
+  // FantasyValue.rankFor() only returns a rank once ensureLoaded() has run, so
+  // kick it off here. It reads every fight result (heavy), so we render the
+  // list first and re-render once the cache resolves; on failure the rows
+  // simply omit the rank.
+  if (typeof FantasyValue !== 'undefined' && FantasyValue.ensureLoaded) {
+    FantasyValue.ensureLoaded(leagueId, league.scoring_config).then(function () {
+      renderAvailableFighters();
+    }).catch(function () { /* silent - rows just omit the rank */ });
+  }
+
   if (isCommissioner) {
     document.getElementById('commissionerSection').style.display = 'block';
     renderProcessingQueue();
