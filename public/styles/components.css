@@ -13210,21 +13210,28 @@ label .form-label__hint {
   align-items: center;
   justify-content: center;
   text-align: center;
-  /* Fixed height on desktop so every button is EXACTLY the same size — the
-     grid's default vertical stretch was letting the card's flex layout pull
-     them to uneven/oversized heights. (Mobile relaxes this to min-height so
-     a wrapped 2-line label isn't clipped — see the @media block below.) */
-  height: 48px;
-  padding: 0 14px;
+  /* Fixed height so every button is EXACTLY the same size — the grid's default
+     vertical stretch was letting the card's flex layout pull them to uneven
+     heights. The labels are short enough that they never wrap at the 2-up
+     column width, so a fixed height never clips. */
+  height: 50px;
+  padding: 0 16px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: 0.02em;
   line-height: 1.2;
   white-space: normal;
   color: #fff;
-  background: var(--accent-crimson);
-  border: 1px solid var(--accent-crimson);
-  border-radius: 8px;
+  /* Sleeker than a flat fill: a subtle top-to-bottom crimson gradient for
+     depth, a crisp rim-light border to define the edge against the dark card,
+     a soft lift shadow, and an inset top highlight so it reads as a real,
+     pressable button rather than a colored block. */
+  background: linear-gradient(180deg, var(--accent-crimson) 0%, var(--accent-crimson-hover) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 10px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.18);
   text-decoration: none;
+  transition: transform 0.12s ease, box-shadow 0.15s ease, filter 0.15s ease;
 }
 /* A lone trailing button (the 3-button, non-commissioner case) spans the
    full width so the grid isn't left with an awkward empty cell. */
@@ -13233,9 +13240,15 @@ label .form-label__hint {
 }
 @media (hover: hover) {
   .lineup-banner-actions .fight-card-btn:hover {
-    background: var(--accent-crimson-hover);
-    border-color: var(--accent-crimson-hover);
+    filter: brightness(1.08);
+    transform: translateY(-1px);
+    box-shadow: 0 5px 14px rgba(193, 59, 46, 0.30), inset 0 1px 0 rgba(255, 255, 255, 0.22);
   }
+}
+/* Pressed: settle back down with an inset shadow so the tap feels physical. */
+.lineup-banner-actions .fight-card-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), inset 0 2px 4px rgba(0, 0, 0, 0.22);
 }
 
 /* Mobile: everything (equal-width grid, fixed 48px height, crimson, centering)
