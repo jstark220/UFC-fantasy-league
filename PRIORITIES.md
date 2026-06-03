@@ -53,6 +53,24 @@ manager. They are the priority.
 - **Effort:** Medium. Needs investigation to confirm whether it is a
   subscription drop or a render-trigger gap.
 
+### P0.3 Duplicate fighters in the draft pool  (CLEANUP DONE June 3, 2026; prevention pending)
+- **Done (June 3):** `cleanupDuplicateFighters.js` deduped the table — 6,364 → 3,862
+  fighters (2,502 phantoms removed, 8 split fighters consolidated incl. Jan
+  Błachowicz, Navajo Stirling, Waldo Cortes Acosta). It catches what the old
+  `mergeDuplicateFighters.js` missed (diacritics like Błachowicz≠Blachowicz,
+  reversed order "Stirling Navajo", hyphen variants) and re-points ALL fighter
+  FKs (the old one orphaned scores/draft_picks/draft_queue/projections). No
+  roster was touched (every rostered copy was the survivor). Also: the draft
+  pool + View-all now hide undraftable phantoms (no photo AND inactive), so
+  reversed scraper rows can't flood the draft (`draft.js` renderFighterPool /
+  renderViewAllList).
+- **Still pending — prevent recurrence:** tighten the name-match in
+  `ingestFightResults.js` / `scrapeActiveFromEvents.js` to use a normalized
+  (diacritic/word-order/punctuation-insensitive) key so they stop minting
+  `ufcstats-` rows. Until then, re-run `node cleanupDuplicateFighters.js
+  --dry-run` after each ingest.
+
+<!-- Original write-up below, kept for context. -->
 ### P0.3 Duplicate fighters in the draft pool
 - **What:** Some fighters appeared twice. The bad copy shows "Lastname Firstname"
   ordering, no photo, and no fight history.

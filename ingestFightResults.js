@@ -44,9 +44,23 @@ let DRY_RUN = false;
 let DAYS_BACK = 21;
 let singleEspnId = null;
 
+// Fold names to a comparable key. NFD handles most accents (é, ñ, ç...) but a
+// few letters don't decompose and silently broke matching — most notably ł
+// ("Błachowicz" ≠ "Blachowicz"), which minted duplicate fighters. Replace those
+// before stripping. (cleanupDuplicateFighters.js cleans the existing dupes;
+// this stops new ones being created.)
 function normalizeName(s) {
-  return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+  return (s || '')
+    .replace(/[łŁ]/g, 'l').replace(/[øØ]/g, 'o').replace(/[đĐð]/g, 'd')
+    .replace(/ß/g, 'ss').replace(/æ/g, 'ae').replace(/œ/g, 'oe').replace(/þ/g, 'th')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
     .toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+// Word-order-insensitive key (sorted tokens) so "Stirling Navajo" matches the
+// canonical "Navajo Stirling" instead of minting a reversed duplicate.
+function tokenKey(name) {
+  const p = normalizeName(name).split(' ').filter(Boolean).sort();
+  return p.length ? p.join(' ') : null;
 }
 
 // ----------------------------------------------------------------------------
@@ -54,6 +68,7 @@ function normalizeName(s) {
 // ----------------------------------------------------------------------------
 const byEspnId = new Map();   // espn_athlete_id -> fighter row
 const byName = new Map();      // normalizeName(name) -> fighter row
+const byTokenKey = new Map();  // sorted-token name -> fighter row OR 'AMBIGUOUS'
 const byId = new Map();        // fighter id -> fighter row (for division fallback)
 const byLastFirst = new Map(); // "lastname|firstInitial" -> fighter row OR 'AMBIGUOUS'
 const pendingIdWrites = [];    // { id, espn_athlete_id } to persist after matching
@@ -84,6 +99,8 @@ async function loadFighters() {
       if (f.espn_athlete_id) byEspnId.set(f.espn_athlete_id, f);
       const n = normalizeName(f.name);
       if (n && !byName.has(n)) byName.set(n, f);
+      const tk = tokenKey(f.name);
+      if (tk) byTokenKey.set(tk, byTokenKey.has(tk) ? 'AMBIGUOUS' : f);
       const k = lastFirstKey(f.name);
       if (k) byLastFirst.set(k, byLastFirst.has(k) ? 'AMBIGUOUS' : f);
     });
@@ -111,6 +128,15 @@ async function resolveFighter(competitor, weightClass) {
   const norm = normalizeName(competitor.name);
   // Exact normalized name, then the unambiguous lastname+initial fallback.
   let m = byName.get(norm);
+  if (!m) {
+    // Word-order variant ("Stirling Navajo" -> "Navajo Stirling"), only when unambiguous.
+    const tk = tokenKey(competitor.name);
+    const cand = tk ? byTokenKey.get(tk) : null;
+    if (cand && cand !== 'AMBIGUOUS') {
+      m = cand;
+      console.log(`   ~ matched "${competitor.name}" -> existing "${m.name}" (word-order variant)`);
+    }
+  }
   if (!m) {
     const k = lastFirstKey(competitor.name);
     const cand = k ? byLastFirst.get(k) : null;
@@ -152,6 +178,8 @@ async function resolveFighter(competitor, weightClass) {
   const created = { id: res.data.id, name: competitor.name, espn_athlete_id: competitor.espnAthleteId, primary_division: weightClass };
   byEspnId.set(competitor.espnAthleteId, created);
   byName.set(norm, created);
+  const tkNew = tokenKey(competitor.name);
+  if (tkNew) byTokenKey.set(tkNew, byTokenKey.has(tkNew) ? 'AMBIGUOUS' : created);
   byId.set(res.data.id, created);
   return res.data.id;
 }

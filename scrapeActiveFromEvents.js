@@ -30,13 +30,23 @@ const backArg = process.argv.find((a) => a.startsWith('--back='));
 const DAYS_BACK = backArg ? parseInt(backArg.split('=')[1], 10) : 365;
 const DAYS_AHEAD = 150;
 
+// Fold non-decomposing letters (esp. ł: "Błachowicz" ≠ "Blachowicz") so name
+// matching doesn't silently miss — same key as ingestFightResults.js.
 function normalizeName(s) {
-  return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+  return (s || '')
+    .replace(/[łŁ]/g, 'l').replace(/[øØ]/g, 'o').replace(/[đĐð]/g, 'd')
+    .replace(/ß/g, 'ss').replace(/æ/g, 'ae').replace(/œ/g, 'oe').replace(/þ/g, 'th')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
     .toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 function lastFirstKey(name) {
   const p = normalizeName(name).split(' ').filter(Boolean);
   return p.length < 2 ? null : p[p.length - 1] + '|' + p[0][0];
+}
+// Word-order-insensitive key so reversed names ("Stirling Navajo") still match.
+function tokenKey(name) {
+  const p = normalizeName(name).split(' ').filter(Boolean).sort();
+  return p.length ? p.join(' ') : null;
 }
 function isPlaceholder(name) {
   return !name || !name.trim() || /\btba\b/i.test(name) || /opponent\s+tba/i.test(name);
@@ -55,7 +65,7 @@ function isPlaceholder(name) {
   console.log(`Found ${names.size} distinct fighters across ${events.length} cards.`);
 
   // 2. Load fighters into match maps.
-  const byName = new Map(); const byLastFirst = new Map();
+  const byName = new Map(); const byLastFirst = new Map(); const byTokenKey = new Map();
   let from = 0; const PAGE = 1000;
   while (true) {
     const res = await supabaseClient.from('fighters').select('id, name, is_active')
@@ -63,6 +73,7 @@ function isPlaceholder(name) {
     if (res.error || !res.data) break;
     res.data.forEach((f) => {
       const n = normalizeName(f.name); if (n && !byName.has(n)) byName.set(n, f);
+      const tk = tokenKey(f.name); if (tk) byTokenKey.set(tk, byTokenKey.has(tk) ? 'AMBIGUOUS' : f);
       const k = lastFirstKey(f.name); if (k) byLastFirst.set(k, byLastFirst.has(k) ? 'AMBIGUOUS' : f);
     });
     if (res.data.length < PAGE) break;
@@ -73,6 +84,7 @@ function isPlaceholder(name) {
   let activated = 0, unmatched = 0;
   for (const name of names) {
     let m = byName.get(normalizeName(name));
+    if (!m) { const c = byTokenKey.get(tokenKey(name)); if (c && c !== 'AMBIGUOUS') m = c; }
     if (!m) { const c = byLastFirst.get(lastFirstKey(name)); if (c && c !== 'AMBIGUOUS') m = c; }
     if (!m) { unmatched++; continue; }
     if (m.is_active) continue;
