@@ -1246,7 +1246,7 @@ let _pendingClockScroll = false;
 async function fetchAllFighters() {
   var FIGHTER_COLS = 'id, name, primary_division, current_rank, is_champion, ' +
     'is_sub_champion, sub_title_type, record_wins, record_losses, record_draws, ' +
-    'photo_url, country';
+    'photo_url, country, is_active';
   var all  = [];
   var PAGE = 1000;
   var from = 0;
@@ -3086,8 +3086,15 @@ function renderFighterPool() {
   const myTurn         = isMyTurn() && !picking;
   const myPickFighters = getMyPickFighters();
 
-  // Start with all undrafted fighters
-  let fighters = allFighters.filter(function(f) { return !pickedIds.has(f.id); });
+  // Start with all undrafted, draftable fighters. Hide phantom rows the
+  // scraper minted (reversed-name "ufcstats-" dupes): they have no photo AND
+  // are inactive, so they're undraftable clutter. Real fighters always have a
+  // photo or an active flag, so this only removes junk. (Board / My Roster
+  // look fighters up by id from the full allFighters, so this filter — pool
+  // display only — never hides a rostered/drafted fighter.)
+  let fighters = allFighters.filter(function(f) {
+    return !pickedIds.has(f.id) && (f.photo_url || f.is_active);
+  });
 
   // Apply division filter
   if (divisionFilter !== 'all') {
@@ -3451,8 +3458,11 @@ function renderViewAllList() {
   var myTurn         = isMyTurn() && !picking;
   var myPickFighters = getMyPickFighters();
 
-  // Same filter pipeline as renderFighterPool, but reading viewAll* state
-  var fighters = allFighters.filter(function(f) { return !pickedIds.has(f.id); });
+  // Same filter pipeline as renderFighterPool, but reading viewAll* state.
+  // Same phantom guard (no photo AND inactive = undraftable scraper junk).
+  var fighters = allFighters.filter(function(f) {
+    return !pickedIds.has(f.id) && (f.photo_url || f.is_active);
+  });
 
   if (viewAllDivision !== 'all') {
     fighters = fighters.filter(function(f) { return f.primary_division === viewAllDivision; });
