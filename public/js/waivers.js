@@ -768,6 +768,66 @@ function wireUpTabs() {
     document.getElementById('myClaimsSection').style.display   = tab === 'my-claims' ? '' : 'none';
     document.getElementById('activitySection').style.display   = tab === 'activity'  ? '' : 'none';
   });
+
+  // "Waiver Order" button (sits beside the tabs, not a tab itself).
+  var orderBtn = document.getElementById('waiverOrderBtn');
+  if (orderBtn) orderBtn.addEventListener('click', showWaiverOrder);
+}
+
+// ========================================================================
+// WAIVER ORDER MODAL
+// Shows the league's current claim priority. waiver_priority is the live
+// rolling-order field: lower number claims first, and a team drops to the
+// back of the order after winning a claim. Same-priority ties are settled
+// by who submitted their claim first (see the claim processor's
+// .order('priority').order('submitted_at')).
+// ========================================================================
+function showWaiverOrder() {
+  var ordered = (members || []).slice().sort(function(a, b) {
+    var pa = a.waiver_priority == null ? 9999 : a.waiver_priority;
+    var pb = b.waiver_priority == null ? 9999 : b.waiver_priority;
+    if (pa !== pb) return pa - pb;
+    return (a.team_name || '').localeCompare(b.team_name || '');
+  });
+  // Everyone tied at the same priority = season start, no claims won yet.
+  var allTied = ordered.length > 1 &&
+    ordered.every(function(m) { return (m.waiver_priority || 0) === (ordered[0].waiver_priority || 0); });
+
+  var rows = ordered.map(function(m) {
+    var isMe = myMember && m.id === myMember.id;
+    var pr   = m.waiver_priority == null ? '—' : m.waiver_priority;
+    return '<div class="waiver-order-row' + (isMe ? ' waiver-order-row--me' : '') + '">' +
+             '<span class="waiver-order-row__num">#' + escapeHtml(String(pr)) + '</span>' +
+             '<span class="waiver-order-row__team">' + escapeHtml(m.team_name || 'Team') +
+               (isMe ? '<span class="waiver-order-row__you">You</span>' : '') +
+             '</span>' +
+           '</div>';
+  }).join('');
+
+  var note = allTied
+    ? 'Every team starts tied at priority #1. When two teams claim the same fighter, the earliest submitted claim wins. Win a claim and you drop to the back of the order for the next cycle.'
+    : 'Lower number claims first. When two teams want the same fighter, the higher-priority (lower number) team wins; same-priority ties go to the earliest submitted claim. Win a claim and you move to the back.';
+
+  var overlay = document.createElement('div');
+  overlay.id = 'waiverOrderModal';
+  overlay.className = 'move-flex-modal-overlay';
+  overlay.innerHTML =
+    '<div class="move-flex-modal" role="dialog" aria-modal="true" style="max-width:420px">' +
+      '<div class="move-flex-modal__header">' +
+        '<p class="move-flex-modal__title">Waiver Order</p>' +
+        '<button class="move-flex-modal__close" id="closeWaiverOrderBtn" aria-label="Close">&times;</button>' +
+      '</div>' +
+      '<div class="move-flex-modal__body">' +
+        '<div class="waiver-order-list">' + rows + '</div>' +
+        '<p class="waiver-order-note">' + note + '</p>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(overlay);
+  document.getElementById('closeWaiverOrderBtn').addEventListener('click', function() { overlay.remove(); });
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+  document.addEventListener('keydown', function esc(e) {
+    if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', esc); }
+  });
 }
 
 // ========================================================================

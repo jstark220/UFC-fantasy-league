@@ -8563,6 +8563,73 @@ body {
   padding: 0 var(--space-2);
 }
 
+/* "Waiver Order" button — sits next to the tabs but is NOT a tab (no
+   underline state); it opens the claim-priority modal. flex-shrink:0 keeps it
+   intact in the horizontally-scrolling tab row on mobile. */
+.waiver-order-btn {
+  align-self: center;
+  margin-left: var(--space-3);
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+.waiver-order-btn:hover {
+  border-color: var(--accent-crimson);
+  color: var(--text-primary);
+  background: rgba(193, 59, 46, 0.06);
+}
+.waiver-order-btn__icon { display: inline-flex; color: var(--accent-crimson); }
+
+/* Waiver-order modal: one row per team, ordered by claim priority. */
+.waiver-order-list { display: flex; flex-direction: column; gap: 2px; }
+.waiver-order-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 8px 10px;
+  border-radius: 6px;
+}
+.waiver-order-row--me { background: rgba(193, 59, 46, 0.10); }
+.waiver-order-row__num {
+  min-width: 34px;
+  font-weight: 700;
+  color: var(--accent-crimson);
+  font-variant-numeric: tabular-nums;
+}
+.waiver-order-row__team {
+  display: flex;
+  align-items: center;
+  color: var(--text-primary);
+  font-weight: 600;
+  min-width: 0;
+}
+.waiver-order-row__you {
+  margin-left: 8px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-tertiary);
+}
+.waiver-order-note {
+  margin: var(--space-4) 0 0;
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  line-height: 1.45;
+}
+
 .waiver-tab {
   background: none;
   border: none;
