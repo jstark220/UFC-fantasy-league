@@ -145,6 +145,44 @@ manager. They are the priority.
 - **Effort:** Quick to Medium (mostly wiring an existing module into another
   view).
 
+### P1.5 Enforce blind waivers at the database level (RLS + server-side processing)
+- **What:** Pending waiver claims should be invisible to other managers (and
+  ideally the commissioner) until they process. Right now only the *UI* hides
+  them: the commissioner's Waiver Queue no longer lists claim contents (commit
+  46f8992, "Claims are blind" panel), but the rows are still fetched
+  client-side, and RLS still lets any league member read every claim in the
+  league.
+- **Why it matters:** The commissioner is also a manager; seeing who's claiming
+  whom is a competitive edge. Blind waivers need to be enforced, not just
+  hidden in the UI. (Deferred by Jacob on 2026-06-04 — no risk to current
+  claims wanted right now.)
+- **Fix (two parts, both deferred):**
+  1. **Tighten RLS (Medium).** Replace the `waiver_claims` SELECT policy so a
+     member can read a row only if it's their own, OR `status = 'approved'`
+     (the Roster Activity feed needs these — verified it only reads approved),
+     OR they're a commissioner of that league (so client-side processing keeps
+     working). FIRST introspect the live policies
+     (`select policyname, cmd, qual, with_check from pg_policies where
+     tablename = 'waiver_claims'`) so the migration swaps ONLY the read rule and
+     leaves the submit/cancel/process (INSERT/UPDATE) policies untouched. Pair
+     with a one-line guard so the auto-processor (`runLazyProcessor`,
+     `public/js/waivers.js` ~line 212) runs only for the commissioner — a
+     regular manager loading at the cutoff with a narrowed view shouldn't be
+     able to self-process a contested claim (a risk that technically exists
+     today too).
+  2. **Move processing server-side (Large) for FULL blindness.** While
+     processing runs in the commissioner's browser, their client must read the
+     pending queue, so a determined commish could read the network tab. A
+     scheduled job (GitHub Actions cron or a Supabase Edge Function) using the
+     service role would process claims at each cutoff via the shared
+     `runRoundRobin` logic; then RLS can drop the commissioner read-all clause
+     entirely and pending claims become truly owner-only.
+- **Where:** Supabase RLS on `waiver_claims`; `public/js/waivers.js`
+  (`runLazyProcessor` guard, `runRoundRobin`); `.github/workflows/update-data.yml`
+  if processing moves to the cron.
+- **Effort:** Medium (RLS + guard) / Large (server-side processing). RLS is
+  read-visibility only, so it can't damage existing claim rows.
+
 ---
 
 ## P2: Polish
