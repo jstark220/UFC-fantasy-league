@@ -7037,24 +7037,9 @@ body {
   }
   .waiver-order-btn__label { display: none; }
 
-  /* Pending-claim cards on mobile: the reorder rail eats horizontal room, so
-     stack Claiming ABOVE Dropping (instead of side by side) to give each
-     fighter name the full width and avoid mid-name wrapping. The arrow that
-     sat between them rotates to point downward. */
-  .waiver-pending-card { gap: var(--space-3); padding: var(--space-4); }
+  /* Compact claim rows on mobile: slightly larger reorder tap targets. The
+     row layout itself is fluid and needs no other mobile-specific changes. */
   .waiver-reorder__btn { width: 32px; height: 30px; }
-  .waiver-pending-card__sides {
-    flex-direction: column;
-    align-items: stretch;
-    gap: var(--space-2);
-  }
-  .waiver-pending-card__arrow {
-    align-self: flex-start;
-    transform: rotate(90deg);
-    padding: 0;
-    margin: var(--space-1) 0;
-  }
-  .waiver-pending-card__drop--empty { align-items: flex-start; }
 
   /* Auth pages (signup/login/forgot/reset): the card has 32px internal
      padding which steals 64px of horizontal room. Tighten to leave more
@@ -9180,19 +9165,83 @@ select.form-input option,
 }
 .waiver-claims-help strong { color: var(--text-secondary); font-weight: 700; }
 
-/* Pending card is now a row: [reorder rail] + [body]. The body holds the
-   original sides + meta, so those layouts are unchanged. */
-.waiver-pending-card {
+/* Compact pending-claim row: [reorder rail] + [main]. Replaces the tall
+   stacked card so all of a manager's claims fit on one screen. The main
+   column shows the fighter, an optional "dropping X" line (only when a drop
+   is set), and a quiet process-time line; a small X cancels. */
+.claim-row {
   display: flex;
   align-items: stretch;
-  gap: var(--space-4);
+  gap: var(--space-3);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--accent-gold);
+  border-radius: 8px;
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-2);
 }
-.waiver-pending-card__body {
+.claim-row__main {
   flex: 1;
-  min-width: 0;   /* let the inner flex rows shrink instead of overflowing */
+  min-width: 0;            /* let long names wrap/clip instead of overflowing */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+}
+.claim-row__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.claim-row__fighter-wrap { min-width: 0; }
+.claim-row__fighter {
+  display: block;
+  font-size: var(--text-body);
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.25;
+}
+.claim-row__div {
+  display: block;
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  margin-top: 1px;
+}
+.claim-row__drop {
+  font-size: var(--text-caption);
+  color: var(--text-secondary);
+}
+.claim-row__drop strong { color: var(--text-primary); font-weight: 700; }
+.claim-row__meta {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+}
+.claim-row__cancel {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--text-tertiary);
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.claim-row__cancel:hover {
+  color: var(--accent-crimson);
+  border-color: var(--accent-crimson);
+  background: rgba(193, 59, 46, 0.08);
 }
 
-/* Reorder rail: up arrow / choice number / down arrow, stacked. */
+/* Reorder rail: up arrow / choice number / down arrow, stacked. Centered in
+   the row so it reads as the row's rank. Reused by .claim-row. */
 .waiver-reorder {
   display: flex;
   flex-direction: column;

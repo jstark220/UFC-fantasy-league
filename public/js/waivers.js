@@ -1639,10 +1639,9 @@ function renderMyClaims() {
       var addFighter  = fighterMap[c.fighter_to_add_id];
       var dropFighter = c.fighter_to_drop_id ? fighterMap[c.fighter_to_drop_id] : null;
       var addDiv      = addFighter  ? (DIVISION_LABELS[addFighter.primary_division]  || addFighter.primary_division)  : '';
-      var dropDiv     = dropFighter ? (DIVISION_LABELS[dropFighter.primary_division] || dropFighter.primary_division) : '';
       var processAt   = computeClaimProcessTime(c);
       var processLabel = processAt
-        ? 'Processes ' + formatEtDateTime(processAt) + ' (' + formatRelativeShort(processAt, new Date()) + ')'
+        ? 'Processes ' + formatEtDateTime(processAt) + ' · ' + formatRelativeShort(processAt, new Date())
         : 'Awaiting process time';
 
       // Reorder rail: up/down arrows + this claim's choice number. Arrows are
@@ -1650,31 +1649,29 @@ function renderMyClaims() {
       var upDisabled   = idx === 0                  ? ' disabled' : '';
       var downDisabled = idx === pending.length - 1 ? ' disabled' : '';
 
+      // The "dropping X" line is rendered ONLY when a drop is actually set —
+      // most free-agency claims have no drop, so we don't waste a row on it.
+      var dropHtml = dropFighter
+        ? '<div class="claim-row__drop">Dropping <strong>' + escapeHtml(dropFighter.name) + '</strong></div>'
+        : '';
+
       html +=
-        '<div class="waiver-pending-card">' +
+        '<div class="claim-row">' +
           '<div class="waiver-reorder" role="group" aria-label="Reorder claim">' +
             '<button class="waiver-reorder__btn" data-move-up="' + c.id + '"' + upDisabled + ' aria-label="Move claim up">&#9650;</button>' +
             '<span class="waiver-reorder__rank" aria-label="Choice number">' + (idx + 1) + '</span>' +
             '<button class="waiver-reorder__btn" data-move-down="' + c.id + '"' + downDisabled + ' aria-label="Move claim down">&#9660;</button>' +
           '</div>' +
-          '<div class="waiver-pending-card__body">' +
-            '<div class="waiver-pending-card__sides">' +
-              '<div class="waiver-pending-card__add">' +
-                '<span class="waiver-pending-card__label">Claiming</span>' +
-                '<span class="waiver-pending-card__fighter">' + escapeHtml(addFighter ? addFighter.name : '?') + '</span>' +
-                '<span class="waiver-pending-card__div">' + escapeHtml(addDiv) + '</span>' +
+          '<div class="claim-row__main">' +
+            '<div class="claim-row__top">' +
+              '<div class="claim-row__fighter-wrap">' +
+                '<span class="claim-row__fighter">' + escapeHtml(addFighter ? addFighter.name : '?') + '</span>' +
+                '<span class="claim-row__div">' + escapeHtml(addDiv) + '</span>' +
               '</div>' +
-              '<span class="waiver-pending-card__arrow">&rarr;</span>' +
-              '<div class="waiver-pending-card__drop' + (dropFighter ? '' : ' waiver-pending-card__drop--empty') + '">' +
-                '<span class="waiver-pending-card__label">Dropping</span>' +
-                '<span class="waiver-pending-card__fighter">' + escapeHtml(dropFighter ? dropFighter.name : 'No drop') + '</span>' +
-                (dropDiv ? '<span class="waiver-pending-card__div">' + escapeHtml(dropDiv) + '</span>' : '') +
-              '</div>' +
+              '<button class="claim-row__cancel" data-cancel-id="' + c.id + '" aria-label="Cancel claim" title="Cancel claim">&#10005;</button>' +
             '</div>' +
-            '<div class="waiver-pending-card__meta">' +
-              '<span>' + escapeHtml(processLabel) + '</span>' +
-              '<button class="btn-ghost" data-cancel-id="' + c.id + '">Cancel</button>' +
-            '</div>' +
+            dropHtml +
+            '<div class="claim-row__meta">' + escapeHtml(processLabel) + '</div>' +
           '</div>' +
         '</div>';
     });
