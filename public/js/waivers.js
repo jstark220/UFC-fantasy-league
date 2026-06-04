@@ -1728,6 +1728,38 @@ function renderProcessingQueue() {
 // ========================================================================
 // CLAIM MODAL
 // ========================================================================
+// In-theme replacement for alert() — a small dark modal matching the rest of
+// the site (move-flex-modal styling) instead of the OS default box.
+function showNotice(title, message) {
+  var existing = document.getElementById('noticeModal');
+  if (existing) existing.remove();
+
+  var overlay = document.createElement('div');
+  overlay.id = 'noticeModal';
+  overlay.className = 'move-flex-modal-overlay';
+  overlay.innerHTML =
+    '<div class="move-flex-modal" role="dialog" aria-modal="true" style="max-width:400px">' +
+      '<div class="move-flex-modal__header">' +
+        '<p class="move-flex-modal__title">' + escapeHtml(title) + '</p>' +
+        '<button class="move-flex-modal__close" id="noticeCloseX" aria-label="Close">&times;</button>' +
+      '</div>' +
+      '<div class="move-flex-modal__body">' +
+        '<p class="notice-modal__message">' + escapeHtml(message) + '</p>' +
+        '<div class="move-flex-modal__actions">' +
+          '<button class="btn-primary" id="noticeOkBtn">Got it</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(overlay);
+
+  function close() { overlay.remove(); document.removeEventListener('keydown', esc); }
+  function esc(e) { if (e.key === 'Escape') close(); }
+  document.getElementById('noticeCloseX').addEventListener('click', close);
+  document.getElementById('noticeOkBtn').addEventListener('click', close);
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) close(); });
+  document.addEventListener('keydown', esc);
+}
+
 function openClaimModal(fighterId) {
   claimingFighter = allFighters.find(function(f) { return f.id === fighterId; });
   if (!claimingFighter) return;
@@ -1751,8 +1783,9 @@ function openClaimModal(fighterId) {
   if (addMode.mode !== 'instant') {
     var openClaims = myClaims.filter(function(c) { return c.status === 'pending'; }).length;
     if (openClaims >= MAX_OPEN_CLAIMS) {
-      alert('You already have ' + MAX_OPEN_CLAIMS + ' open waiver claims, which is the maximum. ' +
-            'Cancel one in the "My Claims" tab before submitting another.');
+      showNotice('Claim limit reached',
+        'You already have ' + MAX_OPEN_CLAIMS + ' open waiver claims, which is the maximum. ' +
+        'Cancel one in the "My Claims" tab before submitting another.');
       return;
     }
   }

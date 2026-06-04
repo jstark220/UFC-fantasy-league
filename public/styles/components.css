@@ -4601,6 +4601,14 @@ body {
   border-top: 1px solid var(--border-subtle);
 }
 
+/* Generic in-theme notice modal (replaces native alert() for waiver messages) */
+.notice-modal__message {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-body);
+  line-height: 1.5;
+}
+
 /* ========================================================================
    FIGHT CARD MODAL
    ======================================================================== */
