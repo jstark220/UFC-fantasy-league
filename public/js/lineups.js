@@ -70,13 +70,15 @@ async function initLineups() {
   // Eagerly wire the back-to-my-lineup link
   document.getElementById('lineupBackLink').href = 'lineup.html?id=' + leagueId;
 
-  // Pull league + membership + events + roster + fighters in parallel
-  const [leagueRes, membersRes, eventsRes, rostersRes, fightersRes] = await Promise.all([
+  // Pull league + membership + events in parallel. Fighters are loaded
+  // per-event in loadEventData (only the ones actually started this event) —
+  // fetching the whole fighters table here hit the 1000-row PostgREST cap and
+  // silently dropped most fighters, so starters outside the first 1000 showed
+  // as "Not set".
+  const [leagueRes, membersRes, eventsRes] = await Promise.all([
     supabaseClient.from('leagues').select('id, name, scoring_config').eq('id', leagueId).single(),
     supabaseClient.from('league_members').select('id, user_id, team_name, is_commissioner').eq('league_id', leagueId),
-    supabaseClient.from('ufc_events').select('id, name, full_name, event_date, venue, lineup_lock_time').order('event_date', { ascending: false }),
-    supabaseClient.from('rosters').select('fighter_id, league_member_id, slot_override').eq('league_id', leagueId),
-    supabaseClient.from('fighters').select('id, name, primary_division, current_rank, is_champion, record_wins, record_losses, record_draws, photo_url')
+    supabaseClient.from('ufc_events').select('id, name, full_name, event_date, venue, lineup_lock_time').order('event_date', { ascending: false })
   ]);
 
   if (leagueRes.error || !leagueRes.data) {
@@ -100,9 +102,7 @@ async function initLineups() {
   // original DB sort.
   availableEvents.sort(function(a, b) { return String(b.event_date || '').localeCompare(String(a.event_date || '')); });
 
-  // Build the fighter lookup once — we'll reach into it for every starter
-  // card rendered. fighter rows include the rank + photo we need.
-  (fightersRes.data || []).forEach(function(f) { fightersById[f.id] = f; });
+  // (fightersById is populated per-event by loadEventData.)
 
   // Pick the initial event: URL ?event= takes precedence, otherwise default
   const requestedEventId = params.get('event');
@@ -166,6 +166,25 @@ async function loadEventData() {
     if (!scoresByMember[row.league_member_id]) scoresByMember[row.league_member_id] = {};
     scoresByMember[row.league_member_id][row.fighter_id] = row.total_points;
   });
+
+  // Load the fighter rows for the starters set this event — but only the ones
+  // we don't already have. We fetch by id (a small set: a few per member)
+  // rather than the whole fighters table, which would hit the 1000-row cap and
+  // leave most starters unresolved (showing "Not set"). fightersById persists
+  // across event switches, so each event only fetches what's new.
+  var neededIds = [];
+  Object.keys(selectionsByMember).forEach(function(mid) {
+    selectionsByMember[mid].forEach(function(fid) {
+      if (!fightersById[fid] && neededIds.indexOf(fid) === -1) neededIds.push(fid);
+    });
+  });
+  if (neededIds.length > 0) {
+    var fRes = await supabaseClient
+      .from('fighters')
+      .select('id, name, primary_division, current_rank, is_champion, record_wins, record_losses, record_draws, photo_url')
+      .in('id', neededIds);
+    (fRes.data || []).forEach(function(f) { fightersById[f.id] = f; });
+  }
 }
 
 // ========================================================================
