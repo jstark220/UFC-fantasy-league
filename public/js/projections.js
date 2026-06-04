@@ -24,6 +24,12 @@
     // for a fight that already happened (defensive — recomputeProjections
     // doesn't write rows for completed fights, but stale rows from before
     // the fight occurred could linger until the next sync).
+    // NOTE: do NOT filter with .in('fighter_id', fighterIds) — callers pass
+    // the whole fighter table (~6k ids on the waivers page), which overflows
+    // the request URL and makes the query fail silently. Upcoming projections
+    // are a small set (one per booked fight), so fetch them all via the
+    // event-date filter and narrow to the requested fighters in JS — same
+    // approach FightOdds.loadFightOdds uses.
     const { data, error } = await supabaseClient
       .from('fighter_projections')
       .select(`
@@ -35,7 +41,6 @@
           event:ufc_events!inner(event_date)
         )
       `)
-      .in('fighter_id', fighterIds)
       .gte('fight.event.event_date', todayISO);
 
     if (error) {
@@ -43,8 +48,10 @@
       return {};
     }
 
+    const wanted = new Set(fighterIds);
     const result = {};
     for (const row of (data || [])) {
+      if (!wanted.has(row.fighter_id)) continue;     // not a fighter we asked for
       if (row.fight && row.fight.outcome) continue;  // skip completed
       result[row.fighter_id] = {
         projectedPoints: Number(row.projected_points),
