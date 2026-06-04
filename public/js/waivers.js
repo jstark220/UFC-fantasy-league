@@ -1849,57 +1849,40 @@ function renderRosterActivity() {
 // RENDER PROCESSING QUEUE (COMMISSIONER)
 // ========================================================================
 function renderProcessingQueue() {
-  var el = document.getElementById('commissionerSection');
+  var el    = document.getElementById('commissionerSection');
+  var count = pendingAllClaims.length;
 
   var headerHtml =
     '<div class="waiver-commissioner">' +
       '<div class="waiver-commissioner__header">' +
         '<p class="section-label">Waiver Queue ' +
-          '<span class="section-label__count">(' + pendingAllClaims.length + ' pending)</span>' +
+          '<span class="section-label__count">(' + count + ' pending)</span>' +
         '</p>' +
-        '<button class="btn-primary" id="processBtn">Process All Claims</button>' +
+        (count > 0 ? '<button class="btn-primary" id="processBtn">Process All Claims</button>' : '') +
       '</div>';
 
-  if (pendingAllClaims.length === 0) {
+  if (count === 0) {
     el.innerHTML = headerHtml + EmptyState.html({
       kind:    'claims',
       title:   'No pending claims',
-      body:    'When managers submit waiver claims, they\'ll queue up here for you to process.',
+      body:    'When managers submit waiver claims they queue up here. Their contents stay hidden until they process.',
       compact: true
     }) + '</div>';
-    document.getElementById('processBtn').addEventListener('click', processWaivers);
     return;
   }
 
-  var fighterMap = {};
-  allFighters.forEach(function(f) { fighterMap[f.id] = f; });
-
-  var memberMap = {};
-  members.forEach(function(m) { memberMap[m.id] = m; });
-
-  var rows = pendingAllClaims.map(function(c) {
-    var member      = memberMap[c.league_member_id];
-    var addFighter  = fighterMap[c.fighter_to_add_id];
-    var dropFighter = c.fighter_to_drop_id ? fighterMap[c.fighter_to_drop_id] : null;
-    var submitted   = c.submitted_at ? new Date(c.submitted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '-';
-
-    return '<tr class="standings-row">' +
-      '<td class="standings-pts-cell" style="text-align:left; padding-left: var(--space-4)">#' + escapeHtml(String(c.priority)) + '</td>' +
-      '<td class="standings-team-cell">' + escapeHtml(member ? member.team_name : '?') + '</td>' +
-      '<td class="standings-team-cell">' + escapeHtml(addFighter ? addFighter.name : '?') + '</td>' +
-      '<td class="standings-team-cell">' + escapeHtml(dropFighter ? dropFighter.name : '—') + '</td>' +
-      '<td class="standings-pts-cell" style="color: var(--text-tertiary)">' + escapeHtml(submitted) + '</td>' +
-    '</tr>';
-  }).join('');
-
+  // Blind waivers: we deliberately do NOT list who is claiming whom — not even
+  // for the commissioner, who is also a manager and would otherwise get an
+  // unfair read on the league. Show only the aggregate count + the manual
+  // process control. (Contents become public via Roster Activity AFTER they
+  // process.)
   el.innerHTML = headerHtml +
-    '<div class="standings-card"><table class="standings-table"><thead><tr>' +
-      '<th class="standings-th standings-th--rank">Pri</th>' +
-      '<th class="standings-th standings-th--team">Team</th>' +
-      '<th class="standings-th standings-th--team">Claiming</th>' +
-      '<th class="standings-th standings-th--team">Dropping</th>' +
-      '<th class="standings-th standings-th--pts">Submitted</th>' +
-    '</tr></thead><tbody>' + rows + '</tbody></table></div>' +
+    '<div class="waiver-blind-note">' +
+      '<p class="waiver-blind-note__title">&#128274; Claims are blind</p>' +
+      '<p>' + count + ' claim' + (count === 1 ? '' : 's') + ' queued across the league. To keep waivers fair, ' +
+        'the teams and fighters are hidden from everyone — including you — until claims process. ' +
+        'They run automatically at each cutoff; use <strong>Process All Claims</strong> only if you need to run them manually.</p>' +
+    '</div>' +
     '</div>';
 
   document.getElementById('processBtn').addEventListener('click', processWaivers);

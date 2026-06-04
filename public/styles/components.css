@@ -9165,6 +9165,28 @@ select.form-input option,
 }
 .waiver-claims-help strong { color: var(--text-secondary); font-weight: 700; }
 
+/* Blind-waiver panel shown in place of the old commissioner claim table —
+   conveys that pending-claim contents are intentionally hidden. Fluid layout,
+   so it needs no separate mobile rules. */
+.waiver-blind-note {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--accent-gold);
+  border-radius: 8px;
+  padding: var(--space-5) var(--space-6);
+  color: var(--text-secondary);
+  font-size: var(--text-body);
+  line-height: 1.5;
+}
+.waiver-blind-note p { margin: 0; }
+.waiver-blind-note p + p { margin-top: var(--space-3); }
+.waiver-blind-note__title {
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.02em;
+}
+.waiver-blind-note strong { color: var(--text-primary); }
+
 /* Compact pending-claim row: [reorder rail] + [main]. Replaces the tall
    stacked card so all of a manager's claims fit on one screen. The main
    column shows the fighter, an optional "dropping X" line (only when a drop
