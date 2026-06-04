@@ -789,10 +789,6 @@ function showWaiverOrder() {
     if (pa !== pb) return pa - pb;
     return (a.team_name || '').localeCompare(b.team_name || '');
   });
-  // Everyone tied at the same priority = season start, no claims won yet.
-  var allTied = ordered.length > 1 &&
-    ordered.every(function(m) { return (m.waiver_priority || 0) === (ordered[0].waiver_priority || 0); });
-
   var rows = ordered.map(function(m) {
     var isMe = myMember && m.id === myMember.id;
     var pr   = m.waiver_priority == null ? '—' : m.waiver_priority;
@@ -804,9 +800,7 @@ function showWaiverOrder() {
            '</div>';
   }).join('');
 
-  var note = allTied
-    ? 'Every team starts tied at priority #1. When two teams claim the same fighter, the earliest submitted claim wins. Win a claim and you drop to the back of the order for the next cycle.'
-    : 'Lower number claims first. When two teams want the same fighter, the higher-priority (lower number) team wins; same-priority ties go to the earliest submitted claim. Win a claim and you move to the back.';
+  var note = 'Order starts as the inverse of the draft order, then resets each week to the inverse of the standings (worst record claims first). Lower number = first claim; ties are broken randomly.';
 
   var overlay = document.createElement('div');
   overlay.id = 'waiverOrderModal';
