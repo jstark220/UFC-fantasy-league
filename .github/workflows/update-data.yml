@@ -114,12 +114,28 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
-      # ---- Step 6: Merge any duplicate fighters created by ingestion ----
-      # ingestFightResults.js auto-creates fighters with "ufcstats-" prefix
-      # when it can't match a name. Periodically these accumulate alongside
-      # canonical Octagon API entries and need merging back together.
-      - name: Merge duplicate fighter records
-        run: node mergeDuplicateFighters.js
+      # ---- Step 5.6: Reset the weekly waiver order ----
+      # After scoring, re-seed each league's waiver claim order to the INVERSE
+      # of standings (worst record claims first; ties random). Self-gating: only
+      # fires when a NEW event has scored since the last reset (tracked in
+      # leagues.waiver_order_basis), so a daily run never wipes the mid-week
+      # rolling order. Pre-season (no scores) it seeds the inverse draft order.
+      # Requires once: ALTER TABLE leagues ADD COLUMN IF NOT EXISTS waiver_order_basis text;
+      - name: Reset weekly waiver order
+        run: node resetWaiverOrder.js
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      # ---- Step 6: Clean up duplicate fighters created by ingestion ----
+      # The ingest scripts can mint a separate row when a name doesn't match
+      # (diacritics / reversed order). cleanupDuplicateFighters.js keeps the
+      # canonical survivor and re-points ALL fighter FKs (the older
+      # mergeDuplicateFighters.js missed scores/draft_picks/projections and
+      # orphaned them), then deletes the dupes.
+      - name: Clean up duplicate fighter records
+        run: node cleanupDuplicateFighters.js
         continue-on-error: true
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
