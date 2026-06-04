@@ -18,7 +18,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="styles/tokens.css">
-  <link rel="stylesheet" href="styles/components.css?v=7">
+  <link rel="stylesheet" href="styles/components.css?v=8">
 
   <title>Free Agency - Knockdown Fantasy</title>
   <script src="js/loading-screen.js"></script>
@@ -54,19 +54,32 @@
       <div id="phaseBanner" class="phase-banner" style="display: none;"></div>
 
       <!-- Tab bar -->
+      <!-- Each tab carries two labels: a full one (desktop) and a short one
+           (mobile). On mobile the three tabs become equal-width segments that
+           fill the row, so the short labels are swapped in to keep them from
+           wrapping or truncating. CSS toggles which label shows. -->
       <div class="waiver-tabs">
-        <button class="waiver-tab waiver-tab--active" data-tab="available">Available Fighters</button>
+        <button class="waiver-tab waiver-tab--active" data-tab="available">
+          <span class="waiver-tab__full">Available Fighters</span>
+          <span class="waiver-tab__short">Available</span>
+        </button>
         <button class="waiver-tab" data-tab="my-claims">
-          My Claims
+          <span class="waiver-tab__full">My Claims</span>
+          <span class="waiver-tab__short">Claims</span>
           <span class="waiver-tab__count" id="claimCount" style="display:none"></span>
         </button>
-        <button class="waiver-tab" data-tab="activity">Roster Activity</button>
-        <!-- Not a tab: opens the waiver-priority order in a modal. -->
+        <button class="waiver-tab" data-tab="activity">
+          <span class="waiver-tab__full">Roster Activity</span>
+          <span class="waiver-tab__short">Activity</span>
+        </button>
+        <!-- Not a tab: opens the waiver-priority order in a modal. On mobile
+             the text label is hidden and this collapses to a square icon
+             button so the three real tabs get the full row width. -->
         <button class="waiver-order-btn" id="waiverOrderBtn" type="button" aria-label="View waiver order">
           <span class="waiver-order-btn__icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><path d="M4 6h1v4"/><path d="M4 10h2"/><path d="M6 18H4c0-1 2-2 2-3s-1-1.4-2-1"/></svg>
           </span>
-          Waiver Order
+          <span class="waiver-order-btn__label">Waiver Order</span>
         </button>
       </div>
 

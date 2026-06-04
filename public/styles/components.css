@@ -6996,21 +6996,46 @@ body {
     padding: var(--space-5) var(--space-4);
   }
 
-  /* Tab bars (waivers, trades, draft mobile) can have 3-4 tabs that
-     don't fit. Allow horizontal scroll so the user can swipe to the
-     ones that overflow rather than have them squished. */
+  /* Free-agency tabs on mobile: instead of a horizontal scroll (where the
+     last tabs sit off-screen and are easy to miss), fit all three across the
+     row as equal-width segments so every section is visible at a glance. The
+     long desktop labels are swapped for short ones, and "Waiver Order" (not a
+     tab) collapses to a square icon button pinned at the right. */
   .waiver-tabs {
-    overflow-x: auto;
+    overflow-x: visible;
     flex-wrap: nowrap;
-    -webkit-overflow-scrolling: touch;
-    /* Hide the scrollbar — the tab outlines themselves signal scrollability */
-    scrollbar-width: none;
+    gap: 0;                 /* equal segments read as one control */
+    padding: 0;
+    align-items: stretch;
   }
-  .waiver-tabs::-webkit-scrollbar { display: none; }
   .waiver-tab {
-    flex-shrink: 0;
-    padding: var(--space-3) var(--space-4);
+    flex: 1 1 0;            /* three equal-width segments share the row */
+    min-width: 0;           /* allow shrinking below content width */
+    justify-content: center;
+    text-align: center;
+    padding: var(--space-3) var(--space-2);
+    font-size: var(--text-caption);
+    gap: 4px;
+    border-radius: 6px 6px 0 0;
   }
+  /* Swap full labels for short ones. These are descendant selectors (higher
+     specificity) on purpose: the base ".waiver-tab__short { display:none }"
+     rule lives LATER in this file, so a bare selector here would lose the
+     source-order tie and the label would never show. */
+  .waiver-tab .waiver-tab__full { display: none; }
+  .waiver-tab .waiver-tab__short { display: inline; }
+  .waiver-tab:first-child { padding-left: var(--space-2); }
+  /* "Waiver Order" → compact square icon button at the row's end */
+  .waiver-order-btn {
+    flex-shrink: 0;
+    margin-left: var(--space-2);
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    justify-content: center;
+    gap: 0;
+  }
+  .waiver-order-btn__label { display: none; }
 
   /* Auth pages (signup/login/forgot/reset): the card has 32px internal
      padding which steals 64px of horizontal room. Tighten to leave more
@@ -8722,6 +8747,10 @@ body {
   min-width: 20px;
   text-align: center;
 }
+
+/* Desktop shows the full tab labels; the short labels are mobile-only and
+   stay hidden here. The mobile media query flips this. */
+.waiver-tab__short { display: none; }
 
 /* Search + filter controls */
 .waiver-controls {
