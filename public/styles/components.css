@@ -7037,6 +7037,25 @@ body {
   }
   .waiver-order-btn__label { display: none; }
 
+  /* Pending-claim cards on mobile: the reorder rail eats horizontal room, so
+     stack Claiming ABOVE Dropping (instead of side by side) to give each
+     fighter name the full width and avoid mid-name wrapping. The arrow that
+     sat between them rotates to point downward. */
+  .waiver-pending-card { gap: var(--space-3); padding: var(--space-4); }
+  .waiver-reorder__btn { width: 32px; height: 30px; }
+  .waiver-pending-card__sides {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-2);
+  }
+  .waiver-pending-card__arrow {
+    align-self: flex-start;
+    transform: rotate(90deg);
+    padding: 0;
+    margin: var(--space-1) 0;
+  }
+  .waiver-pending-card__drop--empty { align-items: flex-start; }
+
   /* Auth pages (signup/login/forgot/reset): the card has 32px internal
      padding which steals 64px of horizontal room. Tighten to leave more
      room for the form. The page-level 16px padding stays for the gutter.
@@ -9150,6 +9169,70 @@ select.form-input option,
   padding-top: var(--space-3);
   border-top: 1px solid var(--border-subtle);
   flex-wrap: wrap;
+}
+
+/* Helper line above the pending claims explaining the rolling-waiver rules. */
+.waiver-claims-help {
+  margin: 0 0 var(--space-4);
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  line-height: 1.5;
+}
+.waiver-claims-help strong { color: var(--text-secondary); font-weight: 700; }
+
+/* Pending card is now a row: [reorder rail] + [body]. The body holds the
+   original sides + meta, so those layouts are unchanged. */
+.waiver-pending-card {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-4);
+}
+.waiver-pending-card__body {
+  flex: 1;
+  min-width: 0;   /* let the inner flex rows shrink instead of overflowing */
+}
+
+/* Reorder rail: up arrow / choice number / down arrow, stacked. */
+.waiver-reorder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.waiver-reorder__btn {
+  width: 30px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--text-secondary);
+  background: var(--bg-tertiary, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.waiver-reorder__btn:hover:not(:disabled) {
+  color: var(--text-primary);
+  border-color: var(--accent-crimson);
+  background: rgba(193, 59, 46, 0.08);
+}
+.waiver-reorder__btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.waiver-reorder__rank {
+  font-family: var(--font-display, var(--font-body));
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--accent-crimson);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 
 .waiver-pending-card__priority {

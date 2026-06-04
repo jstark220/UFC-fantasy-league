@@ -554,124 +554,217 @@ async function loadFreshRosters() {
   return byMember;
 }
 
-// Process a list of pending claims (already in priority order). Mirrors
-// the existing commissioner processWaivers() logic but works on a passed-
-// in claim batch and roster snapshot.
-async function processClaimBatch(claims, rosterMap) {
+// Sort comparator for a single team's own claims = their PREFERENCE order.
+// Managers can reorder via the My Claims UI, which writes `claim_order`
+// (0-based). Claims with no explicit order (older rows, brand-new claims)
+// fall back to submission time and sort AFTER any explicitly-ordered ones.
+function claimPrefCompare(a, b) {
+  var ao = (a.claim_order == null) ? Infinity : a.claim_order;
+  var bo = (b.claim_order == null) ? Infinity : b.claim_order;
+  if (ao !== bo) return ao - bo;
+  return new Date(a.submitted_at).getTime() - new Date(b.submitted_at).getTime();
+}
+
+// Try to apply ONE claim against the live roster snapshot. Returns
+// { ok: true } on success (and performs all the DB writes + activity log),
+// or { ok: false, reason } if the claim can't be satisfied (caller rejects).
+// `capForClaim(claim)` returns the roster cap to enforce for this claim.
+async function applyOneClaim(claim, rosterMap, claimedThisCycle, fighterMap, capForClaim) {
+  // Already won by a higher-priority team earlier in this same run.
+  if (claimedThisCycle.has(claim.fighter_to_add_id)) {
+    return { ok: false, reason: 'Fighter already claimed by a higher-priority team this cycle.' };
+  }
+
+  // Already on someone's roster (claimed in a prior run or never dropped).
+  var owned = false;
+  Object.keys(rosterMap).forEach(function(memberId) {
+    (rosterMap[memberId] || []).forEach(function(r) {
+      if (r.fighter_id === claim.fighter_to_add_id) owned = true;
+    });
+  });
+  if (owned) return { ok: false, reason: 'Fighter is already on a roster.' };
+
+  // The fighter they wanted to drop must still be on their roster.
+  if (claim.fighter_to_drop_id) {
+    var mine = rosterMap[claim.league_member_id] || [];
+    var dropOnRoster = mine.some(function(r) { return r.fighter_id === claim.fighter_to_drop_id; });
+    if (!dropOnRoster) {
+      return { ok: false, reason: 'The fighter you selected to drop is no longer on your roster.' };
+    }
+  }
+
+  // Cap check (the caller decides which cap applies — base vs at-process-time).
+  var memberRoster = rosterMap[claim.league_member_id] || [];
+  var cap = capForClaim(claim);
+  if (memberRoster.length >= cap && !claim.fighter_to_drop_id) {
+    return { ok: false, reason: 'At the ' + cap + '-fighter cap. Must specify a fighter to drop.' };
+  }
+
+  // Roster-construction: simulate the swap and reject if it breaks the limits.
+  var projected = memberRoster
+    .filter(function(r) { return r.fighter_id !== claim.fighter_to_drop_id; })
+    .map(function(r) { return fighterMap[r.fighter_id]; })
+    .filter(Boolean);
+  if (fighterMap[claim.fighter_to_add_id]) projected.push(fighterMap[claim.fighter_to_add_id]);
+  var constructionErr = checkRosterConstruction(projected);
+  if (constructionErr) return { ok: false, reason: constructionErr };
+
+  // ---- Apply the swap ----
+  var addRes = await supabaseClient.from('rosters').insert({
+    league_id:        leagueId,
+    league_member_id: claim.league_member_id,
+    fighter_id:       claim.fighter_to_add_id,
+    acquired_method:  'waiver'
+  });
+  if (addRes.error) return { ok: false, reason: 'Database error adding fighter: ' + addRes.error.message };
+
+  if (claim.fighter_to_drop_id) {
+    await supabaseClient.from('rosters').delete()
+      .eq('league_id', leagueId)
+      .eq('league_member_id', claim.league_member_id)
+      .eq('fighter_id', claim.fighter_to_drop_id);
+    await supabaseClient.from('roster_drops').insert({
+      league_id:        leagueId,
+      league_member_id: claim.league_member_id,
+      fighter_id:       claim.fighter_to_drop_id,
+      source:           'claim'
+    });
+    rosterMap[claim.league_member_id] = (rosterMap[claim.league_member_id] || [])
+      .filter(function(r) { return r.fighter_id !== claim.fighter_to_drop_id; });
+  }
+
+  rosterMap[claim.league_member_id] = (rosterMap[claim.league_member_id] || []).concat([
+    { fighter_id: claim.fighter_to_add_id, league_member_id: claim.league_member_id, acquired_at: new Date().toISOString() }
+  ]);
+
+  await supabaseClient.from('waiver_claims').update({
+    status:       'approved',
+    processed_at: new Date().toISOString()
+  }).eq('id', claim.id);
+
+  claimedThisCycle.add(claim.fighter_to_add_id);
+
+  // Activity feed: claim won.
+  if (typeof LeagueActivity !== 'undefined') {
+    var addedFighter   = fighterMap[claim.fighter_to_add_id];
+    var droppedFighter = claim.fighter_to_drop_id ? fighterMap[claim.fighter_to_drop_id] : null;
+    LeagueActivity.logEvent(leagueId, LeagueActivity.KINDS.CLAIM_WON, {
+      fighter_id:           claim.fighter_to_add_id,
+      fighter_name:         addedFighter ? addedFighter.name : 'a fighter',
+      dropped_fighter_id:   droppedFighter ? droppedFighter.id   : null,
+      dropped_fighter_name: droppedFighter ? droppedFighter.name : null,
+      priority:             claim.priority,
+      via:                  'waiver'
+    }, claim.league_member_id);
+  }
+
+  return { ok: true };
+}
+
+// ROLLING ROUND-ROBIN waiver processor (shared by the auto/lazy path and the
+// commissioner "Process All Claims" button).
+//
+// Rules (per Jacob's spec):
+//   - Process in rounds by LIVE waiver priority (1 = first in line).
+//   - Each round, going down the line, every team gets AT MOST ONE successful
+//     add. The instant a team's claim lands, that team drops to the BACK of
+//     the line (its priority is bumped past everyone) for the rest of the run
+//     and for future runs (rolling waivers).
+//   - Within a team's turn, claims are tried in the manager's PREFERENCE order.
+//     A claim that fails because the target is gone/invalid costs nothing — we
+//     fall through to the next one until one succeeds (that's the team's pickup
+//     for this round) or the team runs out.
+//   - A team only moves to the back on a SUCCESSFUL claim. If all its claims
+//     fail this run, it keeps its spot for next time.
+//
+// Net effect: contested fighters get spread around; a top-priority team can't
+// hoard several contested adds in one run.
+//
+// Returns the number of claims approved. Persists the priority roll to
+// league_members and mirrors it onto the in-memory `members` array so
+// subsequent batches in the same run see the new order.
+async function runRoundRobin(claims, rosterMap, capForClaim) {
+  if (!claims || claims.length === 0) return 0;
+
   var fighterMap = {};
   allFighters.forEach(function(f) { fighterMap[f.id] = f; });
 
+  // Group claims by team, each list in the manager's preference order.
+  var byTeam  = {};
+  var pointer = {};   // team -> index of next claim to try
+  claims.forEach(function(c) {
+    if (!byTeam[c.league_member_id]) { byTeam[c.league_member_id] = []; pointer[c.league_member_id] = 0; }
+    byTeam[c.league_member_id].push(c);
+  });
+  Object.keys(byTeam).forEach(function(mid) { byTeam[mid].sort(claimPrefCompare); });
+
+  // Live priority per team (lower = earlier in line). Unknown teams sort last.
+  var livePriority = {};
+  var globalMax    = 0;
+  members.forEach(function(m) {
+    var p = (m.waiver_priority == null) ? 9999 : m.waiver_priority;
+    livePriority[m.id] = p;
+    if (p < 9999 && p > globalMax) globalMax = p;
+  });
+  Object.keys(byTeam).forEach(function(mid) { if (livePriority[mid] == null) livePriority[mid] = 9999; });
+
   var claimedThisCycle = new Set();
+  var winners  = {};            // team -> final (back-of-line) priority
+  var nextBack = globalMax;     // winners stack just past the current last place
+  var approved = 0;
 
-  for (var i = 0; i < claims.length; i++) {
-    var claim = claims[i];
-
-    // Skip if already won by an earlier claim in this batch
-    if (claimedThisCycle.has(claim.fighter_to_add_id)) {
-      await rejectClaim(claim, 'Fighter already claimed by a higher-priority team this cycle.');
-      continue;
-    }
-
-    // Already on someone's roster?
-    var ownerEntries = [];
-    Object.keys(rosterMap).forEach(function(memberId) {
-      rosterMap[memberId].forEach(function(r) {
-        if (r.fighter_id === claim.fighter_to_add_id) ownerEntries.push({ memberId: memberId, row: r });
-      });
+  // Each loop iteration = one team's turn. The team with the best live
+  // priority that still has unresolved claims goes next.
+  while (true) {
+    var pick = null;
+    Object.keys(byTeam).forEach(function(mid) {
+      if (pointer[mid] >= byTeam[mid].length) return;                 // exhausted
+      if (pick === null || livePriority[mid] < livePriority[pick]) pick = mid;
     });
-    if (ownerEntries.length > 0) {
-      await rejectClaim(claim, 'Fighter is already on a roster.');
-      continue;
-    }
+    if (pick === null) break;   // nobody has claims left
 
-    // Drop validity
-    if (claim.fighter_to_drop_id) {
-      var myEntries = rosterMap[claim.league_member_id] || [];
-      var dropOnRoster = myEntries.some(function(r) { return r.fighter_id === claim.fighter_to_drop_id; });
-      if (!dropOnRoster) {
-        await rejectClaim(claim, 'The fighter you selected to drop is no longer on your roster.');
-        continue;
+    // Try this team's claims in preference order until one succeeds.
+    var wonThisTurn = false;
+    while (pointer[pick] < byTeam[pick].length && !wonThisTurn) {
+      var claim = byTeam[pick][pointer[pick]];
+      pointer[pick]++;
+      var res = await applyOneClaim(claim, rosterMap, claimedThisCycle, fighterMap, capForClaim);
+      if (res.ok) {
+        wonThisTurn = true;
+        approved++;
+      } else {
+        await rejectClaim(claim, res.reason);   // failed -> rejected, no priority cost
       }
     }
 
-    // Cap check uses the cap that applied AT THE CLAIM'S PROCESS TIME, not now.
-    // Pre-event close (Fri 3am ET) is still inside the +3 expansion → 23.
-    // Post-event close (Tue 3am ET) is after revert → 20.
-    // Rolling clears can happen any time; use the cap at that moment.
-    var memberRoster = rosterMap[claim.league_member_id] || [];
-    var processAt    = computeClaimProcessTime(claim) || new Date();
-    var capAtProcessTime = getRosterCap(processAt, nextEvent ? nextEvent.event_date : null);
-    if (memberRoster.length >= capAtProcessTime && !claim.fighter_to_drop_id) {
-      await rejectClaim(claim, 'At the ' + capAtProcessTime + '-fighter cap. Must specify a fighter to drop.');
-      continue;
-    }
-
-    // Roster construction
-    var projected = memberRoster
-      .filter(function(r) { return r.fighter_id !== claim.fighter_to_drop_id; })
-      .map(function(r) { return fighterMap[r.fighter_id]; })
-      .filter(Boolean);
-    if (fighterMap[claim.fighter_to_add_id]) projected.push(fighterMap[claim.fighter_to_add_id]);
-    var constructionErr = checkRosterConstruction(projected);
-    if (constructionErr) {
-      await rejectClaim(claim, constructionErr);
-      continue;
-    }
-
-    // Apply the swap
-    var addRes = await supabaseClient.from('rosters').insert({
-      league_id: leagueId,
-      league_member_id: claim.league_member_id,
-      fighter_id: claim.fighter_to_add_id,
-      acquired_method: 'waiver'
-    });
-    if (addRes.error) {
-      await rejectClaim(claim, 'Database error adding fighter: ' + addRes.error.message);
-      continue;
-    }
-
-    if (claim.fighter_to_drop_id) {
-      await supabaseClient.from('rosters').delete()
-        .eq('league_id', leagueId)
-        .eq('league_member_id', claim.league_member_id)
-        .eq('fighter_id', claim.fighter_to_drop_id);
-      await supabaseClient.from('roster_drops').insert({
-        league_id: leagueId,
-        league_member_id: claim.league_member_id,
-        fighter_id: claim.fighter_to_drop_id,
-        source: 'claim'
-      });
-      // Update local snapshot so subsequent claims in this batch see it
-      rosterMap[claim.league_member_id] = (rosterMap[claim.league_member_id] || [])
-        .filter(function(r) { return r.fighter_id !== claim.fighter_to_drop_id; });
-    }
-
-    rosterMap[claim.league_member_id] = (rosterMap[claim.league_member_id] || []).concat([
-      { fighter_id: claim.fighter_to_add_id, league_member_id: claim.league_member_id, acquired_at: new Date().toISOString() }
-    ]);
-
-    await supabaseClient.from('waiver_claims').update({
-      status: 'approved',
-      processed_at: new Date().toISOString()
-    }).eq('id', claim.id);
-
-    claimedThisCycle.add(claim.fighter_to_add_id);
-
-    // Activity feed: claim won by this manager. Includes the dropped
-    // fighter context so the headline reads "won X, dropping Y".
-    if (typeof LeagueActivity !== 'undefined') {
-      var addedFighter   = fighterMap[claim.fighter_to_add_id];
-      var droppedFighter = claim.fighter_to_drop_id ? fighterMap[claim.fighter_to_drop_id] : null;
-      LeagueActivity.logEvent(leagueId, LeagueActivity.KINDS.CLAIM_WON, {
-        fighter_id:           claim.fighter_to_add_id,
-        fighter_name:         addedFighter ? addedFighter.name : 'a fighter',
-        dropped_fighter_id:   droppedFighter ? droppedFighter.id   : null,
-        dropped_fighter_name: droppedFighter ? droppedFighter.name : null,
-        priority:             claim.priority,
-        via:                  'waiver'
-      }, claim.league_member_id);
+    // Only a successful pickup sends you to the back of the line.
+    if (wonThisTurn) {
+      nextBack++;
+      livePriority[pick] = nextBack;   // affects the rest of THIS run immediately
+      winners[pick]      = nextBack;
     }
   }
+
+  // Persist the priority roll for every team that won, and mirror it locally.
+  var winnerIds = Object.keys(winners);
+  for (var i = 0; i < winnerIds.length; i++) {
+    var mid = winnerIds[i];
+    await supabaseClient.from('league_members').update({ waiver_priority: winners[mid] }).eq('id', mid);
+    var mm = members.find(function(m) { return String(m.id) === String(mid); });
+    if (mm) mm.waiver_priority = winners[mid];
+  }
+
+  return approved;
+}
+
+// Auto/lazy path: process a batch of claims that have hit their trigger time.
+// Cap is the one that applied at each claim's process time (the +3 window
+// closes at different moments for pre/post claims).
+async function processClaimBatch(claims, rosterMap) {
+  return runRoundRobin(claims, rosterMap, function(claim) {
+    var processAt = computeClaimProcessTime(claim) || new Date();
+    return getRosterCap(processAt, nextEvent ? nextEvent.event_date : null);
+  });
 }
 
 async function rejectClaim(claim, reason) {
@@ -1529,9 +1622,20 @@ function renderMyClaims() {
   var html = '';
 
   if (pending.length > 0) {
-    html += '<p class="section-label" style="margin-bottom: var(--space-4)">Pending <span class="section-label__count">(' + pending.length + ')</span></p>';
+    // Show pending claims in the manager's PREFERENCE order — this is the
+    // order the round-robin tries them in. Reordering (below) writes the
+    // claim_order column; until that's set they fall back to submission time.
+    pending.sort(claimPrefCompare);
 
-    pending.forEach(function(c) {
+    // Live waiver-line position (lower = earlier), for the help text.
+    var meMember = members.find(function(m) { return m.id === myMemberId; });
+    var myLine   = meMember && meMember.waiver_priority != null ? meMember.waiver_priority : null;
+
+    html += '<p class="section-label" style="margin-bottom: var(--space-3)">Pending <span class="section-label__count">(' + pending.length + ')</span></p>';
+    html += '<p class="waiver-claims-help">Claims are tried top to bottom. You drop to the back of the waiver line only after one is <strong>successful</strong> — a missed claim keeps your spot. Use the arrows to reorder.' +
+            (myLine != null ? ' Your line: <strong>#' + escapeHtml(String(myLine)) + '</strong>.' : '') + '</p>';
+
+    pending.forEach(function(c, idx) {
       var addFighter  = fighterMap[c.fighter_to_add_id];
       var dropFighter = c.fighter_to_drop_id ? fighterMap[c.fighter_to_drop_id] : null;
       var addDiv      = addFighter  ? (DIVISION_LABELS[addFighter.primary_division]  || addFighter.primary_division)  : '';
@@ -1541,25 +1645,36 @@ function renderMyClaims() {
         ? 'Processes ' + formatEtDateTime(processAt) + ' (' + formatRelativeShort(processAt, new Date()) + ')'
         : 'Awaiting process time';
 
+      // Reorder rail: up/down arrows + this claim's choice number. Arrows are
+      // disabled at the ends. (Up/down rather than drag = reliable on touch.)
+      var upDisabled   = idx === 0                  ? ' disabled' : '';
+      var downDisabled = idx === pending.length - 1 ? ' disabled' : '';
+
       html +=
         '<div class="waiver-pending-card">' +
-          '<div class="waiver-pending-card__sides">' +
-            '<div class="waiver-pending-card__add">' +
-              '<span class="waiver-pending-card__label">Claiming</span>' +
-              '<span class="waiver-pending-card__fighter">' + escapeHtml(addFighter ? addFighter.name : '?') + '</span>' +
-              '<span class="waiver-pending-card__div">' + escapeHtml(addDiv) + '</span>' +
-            '</div>' +
-            '<span class="waiver-pending-card__arrow">&rarr;</span>' +
-            '<div class="waiver-pending-card__drop' + (dropFighter ? '' : ' waiver-pending-card__drop--empty') + '">' +
-              '<span class="waiver-pending-card__label">Dropping</span>' +
-              '<span class="waiver-pending-card__fighter">' + escapeHtml(dropFighter ? dropFighter.name : 'No drop') + '</span>' +
-              (dropDiv ? '<span class="waiver-pending-card__div">' + escapeHtml(dropDiv) + '</span>' : '') +
-            '</div>' +
+          '<div class="waiver-reorder" role="group" aria-label="Reorder claim">' +
+            '<button class="waiver-reorder__btn" data-move-up="' + c.id + '"' + upDisabled + ' aria-label="Move claim up">&#9650;</button>' +
+            '<span class="waiver-reorder__rank" aria-label="Choice number">' + (idx + 1) + '</span>' +
+            '<button class="waiver-reorder__btn" data-move-down="' + c.id + '"' + downDisabled + ' aria-label="Move claim down">&#9660;</button>' +
           '</div>' +
-          '<div class="waiver-pending-card__meta">' +
-            '<span>Priority #' + escapeHtml(String(c.priority)) + '</span>' +
-            '<span>' + escapeHtml(processLabel) + '</span>' +
-            '<button class="btn-ghost" data-cancel-id="' + c.id + '">Cancel</button>' +
+          '<div class="waiver-pending-card__body">' +
+            '<div class="waiver-pending-card__sides">' +
+              '<div class="waiver-pending-card__add">' +
+                '<span class="waiver-pending-card__label">Claiming</span>' +
+                '<span class="waiver-pending-card__fighter">' + escapeHtml(addFighter ? addFighter.name : '?') + '</span>' +
+                '<span class="waiver-pending-card__div">' + escapeHtml(addDiv) + '</span>' +
+              '</div>' +
+              '<span class="waiver-pending-card__arrow">&rarr;</span>' +
+              '<div class="waiver-pending-card__drop' + (dropFighter ? '' : ' waiver-pending-card__drop--empty') + '">' +
+                '<span class="waiver-pending-card__label">Dropping</span>' +
+                '<span class="waiver-pending-card__fighter">' + escapeHtml(dropFighter ? dropFighter.name : 'No drop') + '</span>' +
+                (dropDiv ? '<span class="waiver-pending-card__div">' + escapeHtml(dropDiv) + '</span>' : '') +
+              '</div>' +
+            '</div>' +
+            '<div class="waiver-pending-card__meta">' +
+              '<span>' + escapeHtml(processLabel) + '</span>' +
+              '<button class="btn-ghost" data-cancel-id="' + c.id + '">Cancel</button>' +
+            '</div>' +
           '</div>' +
         '</div>';
     });
@@ -1598,6 +1713,65 @@ function renderMyClaims() {
       cancelClaim(btn.getAttribute('data-cancel-id'));
     });
   });
+
+  // Reorder arrows: move a pending claim up/down in the manager's preference.
+  el.querySelectorAll('[data-move-up]').forEach(function(btn) {
+    btn.addEventListener('click', function() { moveClaim(btn.getAttribute('data-move-up'), -1); });
+  });
+  el.querySelectorAll('[data-move-down]').forEach(function(btn) {
+    btn.addEventListener('click', function() { moveClaim(btn.getAttribute('data-move-down'), 1); });
+  });
+}
+
+// ========================================================================
+// REORDER A PENDING CLAIM (manager preference order)
+// Moves one of MY pending claims up (dir=-1) or down (dir=+1) in the order
+// the round-robin will try them. Persists the new order to every one of my
+// pending claims via the `claim_order` column (0-based). Only touches my own
+// claims — everyone else's rows are untouched. submitted_at is never changed
+// (the process-time windows depend on it).
+// ========================================================================
+async function moveClaim(claimId, dir) {
+  // Current pending claims in their existing preference order.
+  var pending = myClaims
+    .filter(function(c) { return c.status === 'pending'; })
+    .sort(claimPrefCompare);
+
+  var idx = pending.findIndex(function(c) { return String(c.id) === String(claimId); });
+  if (idx < 0) return;
+  var swapIdx = idx + dir;
+  if (swapIdx < 0 || swapIdx >= pending.length) return;   // already at an end
+
+  // Swap the two claims, then renumber every pending claim 0..N-1.
+  var tmp = pending[idx];
+  pending[idx] = pending[swapIdx];
+  pending[swapIdx] = tmp;
+
+  // Optimistic local update so the UI feels instant.
+  pending.forEach(function(c, i) { c.claim_order = i; });
+  renderMyClaims();
+
+  // Persist. Scoped to my own member id so RLS is satisfied and no one
+  // else's claims can be affected.
+  var updates = pending.map(function(c, i) {
+    return supabaseClient.from('waiver_claims')
+      .update({ claim_order: i })
+      .eq('id', c.id)
+      .eq('league_member_id', myMemberId);
+  });
+  var results = await Promise.all(updates);
+
+  // If the claim_order column hasn't been added yet, every update errors —
+  // tell the user how to enable it (one-time migration) rather than failing
+  // silently.
+  var failed = results.find(function(r) { return r && r.error; });
+  if (failed) {
+    if (typeof showNotice === 'function') {
+      showNotice('Reordering not enabled yet',
+        'Claim reordering needs a one-time database update (the claim_order column). Once that is added, the arrows will save your order.');
+    }
+    await refreshData();   // resync to canonical (discards the optimistic order)
+  }
 }
 
 // ========================================================================
@@ -2188,171 +2362,20 @@ async function processWaivers() {
   btn.disabled = true;
   btn.textContent = 'Processing...';
 
-  var { data: freshRosters, error: rosterErr } = await supabaseClient
-    .from('rosters')
-    .select('id, fighter_id, league_member_id')
-    .eq('league_id', leagueId);
+  // Fresh per-team roster snapshot (memberId -> [roster rows]); also catches
+  // the "fighter no longer droppable" race. loadFreshRosters returns exactly
+  // the shape the round-robin engine expects.
+  var rosterMap = await loadFreshRosters();
 
-  if (rosterErr) {
-    alert('Error loading roster data: ' + rosterErr.message);
-    btn.disabled = false;
-    btn.textContent = 'Process All Claims';
-    return;
-  }
-
-  var claimedThisCycle  = new Set();
-  var approvedMemberIds = [];
-
-  for (var i = 0; i < pendingAllClaims.length; i++) {
-    var claim = pendingAllClaims[i];
-
-    if (claimedThisCycle.has(claim.fighter_to_add_id)) {
-      await supabaseClient.from('waiver_claims').update({
-        status: 'rejected',
-        rejection_reason: 'Fighter already claimed by a higher-priority team this cycle.',
-        processed_at: new Date().toISOString()
-      }).eq('id', claim.id);
-      // Activity feed: lost claim due to higher-priority contention.
-      if (typeof LeagueActivity !== 'undefined') {
-        var lostFighter = (allFighters || []).find(function(f) { return f.id === claim.fighter_to_add_id; });
-        LeagueActivity.logEvent(leagueId, LeagueActivity.KINDS.CLAIM_LOST, {
-          fighter_id:   claim.fighter_to_add_id,
-          fighter_name: lostFighter ? lostFighter.name : 'a fighter',
-          priority:     claim.priority,
-          reason:       'Higher-priority team won the claim this cycle.'
-        }, claim.league_member_id);
-      }
-      continue;
-    }
-
-    var fighterOwned = freshRosters.some(function(r) { return r.fighter_id === claim.fighter_to_add_id; });
-    if (fighterOwned) {
-      await supabaseClient.from('waiver_claims').update({
-        status: 'rejected',
-        rejection_reason: 'Fighter is already on a roster.',
-        processed_at: new Date().toISOString()
-      }).eq('id', claim.id);
-      continue;
-    }
-
-    if (claim.fighter_to_drop_id) {
-      var dropOnRoster = freshRosters.some(function(r) {
-        return r.fighter_id === claim.fighter_to_drop_id && r.league_member_id === claim.league_member_id;
-      });
-      if (!dropOnRoster) {
-        await supabaseClient.from('waiver_claims').update({
-          status: 'rejected',
-          rejection_reason: 'The fighter you selected to drop is no longer on your roster.',
-          processed_at: new Date().toISOString()
-        }).eq('id', claim.id);
-        continue;
-      }
-    }
-
-    var memberRosterSize = freshRosters.filter(function(r) {
-      return r.league_member_id === claim.league_member_id;
-    }).length;
-
-    if (memberRosterSize >= ROSTER_SIZE_BASE && !claim.fighter_to_drop_id) {
-      await supabaseClient.from('waiver_claims').update({
-        status: 'rejected',
-        rejection_reason: 'At the ' + ROSTER_SIZE_BASE + '-fighter cap. Must specify a fighter to drop.',
-        processed_at: new Date().toISOString()
-      }).eq('id', claim.id);
-      continue;
-    }
-
-    // Roster-construction check: simulate the swap on the freshest roster snapshot
-    // and reject if the result violates the per-division / flex limits.
-    var fighterMapForCheck = {};
-    allFighters.forEach(function(f) { fighterMapForCheck[f.id] = f; });
-    var projectedFighters = freshRosters
-      .filter(function(r) {
-        return r.league_member_id === claim.league_member_id &&
-               r.fighter_id        !== claim.fighter_to_drop_id;
-      })
-      .map(function(r) { return fighterMapForCheck[r.fighter_id]; })
-      .filter(Boolean);
-    if (fighterMapForCheck[claim.fighter_to_add_id]) {
-      projectedFighters.push(fighterMapForCheck[claim.fighter_to_add_id]);
-    }
-
-    var constructionErr = checkRosterConstruction(projectedFighters);
-    if (constructionErr) {
-      await supabaseClient.from('waiver_claims').update({
-        status: 'rejected',
-        rejection_reason: constructionErr,
-        processed_at: new Date().toISOString()
-      }).eq('id', claim.id);
-      continue;
-    }
-
-    var { error: addErr } = await supabaseClient.from('rosters').insert({
-      league_id:        leagueId,
-      league_member_id: claim.league_member_id,
-      fighter_id:       claim.fighter_to_add_id
-    });
-
-    if (addErr) {
-      await supabaseClient.from('waiver_claims').update({
-        status: 'rejected',
-        rejection_reason: 'Database error adding fighter: ' + addErr.message,
-        processed_at: new Date().toISOString()
-      }).eq('id', claim.id);
-      continue;
-    }
-
-    if (claim.fighter_to_drop_id) {
-      await supabaseClient.from('rosters').delete()
-        .eq('league_id', leagueId)
-        .eq('league_member_id', claim.league_member_id)
-        .eq('fighter_id', claim.fighter_to_drop_id);
-
-      freshRosters = freshRosters.filter(function(r) {
-        return !(r.fighter_id === claim.fighter_to_drop_id && r.league_member_id === claim.league_member_id);
-      });
-    }
-
-    freshRosters.push({ fighter_id: claim.fighter_to_add_id, league_member_id: claim.league_member_id });
-
-    await supabaseClient.from('waiver_claims').update({
-      status: 'approved',
-      processed_at: new Date().toISOString()
-    }).eq('id', claim.id);
-
-    claimedThisCycle.add(claim.fighter_to_add_id);
-    if (!approvedMemberIds.includes(claim.league_member_id)) {
-      approvedMemberIds.push(claim.league_member_id);
-    }
-
-    // Activity feed: claim_won. Mirrors the auto-batch path above.
-    if (typeof LeagueActivity !== 'undefined') {
-      var addedFighter   = fighterMapForCheck[claim.fighter_to_add_id];
-      var droppedFighter = claim.fighter_to_drop_id ? fighterMapForCheck[claim.fighter_to_drop_id] : null;
-      LeagueActivity.logEvent(leagueId, LeagueActivity.KINDS.CLAIM_WON, {
-        fighter_id:           claim.fighter_to_add_id,
-        fighter_name:         addedFighter ? addedFighter.name : 'a fighter',
-        dropped_fighter_id:   droppedFighter ? droppedFighter.id   : null,
-        dropped_fighter_name: droppedFighter ? droppedFighter.name : null,
-        priority:             claim.priority,
-        via:                  'waiver'
-      }, claim.league_member_id);
-    }
-  }
-
-  // Approved claimants move to the back of the priority queue
-  var maxPriority  = Math.max.apply(null, members.map(function(m) { return m.waiver_priority || 0; }));
-  var nextPriority = maxPriority + 1;
-  for (var j = 0; j < approvedMemberIds.length; j++) {
-    await supabaseClient.from('league_members')
-      .update({ waiver_priority: nextPriority })
-      .eq('id', approvedMemberIds[j]);
-    nextPriority++;
-  }
+  // Run the same rolling round-robin the auto path uses, so the commissioner
+  // button and the automatic processor behave identically. Cap = the live
+  // cap shown in the UI (respects the +3 event-week expansion). The engine
+  // handles the priority roll (winners to the back) itself.
+  var approved = await runRoundRobin(pendingAllClaims, rosterMap, function() { return rosterCap; });
 
   btn.disabled = false;
   btn.textContent = 'Process All Claims';
-  alert('Waivers processed. ' + claimedThisCycle.size + ' claim(s) approved.');
+  alert('Waivers processed. ' + approved + ' claim(s) approved.');
   await refreshData();
 }
 
