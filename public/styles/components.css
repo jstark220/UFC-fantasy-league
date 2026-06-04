@@ -5752,6 +5752,24 @@ body {
     position: relative;
     padding-right: 94px;
   }
+  /* Free agency: surface the Polymarket odds + projection chips in the cell
+     (they're hidden on the lineup page to keep that line short). Let the
+     next-fight line wrap so the chips show instead of being clipped. Higher
+     specificity than the shared hide rule, so it wins regardless of order. */
+  .lineup-roster-row.lineup-roster-row--fa .lineup-roster-row__matchup {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+  }
+  .lineup-roster-row.lineup-roster-row--fa .lineup-roster-row__matchup .fight-odds,
+  .lineup-roster-row.lineup-roster-row--fa .lineup-roster-row__matchup .fight-projection {
+    display: inline-flex;
+  }
+  /* Drop the verbose "to win on Polymarket" suffix on mobile so the odds chip
+     is just the % dot — compact enough to never crowd the Claim button. */
+  .lineup-roster-row.lineup-roster-row--fa .lineup-roster-row__matchup .fight-odds__inline-suffix {
+    display: none;
+  }
   /* FV stat (or the "On {owner}" label) moves under the name, left-aligned. */
   .lineup-roster-row.lineup-roster-row--fa .lineup-roster-row__record {
     grid-column: 2;

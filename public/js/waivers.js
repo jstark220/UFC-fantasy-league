@@ -1344,10 +1344,14 @@ function renderAvailableFighters() {
     // consumer escapes the result, so we just build raw strings here.
     var flag = (typeof countryFlag === 'function') ? countryFlag(f.country) : '';
     var divParts = [];
-    if (flag)          divParts.push(flag);
-    if (divLabel)      divParts.push(divLabel);
-    if (f.age != null) divParts.push('Age ' + f.age);
+    if (flag)     divParts.push(flag);
+    if (divLabel) divParts.push(divLabel);
     var divLine = divParts.join(' · ');
+    // Age in its own span so the mobile rule can hide it (frees room for the
+    // odds/projection chips); it stays visible on desktop + the fighter modal.
+    var ageHtml = (f.age != null)
+      ? '<span class="lineup-roster-row__sub-age"> &middot; Age ' + escapeHtml(String(f.age)) + '</span>'
+      : '';
     var addMode   = decideAddMode(f.id);
 
     // Right-side stat: show the sort-relevant metric inline on each row
@@ -1453,7 +1457,7 @@ function renderAvailableFighters() {
               rankLabel +
             '</span>' +
           '</span>' +
-          '<span class="lineup-roster-row__division">' + escapeHtml(divLine) + '</span>' +
+          '<span class="lineup-roster-row__division">' + escapeHtml(divLine) + ageHtml + '</span>' +
           nextFightNote +
           rollingNote +
         '</div>' +
