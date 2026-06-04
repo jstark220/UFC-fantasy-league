@@ -1413,11 +1413,16 @@ function renderAvailableFighters() {
             eventName:    nf.event_name    || ''
           })
         : '';
+      // Fight text and the odds/projection chips are wrapped in their own
+      // spans so CSS can keep the chips together in a consistent spot (on
+      // mobile they drop to their own line instead of wrapping mid-sentence).
+      var chipsHtml = (oddsHtml || projHtml)
+        ? '<span class="waiver-nf__chips">' + oddsHtml + projHtml + '</span>'
+        : '';
       nextFightNote =
         '<span class="lineup-roster-row__matchup waiver-next-fight">' +
-          'Fights ' + escapeHtml(NextFight.formatShort(nf)) +
-          (oddsHtml ? ' ' + oddsHtml : '') +
-          (projHtml ? ' ' + projHtml : '') +
+          '<span class="waiver-nf__text">Fights ' + escapeHtml(NextFight.formatShort(nf)) + '</span>' +
+          chipsHtml +
         '</span>';
     }
     var photoHtml = f.photo_url

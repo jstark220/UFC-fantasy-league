@@ -5752,22 +5752,33 @@ body {
     position: relative;
     padding-right: 94px;
   }
-  /* Free agency: surface the Polymarket odds + projection chips in the cell
-     (they're hidden on the lineup page to keep that line short). Let the
-     next-fight line wrap so the chips show instead of being clipped. Higher
+  /* Free agency: show the Polymarket odds + projection chips in the cell
+     (the lineup page hides them). Fight text gets its own line; the chips sit
+     together on the line below, so they're ALWAYS in the same spot instead of
+     wrapping mid-sentence based on the opponent's name length. Higher
      specificity than the shared hide rule, so it wins regardless of order. */
   .lineup-roster-row.lineup-roster-row--fa .lineup-roster-row__matchup {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: 6px;
+    row-gap: 3px;
     white-space: normal;
     overflow: visible;
     text-overflow: clip;
   }
-  .lineup-roster-row.lineup-roster-row--fa .lineup-roster-row__matchup .fight-odds,
-  .lineup-roster-row.lineup-roster-row--fa .lineup-roster-row__matchup .fight-projection {
+  .lineup-roster-row.lineup-roster-row--fa .waiver-nf__text { flex: 1 1 100%; }
+  .lineup-roster-row.lineup-roster-row--fa .waiver-nf__chips { margin-left: 0; }
+  /* Reveal + size the chips down a touch (smaller box + font than desktop). */
+  .lineup-roster-row.lineup-roster-row--fa .waiver-nf__chips .fight-odds,
+  .lineup-roster-row.lineup-roster-row--fa .waiver-nf__chips .fight-projection {
     display: inline-flex;
+    font-size: 9.5px;
+    padding: 1px 6px;
   }
-  /* Drop the verbose "to win on Polymarket" suffix on mobile so the odds chip
-     is just the % dot — compact enough to never crowd the Claim button. */
-  .lineup-roster-row.lineup-roster-row--fa .lineup-roster-row__matchup .fight-odds__inline-suffix {
+  /* Drop the verbose "to win on Polymarket" suffix so the odds chip is just
+     the % dot — keeps both chips compact side by side. */
+  .lineup-roster-row.lineup-roster-row--fa .waiver-nf__chips .fight-odds__inline-suffix {
     display: none;
   }
   /* FV stat (or the "On {owner}" label) moves under the name, left-aligned. */
@@ -6310,6 +6321,13 @@ body {
   font-weight: 600;
   color: var(--accent-gold);
   display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+/* Odds + projection chips grouped so they stay together (and keep an even
+   gap between them) wherever the matchup line puts them. */
+.waiver-nf__chips {
+  display: inline-flex;
   align-items: center;
   gap: var(--space-2);
 }
