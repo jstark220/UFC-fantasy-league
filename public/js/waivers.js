@@ -37,6 +37,10 @@ var pendingAllClaims  = [];
 var leagueActivity    = []; // approved claims across the whole league, newest first
 var claimingFighter   = null;
 
+// A manager can have at most this many pending (open) waiver claims at once.
+// Instant free-agency adds don't count (they hit the roster immediately).
+var MAX_OPEN_CLAIMS   = 4;
+
 // Waiver-phase state — recomputed at every page load and refresh
 var nextEvent       = null;          // ufc_events row used as the schedule anchor
 var phaseInfo       = { phase: 'FA', closesAt: null, opensAt: null };
@@ -1740,6 +1744,19 @@ function openClaimModal(fighterId) {
   if (existing) existing.remove();
 
   var addMode  = decideAddMode(fighterId);
+
+  // Open-claim cap: block a 5th pending claim. Only applies when the add queues
+  // as a waiver claim — instant free-agency adds go straight to the roster, so
+  // they don't count against the limit.
+  if (addMode.mode !== 'instant') {
+    var openClaims = myClaims.filter(function(c) { return c.status === 'pending'; }).length;
+    if (openClaims >= MAX_OPEN_CLAIMS) {
+      alert('You already have ' + MAX_OPEN_CLAIMS + ' open waiver claims, which is the maximum. ' +
+            'Cancel one in the "My Claims" tab before submitting another.');
+      return;
+    }
+  }
+
   var atCap    = myRoster.length >= rosterCap;
   var divLabel = DIVISION_LABELS[claimingFighter.primary_division] || claimingFighter.primary_division;
   var rankStr  = claimingFighter.is_champion ? 'Champion'
