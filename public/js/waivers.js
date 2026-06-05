@@ -291,14 +291,36 @@ function buildLeagueActivity(claims, drops, rosterRows) {
   var items = [];
   var consumedDropIds = new Set();
 
+  // Contention losses: claims rejected because a higher-priority team won the
+  // fighter this cycle (NOT cap/construction errors — those are the manager's
+  // own config and aren't interesting/are private). Used to annotate the
+  // winning row with "also claimed by ...".
+  var contentionLosses = claims.filter(function(c) {
+    return c.status === 'rejected' && /^Fighter already/i.test(c.rejection_reason || '');
+  });
+
   // 1. Approved waiver claims
   claims.filter(function(c) { return c.status === 'approved'; }).forEach(function(c) {
+    // Teams that claimed the SAME fighter and lost in the SAME processing run.
+    // Match by fighter + processed_at proximity (a run stamps all its claims
+    // within seconds; runs are hours/days apart) so a later re-claim of the
+    // same fighter doesn't pull in an earlier cycle's losers.
+    var winAt  = new Date(c.processed_at || c.submitted_at).getTime();
+    var losers = [];
+    contentionLosses.forEach(function(l) {
+      if (l.fighter_to_add_id !== c.fighter_to_add_id) return;
+      var lAt = new Date(l.processed_at || 0).getTime();
+      if (Math.abs(lAt - winAt) > 60 * 60 * 1000) return;          // not the same run
+      if (losers.indexOf(l.league_member_id) === -1) losers.push(l.league_member_id);
+    });
+
     items.push({
       kind: 'waiver',
       occurredAt: c.processed_at || c.submitted_at,
       memberId: c.league_member_id,
       addedFighterId: c.fighter_to_add_id,
-      droppedFighterId: c.fighter_to_drop_id || null
+      droppedFighterId: c.fighter_to_drop_id || null,
+      alsoClaimedBy: losers          // member ids of teams that lost this fighter
     });
   });
 
@@ -1824,17 +1846,35 @@ function renderRosterActivity() {
     var addCell = addFighter
       ? '<span style="color: #4ade80">+ ' + escapeHtml(addFighter.name) + '</span>'
       : '<span style="color: var(--text-tertiary)">—</span>';
+
+    // Annotate a contested waiver win with who else chased that fighter. Show
+    // up to two team names, then "+N" so a popular fighter doesn't blow up the
+    // cell. (Reveals lost claimants — fine post-resolution, but note this needs
+    // rejected claims to be readable, which a future blind-waiver RLS tighten
+    // would hide. See PRIORITIES P1.5.)
+    if (addFighter && it.kind === 'waiver' && it.alsoClaimedBy && it.alsoClaimedBy.length) {
+      var loserNames = it.alsoClaimedBy.map(function(mid) {
+        var m = memberMap[mid];
+        return m ? m.team_name : '?';
+      });
+      var shown = loserNames.slice(0, 2);
+      var extra = loserNames.length - shown.length;
+      var alsoLabel = shown.join(', ') + (extra > 0 ? ' +' + extra : '');
+      addCell += '<span class="activity-also">also claimed by ' + escapeHtml(alsoLabel) + '</span>';
+    }
     var dropCell = dropFighter
       ? '<span style="color: var(--accent-crimson)">− ' + escapeHtml(dropFighter.name) + '</span>'
       : '<span style="color: var(--text-tertiary)">—</span>';
 
+    // data-label drives the mobile stacked-card layout (CSS shows the label
+    // before each value once the table reflows on narrow screens).
     return '<tr class="standings-row">' +
-      '<td class="standings-pts-cell" style="text-align:left; padding-left: var(--space-4); color: var(--text-tertiary)">' +
+      '<td data-label="Date" class="standings-pts-cell" style="text-align:left; padding-left: var(--space-4); color: var(--text-tertiary)">' +
         escapeHtml(dateStr) + '</td>' +
-      '<td class="standings-team-cell">' + escapeHtml(teamLabel) + '</td>' +
-      '<td class="standings-team-cell">' + addCell + '</td>' +
-      '<td class="standings-team-cell">' + dropCell + '</td>' +
-      '<td class="standings-team-cell" style="color: var(--text-tertiary); font-size: var(--text-caption)">' +
+      '<td data-label="Team" class="standings-team-cell">' + escapeHtml(teamLabel) + '</td>' +
+      '<td data-label="Added" class="standings-team-cell">' + addCell + '</td>' +
+      '<td data-label="Dropped" class="standings-team-cell">' + dropCell + '</td>' +
+      '<td data-label="Type" class="standings-team-cell" style="color: var(--text-tertiary); font-size: var(--text-caption)">' +
         escapeHtml(kindLabel[it.kind] || it.kind) +
       '</td>' +
     '</tr>';
@@ -1844,7 +1884,7 @@ function renderRosterActivity() {
     '<p class="section-label" style="margin-bottom: var(--space-4)">League Activity ' +
       '<span class="section-label__count">(' + leagueActivity.length + ')</span>' +
     '</p>' +
-    '<div class="standings-card"><table class="standings-table"><thead><tr>' +
+    '<div class="standings-card"><table class="standings-table activity-table"><thead><tr>' +
       '<th class="standings-th standings-th--rank">Date</th>' +
       '<th class="standings-th standings-th--team">Team</th>' +
       '<th class="standings-th standings-th--team">Added</th>' +
