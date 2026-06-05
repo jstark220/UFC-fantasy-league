@@ -1859,8 +1859,9 @@ function renderRosterActivity() {
       });
       var shown = loserNames.slice(0, 2);
       var extra = loserNames.length - shown.length;
-      var alsoLabel = shown.join(', ') + (extra > 0 ? ' +' + extra : '');
-      addCell += '<span class="activity-also">also claimed by ' + escapeHtml(alsoLabel) + '</span>';
+      var failedList  = shown.join(', ') + (extra > 0 ? ' +' + extra : '');
+      var failedLabel = (loserNames.length > 1 ? 'Failed claims: ' : 'Failed claim: ') + failedList;
+      addCell += '<span class="activity-also">' + escapeHtml(failedLabel) + '</span>';
     }
     var dropCell = dropFighter
       ? '<span style="color: var(--accent-crimson)">− ' + escapeHtml(dropFighter.name) + '</span>'
