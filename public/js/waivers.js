@@ -207,9 +207,13 @@ async function initWaivers() {
   wireUpTabs();
   wireUpSearch();
 
-  // Lazy processor: catch up on any cutoffs whose time has passed.
-  // Runs before render so the UI reflects the freshest state.
-  await runLazyProcessor();
+  // Catch-up processor. Now that the server-side cron (scripts/processWaivers.js
+  // via .github/workflows/process-waivers.yml) is the authoritative processor,
+  // this only runs for a commissioner as a manual fallback. It must NOT run for
+  // a regular manager: their browser can only write their OWN claims (RLS), so
+  // it would process those in isolation — outside the round-robin — which is
+  // exactly the bug that wrongly rejected a manager's claims at the base cap.
+  if (isCommissioner) await runLazyProcessor();
 
   renderPhaseBanner();
   renderAvailableFighters();
@@ -606,7 +610,11 @@ async function applyOneClaim(claim, rosterMap, claimedThisCycle, fighterMap, cap
     .map(function(r) { return fighterMap[r.fighter_id]; })
     .filter(Boolean);
   if (fighterMap[claim.fighter_to_add_id]) projected.push(fighterMap[claim.fighter_to_add_id]);
-  var constructionErr = checkRosterConstruction(projected);
+  // Use the event-week EXPANSION when the cap is expanded (cap > base), so a
+  // no-drop add isn't bounced at the base 15 cap during the +window. Passing
+  // the event lets the bonus match the card type (+3 numbered / +2 Fight Night).
+  var baseTotal = (league && typeof league.roster_size === 'number') ? league.roster_size : ROSTER_SIZE_BASE;
+  var constructionErr = checkRosterConstruction(projected, { useExpansion: cap > baseTotal, event: nextEvent });
   if (constructionErr) return { ok: false, reason: constructionErr };
 
   // ---- Apply the swap ----

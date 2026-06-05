@@ -1,0 +1,49 @@
+# ============================================================================
+# process-waivers.yml
+# Runs the waiver claim processor server-side, on a schedule, so claims process
+# at their cutoff WITHOUT depending on a commissioner having the page open.
+#
+# Why a separate workflow (not the daily 6am-UTC pipeline): waiver cutoffs are
+# 3am ET, which is 07:00 UTC (EDT) / 08:00 UTC (EST). The daily pipeline runs at
+# 06:00 UTC — BEFORE the cutoff — so it would miss same-day claims. This runs
+# after 3am ET. The processor only touches claims whose trigger has passed and
+# is safe to run repeatedly (already-processed claims are skipped), so we run it
+# twice a day for resilience.
+#
+# Required GitHub Secrets: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+# ============================================================================
+
+name: Process Waivers
+
+on:
+  schedule:
+    - cron: '30 8 * * *'    # 08:30 UTC — after 3am ET in both EDT and EST
+    - cron: '30 14 * * *'   # 14:30 UTC — midday safety net
+  workflow_dispatch:         # Manual "run waivers now" from the Actions tab
+
+jobs:
+  process:
+    name: Process due waiver claims
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Processes every league's due claims via the rolling round-robin
+      # (service role bypasses RLS, so it can update every team's roster).
+      - name: Process waiver claims
+        run: node scripts/processWaivers.js --commit
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
