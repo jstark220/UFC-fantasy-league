@@ -916,9 +916,13 @@ function showWaiverOrder() {
     if (pa !== pb) return pa - pb;
     return (a.team_name || '').localeCompare(b.team_name || '');
   });
-  var rows = ordered.map(function(m) {
+  var rows = ordered.map(function(m, idx) {
     var isMe = myMember && m.id === myMember.id;
-    var pr   = m.waiver_priority == null ? '—' : m.waiver_priority;
+    // Number by POSITION (1..N), not the raw waiver_priority. Rolling drops a
+    // winner to the back as (max + 1), which leaves gaps in the stored values
+    // (e.g. 4,5,8,13,18) — but the sorted order is what matters, so the line
+    // always reads 1..N with no holes.
+    var pr   = idx + 1;
     return '<div class="waiver-order-row' + (isMe ? ' waiver-order-row--me' : '') + '">' +
              '<span class="waiver-order-row__num">#' + escapeHtml(String(pr)) + '</span>' +
              '<span class="waiver-order-row__team">' + escapeHtml(m.team_name || 'Team') +
@@ -1657,9 +1661,17 @@ function renderMyClaims() {
     // claim_order column; until that's set they fall back to submission time.
     pending.sort(claimPrefCompare);
 
-    // Live waiver-line position (lower = earlier), for the help text.
-    var meMember = members.find(function(m) { return m.id === myMemberId; });
-    var myLine   = meMember && meMember.waiver_priority != null ? meMember.waiver_priority : null;
+    // Live waiver-line position as a 1..N RANK (matches the Waiver Order modal).
+    // The raw waiver_priority can be gappy after rolling, so we rank by sorted
+    // position rather than show the stored number.
+    var orderedMembers = (members || []).slice().sort(function(a, b) {
+      var pa = a.waiver_priority == null ? 9999 : a.waiver_priority;
+      var pb = b.waiver_priority == null ? 9999 : b.waiver_priority;
+      if (pa !== pb) return pa - pb;
+      return (a.team_name || '').localeCompare(b.team_name || '');
+    });
+    var myIdx  = orderedMembers.findIndex(function(m) { return m.id === myMemberId; });
+    var myLine = myIdx >= 0 ? myIdx + 1 : null;
 
     html += '<p class="section-label" style="margin-bottom: var(--space-3)">Pending <span class="section-label__count">(' + pending.length + ')</span></p>';
     html += '<p class="waiver-claims-help">Claims are tried top to bottom. You drop to the back of the waiver line only after one is <strong>successful</strong> — a missed claim keeps your spot. Use the arrows to reorder.' +
