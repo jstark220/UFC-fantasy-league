@@ -13771,6 +13771,10 @@ label .form-label__hint {
   border-left: 3px solid var(--border-subtle);
   border-radius: 8px;
 }
+/* Starter cell opens the fighter modal — pointer + subtle hover (background
+   only, so the tier-colored left border is preserved). */
+.lineups-slot--clickable { cursor: pointer; transition: background 0.15s ease, border-color 0.15s ease; }
+.lineups-slot--clickable:hover { background: var(--bg-secondary); border-top-color: var(--border-strong); border-right-color: var(--border-strong); border-bottom-color: var(--border-strong); }
 .lineups-slot--champion { border-left-color: var(--tier-champion); }
 .lineups-slot--top5     { border-left-color: var(--tier-top5); }
 .lineups-slot--top15    { border-left-color: var(--tier-top15); }

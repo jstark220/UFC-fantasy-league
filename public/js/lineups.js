@@ -121,6 +121,33 @@ async function initLineups() {
 
   renderEventBanner();
   renderLineupsGrid();
+  wireFighterClicks();
+}
+
+// Clicking a starter cell opens the fighter modal. The cells live inside each
+// card's <a> link, so we preventDefault to stop the navigation and only open
+// the modal. Delegated + attached once, so it survives event re-renders (the
+// #lineupsGrid element persists; only its innerHTML changes).
+function wireFighterClicks() {
+  const grid = document.getElementById('lineupsGrid');
+  if (!grid || grid.__fighterClicksWired) return;
+  grid.__fighterClicksWired = true;
+
+  function openFromTarget(e) {
+    const slot = e.target.closest ? e.target.closest('[data-fighter-id]') : null;
+    if (!slot) return;
+    const fid = slot.getAttribute('data-fighter-id');
+    if (!fid) return;
+    e.preventDefault();     // don't follow the card's link
+    e.stopPropagation();
+    if (typeof showFighterModal === 'function') showFighterModal(fid);
+  }
+
+  grid.addEventListener('click', openFromTarget);
+  // role="button" spans/divs need explicit keyboard activation.
+  grid.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' || e.key === ' ') openFromTarget(e);
+  });
 }
 
 // Default event = next upcoming (earliest future). If none, the most recent
@@ -436,7 +463,10 @@ function renderStarterTile(fighter, points, anyScoresThisEvent) {
   else if (fighter.current_rank <= 15)  tierClass = ' lineups-slot--top15';
 
   return (
-    '<div class="lineups-slot' + tierClass + '">' +
+    // data-fighter-id makes the cell open the fighter modal (wired in
+    // wireFighterClicks); role/tabindex keep it keyboard-accessible even
+    // though it lives inside the card's <a>.
+    '<div class="lineups-slot lineups-slot--clickable' + tierClass + '" data-fighter-id="' + escapeHtml(String(fighter.id)) + '" role="button" tabindex="0">' +
       '<div class="lineups-slot__photo-wrap">' + photoHtml +
         '<span class="lineups-slot__rank">' + rankBadge + '</span>' +
       '</div>' +
