@@ -40,6 +40,27 @@ var lineupCtx        = { memberId: '', eventId: '', count: 3 };
 
 document.addEventListener('DOMContentLoaded', initCommishPowers);
 
+// Fetch the ENTIRE fighters table, paged past PostgREST's 1000-row response
+// cap. A single .select() returns at most 1000 rows, so with ~3800 fighters
+// fighterMap was missing most of them — and any rostered fighter not in the
+// first 1000 silently disappeared from the roster/lineup views. Ordered by id
+// so paging is stable (no skipped/duplicated rows between pages).
+async function fetchAllFighters() {
+  var cols = 'id, name, primary_division, current_rank, is_champion, is_sub_champion, sub_title_type, photo_url, record_wins, record_losses, record_draws';
+  var all = [], from = 0, PAGE = 1000;
+  while (true) {
+    var res = await supabaseClient.from('fighters').select(cols)
+      .order('id', { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (res.error) { console.warn('fetchAllFighters page failed:', res.error.message); break; }
+    var rows = res.data || [];
+    all = all.concat(rows);
+    if (rows.length < PAGE) break;   // last page
+    from += PAGE;
+  }
+  return all;
+}
+
 async function initCommishPowers() {
   user = await requireAuth();
   if (!user) return;
@@ -49,16 +70,19 @@ async function initCommishPowers() {
 
   document.getElementById('backToLeague').href = 'league.html?id=' + leagueId;
 
-  // Load league + members + fighters in parallel.
+  // Load league + members + fighters in parallel. Fighters are paged past the
+  // 1000-row cap (fetchAllFighters) — without it fighterMap held only the first
+  // 1000 of ~3800 fighters, so rostered fighters beyond that vanished from the
+  // roster/lineup views and the add-fighter search.
   var res = await Promise.all([
     supabaseClient.from('leagues').select('id, name, commissioner_id, draft_started, draft_completed, scoring_config, roster_size').eq('id', leagueId).single(),
     supabaseClient.from('league_members').select('id, user_id, team_name, is_commissioner').eq('league_id', leagueId),
-    supabaseClient.from('fighters').select('id, name, primary_division, current_rank, is_champion, is_sub_champion, sub_title_type, photo_url, record_wins, record_losses, record_draws')
+    fetchAllFighters()
   ]);
 
   var leagueRes  = res[0];
   var membersRes = res[1];
-  var fightersRes = res[2];
+  var fightersRes = { data: res[2] };
 
   if (leagueRes.error || !leagueRes.data) {
     window.location.href = 'dashboard.html';
