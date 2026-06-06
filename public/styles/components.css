@@ -13723,6 +13723,29 @@ label .form-label__hint {
   color: var(--text-tertiary);
   font-family: var(--font-body);
 }
+/* Pre-event header: projected total stacked over the set-count, right-aligned. */
+.lineups-card__total-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  flex-shrink: 0;
+}
+.lineups-card__proj-tag {
+  font-family: var(--font-body);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-tertiary);
+}
+.lineups-card__setcount {
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
 
 /* Three-up starter tile row inside each manager card */
 .lineups-card__slots {

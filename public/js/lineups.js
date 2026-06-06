@@ -52,6 +52,7 @@ let fightersById   = {};       // fighter id -> fighter row, for starter renderi
 // Per-event state, reset on event change
 let selectionsByMember = {};   // member id -> [fighter_id, fighter_id, ...]
 let scoresByMember     = {};   // member id -> { fighter_id: total_points }
+let projectionsByFighter = {}; // fighter_id -> projection (upcoming-event preview)
 
 // ========================================================================
 // INIT
@@ -136,8 +137,9 @@ function pickDefaultEvent(events) {
 // LOAD EVENT DATA — selections + scores for the selected event
 // ========================================================================
 async function loadEventData() {
-  selectionsByMember = {};
-  scoresByMember     = {};
+  selectionsByMember   = {};
+  scoresByMember       = {};
+  projectionsByFighter = {};
   if (!selectedEvent) return;
 
   const memberIds = members.map(function(m) { return m.id; });
@@ -184,6 +186,20 @@ async function loadEventData() {
       .select('id, name, primary_division, current_rank, is_champion, record_wins, record_losses, record_draws, photo_url')
       .in('id', neededIds);
     (fRes.data || []).forEach(function(f) { fightersById[f.id] = f; });
+  }
+
+  // Projected points for the started fighters (preview of the upcoming card).
+  // Projections.load only returns entries for upcoming, un-completed fights, so
+  // for a past/scored event this comes back empty and the page falls back to
+  // actual points. Keyed by fighter_id.
+  if (typeof Projections !== 'undefined') {
+    var starterIds = [];
+    Object.keys(selectionsByMember).forEach(function(mid) {
+      selectionsByMember[mid].forEach(function(fid) {
+        if (starterIds.indexOf(fid) === -1) starterIds.push(fid);
+      });
+    });
+    projectionsByFighter = await Projections.load(starterIds);
   }
 }
 
@@ -335,11 +351,36 @@ function renderManagerCard(member, totalScore, anyScoresThisEvent) {
     }
   }
 
-  const totalLabel = anyScoresThisEvent
-    ? '<span class="lineups-card__total">' + (Math.round(totalScore * 100) / 100).toFixed(1) + ' pts</span>'
-    // "x / N set" where N is the event's starter count (2 on Fight Nights,
-    // 3 on numbered cards) — matches the number of slots rendered above.
-    : '<span class="lineups-card__total lineups-card__total--muted">' + Math.min(selectionIds.length, starterCount) + ' / ' + starterCount + ' set</span>';
+  // Projected total = sum of the set starters' projections (preview before the
+  // card scores). Some fighters may lack a projection (needs Polymarket odds),
+  // so we sum whatever is available.
+  let projTotal = 0, projCount = 0;
+  for (let i = 0; i < starterCount; i++) {
+    const pfid = selectionIds[i];
+    const proj = pfid ? projectionsByFighter[pfid] : null;
+    if (proj && proj.projectedPoints != null && !isNaN(proj.projectedPoints)) {
+      projTotal += proj.projectedPoints; projCount++;
+    }
+  }
+  const setCount = Math.min(selectionIds.length, starterCount);
+
+  let totalLabel;
+  if (anyScoresThisEvent) {
+    // Scored: actual event points.
+    totalLabel = '<span class="lineups-card__total">' + (Math.round(totalScore * 100) / 100).toFixed(1) + ' pts</span>';
+  } else if (projCount > 0) {
+    // Pre-event: projected total next to the team name, set-count beneath it.
+    totalLabel =
+      '<span class="lineups-card__total-wrap">' +
+        '<span class="lineups-card__total" title="Projected total points">' +
+          projTotal.toFixed(1) + ' <span class="lineups-card__proj-tag">PROJ</span>' +
+        '</span>' +
+        '<span class="lineups-card__setcount">' + setCount + ' / ' + starterCount + ' set</span>' +
+      '</span>';
+  } else {
+    // Pre-event with no projections available yet — just the set-count.
+    totalLabel = '<span class="lineups-card__total lineups-card__total--muted">' + setCount + ' / ' + starterCount + ' set</span>';
+  }
 
   // Click target: the whole card links to the per-member lineup view so the
   // user can see bench + roster construction. Own card links back to "your"
@@ -381,6 +422,11 @@ function renderStarterTile(fighter, points, anyScoresThisEvent) {
     const ptsStr = hasPts ? (Math.round(points * 100) / 100).toFixed(1) : '—';
     const emptyMod = hasPts ? '' : ' lineups-slot__pts--empty';
     ptsHtml = '<span class="lineups-slot__pts' + emptyMod + '">' + ptsStr + '</span>';
+  } else if (typeof Projections !== 'undefined') {
+    // Pre-event: the fighter's projected points. Non-clickable pill (the whole
+    // card is a link, so we don't add a competing click target). Renders ''
+    // when this fighter has no projection yet.
+    ptsHtml = Projections.pillHtml(projectionsByFighter[fighter.id], { fighterName: fighter.name });
   }
 
   // tier modifier so the slot border matches champion / top-5 / top-15
