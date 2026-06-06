@@ -108,6 +108,12 @@ async function scoreEvents(opts = {}) {
   if (selRes.error) throw new Error('Failed to load starter_selections: ' + selRes.error.message);
   const selections = selRes.data || [];
 
+  // Reconcile the scores table to the CURRENT starters before scoring. Any
+  // score row for these events whose fighter is no longer a starter (e.g. the
+  // commish swapped the lineup) is deleted, or the benched fighter's points
+  // would keep counting toward the total.
+  await reconcileScores(supabase, eventIds, selections, dryRun);
+
   if (selections.length === 0) {
     console.log('No starter selections for these events — nothing to score.');
     return { eventsScored: eventIds.length, rowsWritten: 0, skippedNoFight: 0 };
@@ -193,6 +199,50 @@ async function scoreEvents(opts = {}) {
 
   console.log('Wrote ' + written + ' score rows.');
   return { eventsScored: eventIds.length, rowsWritten: written, skippedNoFight };
+}
+
+// Delete score rows that no longer match a member's CURRENT starters for the
+// given events. Scoped safely: a member's stale row is only removed when that
+// member HAS current starters for the event (so a transient empty read can't
+// wipe a whole lineup's points). This is what makes a lineup change — including
+// a commissioner edit — drop the benched fighter's points on the next pass.
+async function reconcileScores(supabase, eventIds, selections, dryRun) {
+  // Which (member|event) pairs have a known current lineup, and the exact
+  // (member|event|fighter) starters within them.
+  const memberEventWithStarters = new Set();
+  const starterKey = new Set();
+  selections.forEach((s) => {
+    memberEventWithStarters.add(s.league_member_id + '|' + s.event_id);
+    starterKey.add(s.league_member_id + '|' + s.event_id + '|' + s.fighter_id);
+  });
+
+  const existing = await supabase
+    .from('scores')
+    .select('id, league_member_id, event_id, fighter_id')
+    .in('event_id', eventIds);
+  if (existing.error) throw new Error('Failed to load scores for reconcile: ' + existing.error.message);
+
+  const staleIds = (existing.data || [])
+    .filter((r) => {
+      const me = r.league_member_id + '|' + r.event_id;
+      if (!memberEventWithStarters.has(me)) return false;            // unknown lineup — leave it
+      return !starterKey.has(me + '|' + r.fighter_id);               // not a current starter
+    })
+    .map((r) => r.id);
+
+  if (staleIds.length === 0) return;
+
+  if (dryRun) {
+    console.log('(dry run) would remove ' + staleIds.length + ' stale score row(s) (no longer starters).');
+    return;
+  }
+
+  const CHUNK = 200;
+  for (let i = 0; i < staleIds.length; i += CHUNK) {
+    const del = await supabase.from('scores').delete().in('id', staleIds.slice(i, i + CHUNK));
+    if (del.error) throw new Error('Failed to delete stale scores: ' + del.error.message);
+  }
+  console.log('Removed ' + staleIds.length + ' stale score row(s) (benched / swapped out).');
 }
 
 module.exports = { scoreEvents };
