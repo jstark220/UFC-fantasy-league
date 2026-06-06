@@ -32,6 +32,12 @@ var rosters      = [];          // { id, league_member_id, fighter_id, acquired_
 var events       = [];          // ufc_events rows
 var trades       = [];          // trades rows
 
+// Lineups tab state
+var lineupsTabLoaded = false;
+var lineupRoster     = [];          // [{ roster, fighter }] for the selected team
+var lineupStarters   = new Set();   // fighter_ids currently toggled as starters
+var lineupCtx        = { memberId: '', eventId: '', count: 3 };
+
 document.addEventListener('DOMContentLoaded', initCommishPowers);
 
 async function initCommishPowers() {
@@ -106,9 +112,11 @@ function setupTabs() {
       var key = btn.getAttribute('data-commish-tab');
       buttons.forEach(function(b) { b.classList.toggle('waiver-tab--active', b === btn); });
       document.getElementById('commishRostersSection').hidden = key !== 'rosters';
+      document.getElementById('commishLineupsSection').hidden = key !== 'lineups';
       document.getElementById('commishScoresSection').hidden  = key !== 'scores';
       document.getElementById('commishTradesSection').hidden  = key !== 'trades';
       // Lazy-load the destination tab's data the first time it's viewed.
+      if (key === 'lineups' && !lineupsTabLoaded) loadLineupsTab();
       if (key === 'scores' && !events.length)  loadScoresTab();
       if (key === 'trades' && !trades.length)  loadTradesTab();
     });
@@ -276,6 +284,181 @@ async function addToRoster(memberId, fighterId, fighterName) {
   rosters.push(res.data);
   showMessage(fighterName + ' added.', 'success');
   renderRosterPane(memberId);
+}
+
+// ========================================================================
+// LINEUPS TAB
+// Pick a team + event, toggle which rostered fighters are STARTERS, save.
+// Works after the lineup lock (commish override). Writes go through the
+// commish_set_lineup RPC (SECURITY DEFINER) because, under RLS, a member can
+// only edit their OWN starter_selections.
+// ========================================================================
+async function loadLineupsTab() {
+  lineupsTabLoaded = true;
+
+  // Need rosters (the Rosters tab loads them on init) and events.
+  if (!rosters.length) {
+    var rRes = await supabaseClient.from('rosters')
+      .select('id, league_member_id, fighter_id, acquired_method, acquired_at')
+      .eq('league_id', leagueId);
+    rosters = rRes.data || [];
+  }
+  if (!events.length) {
+    var eRes = await supabaseClient.from('ufc_events')
+      .select('id, name, event_date, is_completed')
+      .order('event_date', { ascending: false });
+    events = eRes.data || [];
+  }
+
+  // Team picker.
+  var teamSel = document.getElementById('commishLineupTeamSelect');
+  teamSel.innerHTML = '<option value="">— Pick a team —</option>' +
+    members.slice().sort(function(a, b) { return (a.team_name || '').localeCompare(b.team_name || ''); })
+      .map(function(m) { return '<option value="' + escapeHtml(m.id) + '">' + escapeHtml(m.team_name || '?') + '</option>'; }).join('');
+
+  // Event picker — default to the soonest upcoming event (tonight's card),
+  // else the most recent. events are sorted newest-first.
+  var todayISO = new Date().toISOString().split('T')[0];
+  var upcoming = events.filter(function(e) { return (e.event_date || '') >= todayISO; });
+  var defaultEvent = upcoming.length ? upcoming[upcoming.length - 1] : events[0];
+  var eventSel = document.getElementById('commishLineupEventSelect');
+  eventSel.innerHTML = events.map(function(e) {
+    var label = (e.name || 'Unnamed') + ' · ' + (e.event_date || '').slice(0, 10) + (e.is_completed ? ' · completed' : '');
+    var sel = (defaultEvent && e.id === defaultEvent.id) ? ' selected' : '';
+    return '<option value="' + escapeHtml(e.id) + '"' + sel + '>' + escapeHtml(label) + '</option>';
+  }).join('');
+  lineupCtx.eventId = defaultEvent ? defaultEvent.id : '';
+
+  teamSel.addEventListener('change',  function() { lineupCtx.memberId = teamSel.value;  loadLineupForPane(); });
+  eventSel.addEventListener('change', function() { lineupCtx.eventId  = eventSel.value; loadLineupForPane(); });
+
+  renderLineupPane();  // prompt until a team is picked
+}
+
+// Starter count for an event: 3 for numbered PPVs, 2 for Fight Nights, with
+// per-league scoring_config overrides. Local copy of waiver-phase's rule so
+// this page stays self-contained.
+function starterCountForEvent(ev) {
+  var cfg = (league && league.scoring_config) || {};
+  var numbered = /^UFC\s+\d+\b/i.test(String((ev && ev.name) || '').trim());
+  if (numbered) return cfg.starters_numbered != null ? Number(cfg.starters_numbered) : 3;
+  return cfg.starters_fight_night != null ? Number(cfg.starters_fight_night) : 2;
+}
+
+// Fetch the team's current starters for the event, then render the toggles.
+async function loadLineupForPane() {
+  var memberId = lineupCtx.memberId, eventId = lineupCtx.eventId;
+  if (!memberId || !eventId) { renderLineupPane(); return; }
+
+  lineupCtx.count = starterCountForEvent(events.find(function(e) { return e.id === eventId; }));
+
+  var selRes = await supabaseClient.from('starter_selections')
+    .select('fighter_id, slot_position')
+    .eq('league_member_id', memberId)
+    .eq('event_id', eventId)
+    .order('slot_position');
+  lineupStarters = new Set((selRes.data || []).map(function(s) { return s.fighter_id; }));
+
+  lineupRoster = rosters
+    .filter(function(r) { return r.league_member_id === memberId; })
+    .map(function(r) { var f = fighterMap[r.fighter_id]; return f ? { roster: r, fighter: f } : null; })
+    .filter(Boolean)
+    .sort(function(a, b) {
+      // Current starters float to the top so the active lineup reads first.
+      var as = lineupStarters.has(a.fighter.id), bs = lineupStarters.has(b.fighter.id);
+      if (as !== bs) return as ? -1 : 1;
+      return (a.fighter.name || '').localeCompare(b.fighter.name || '');
+    });
+
+  renderLineupPane();
+}
+
+function renderLineupPane() {
+  var pane = document.getElementById('commishLineupPane');
+  if (!lineupCtx.memberId || !lineupCtx.eventId) {
+    pane.innerHTML = '<p class="commish-empty">Pick a team and an event to edit their starters.</p>';
+    return;
+  }
+  if (lineupRoster.length === 0) {
+    pane.innerHTML = '<p class="commish-empty">This team has no fighters rostered.</p>';
+    return;
+  }
+
+  var n = lineupStarters.size, max = lineupCtx.count, atCap = n >= max;
+
+  var rows = lineupRoster.map(function(item) {
+    var f = item.fighter;
+    var on = lineupStarters.has(f.id);
+    var rankLabel = f.is_champion ? 'C' : (f.current_rank ? '#' + f.current_rank : 'NR');
+    var divLabel  = DIVISION_LABELS[f.primary_division] || f.primary_division || '';
+    var photo = f.photo_url
+      ? '<img class="commish-roster-list__photo" src="' + escapeHtml(f.photo_url) + '" alt="">'
+      : '<div class="commish-roster-list__photo commish-roster-list__photo--placeholder"></div>';
+    // A benched fighter can't be started once the lineup is full.
+    var disabled = (!on && atCap) ? ' disabled' : '';
+    return '<li class="commish-roster-list__row' + (on ? ' commish-lineup-row--starter' : '') + '">' +
+      photo +
+      '<div class="commish-roster-list__info">' +
+        '<span class="commish-roster-list__name">' + escapeHtml(f.name) + '</span>' +
+        '<span class="commish-roster-list__meta">' + escapeHtml(rankLabel) + ' · ' + escapeHtml(divLabel) + '</span>' +
+      '</div>' +
+      '<button class="commish-lineup-toggle' + (on ? ' commish-lineup-toggle--on' : '') + '" data-toggle-fighter="' + escapeHtml(f.id) + '"' + disabled + ' type="button">' +
+        (on ? '★ Starter' : 'Bench') +
+      '</button>' +
+    '</li>';
+  }).join('');
+
+  pane.innerHTML =
+    '<div class="commish-lineup-head">' +
+      '<span class="commish-lineup-count' + (atCap ? ' commish-lineup-count--full' : '') + '">' + n + ' / ' + max + ' starters</span>' +
+      '<button class="btn-primary commish-lineup-save" id="commishLineupSave">Save lineup</button>' +
+    '</div>' +
+    '<ul class="commish-roster-list">' + rows + '</ul>';
+
+  pane.querySelectorAll('[data-toggle-fighter]').forEach(function(btn) {
+    btn.addEventListener('click', function() { toggleStarter(btn.getAttribute('data-toggle-fighter')); });
+  });
+  document.getElementById('commishLineupSave').addEventListener('click', saveLineup);
+}
+
+function toggleStarter(fighterId) {
+  if (lineupStarters.has(fighterId)) {
+    lineupStarters.delete(fighterId);
+  } else if (lineupStarters.size >= lineupCtx.count) {
+    showMessage('Lineup is full (' + lineupCtx.count + ' starters). Bench someone first.', 'error');
+    return;
+  } else {
+    lineupStarters.add(fighterId);
+  }
+  renderLineupPane();  // sync re-render from the in-memory set (no refetch)
+}
+
+async function saveLineup() {
+  var memberId = lineupCtx.memberId, eventId = lineupCtx.eventId;
+  if (!memberId || !eventId) return;
+
+  // Keep the roster's display order (starters already sorted to the top) as a
+  // stable slot order.
+  var ids = lineupRoster.map(function(item) { return item.fighter.id; })
+    .filter(function(id) { return lineupStarters.has(id); });
+
+  var teamName = (memberMap[memberId] && memberMap[memberId].team_name) || 'this team';
+  if (!confirm('Save ' + ids.length + ' starter(s) for ' + teamName + '?\n\nThis overrides their lineup for the selected event, even if it is locked.')) return;
+
+  var res = await supabaseClient.rpc('commish_set_lineup', {
+    p_league_id:        leagueId,
+    p_league_member_id: memberId,
+    p_event_id:         eventId,
+    p_fighter_ids:      ids
+  });
+  if (res.error) {
+    var msg = /commish_set_lineup/i.test(res.error.message || '')
+      ? 'Lineup editing needs a one-time DB function — run sql/2026-06-06_commish_set_lineup.sql in Supabase.'
+      : 'Save failed: ' + res.error.message;
+    showMessage(msg, 'error');
+    return;
+  }
+  showMessage('Lineup saved for ' + teamName + '.', 'success');
 }
 
 // ========================================================================

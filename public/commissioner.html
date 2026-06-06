@@ -18,7 +18,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="styles/tokens.css">
-  <link rel="stylesheet" href="styles/components.css">
+  <link rel="stylesheet" href="styles/components.css?v=1">
 
   <title>Commish Powers - Knockdown Fantasy</title>
   <script src="js/loading-screen.js"></script>
@@ -57,6 +57,7 @@
            for consistency with other tabbed pages (draft room, waivers). -->
       <div class="waiver-tabs commish-tabs">
         <button class="waiver-tab waiver-tab--active" data-commish-tab="rosters">Rosters</button>
+        <button class="waiver-tab"                    data-commish-tab="lineups">Lineups</button>
         <button class="waiver-tab"                    data-commish-tab="scores">Scores</button>
         <button class="waiver-tab"                    data-commish-tab="trades">Trades</button>
       </div>
@@ -73,6 +74,27 @@
         </div>
         <div class="commish-roster-pane" id="commishRosterPane">
           <p class="commish-empty">Pick a team to view their roster.</p>
+        </div>
+      </section>
+
+      <!-- Lineups tab ------------------------------------------------------ -->
+      <section class="commish-section" id="commishLineupsSection" hidden>
+        <div class="commish-section__header">
+          <h2 class="commish-section__title">Edit Lineups</h2>
+          <p class="commish-section__sub">Set any manager's starters for an event — works even after the lineup lock. Re-run scoring afterward if the event has already been scored.</p>
+        </div>
+        <div class="commish-lineup-pickers">
+          <div class="commish-team-picker">
+            <label class="form-label" for="commishLineupTeamSelect">Team</label>
+            <select id="commishLineupTeamSelect" class="waiver-filter"></select>
+          </div>
+          <div class="commish-event-picker">
+            <label class="form-label" for="commishLineupEventSelect">Event</label>
+            <select id="commishLineupEventSelect" class="waiver-filter"></select>
+          </div>
+        </div>
+        <div class="commish-lineup-pane" id="commishLineupPane">
+          <p class="commish-empty">Pick a team and an event to edit their starters.</p>
         </div>
       </section>
 
@@ -118,7 +140,7 @@
   <script src="js/league-nav.js"></script>
   <script src="js/page-help-modal.js"></script>
   <script src="js/league-primer.js"></script>
-  <script src="js/commish-powers.js"></script>
+  <script src="js/commish-powers.js?v=1"></script>
 
 </body>
 </html>

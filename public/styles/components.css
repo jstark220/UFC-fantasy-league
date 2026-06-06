@@ -15777,6 +15777,56 @@ label .form-label__hint {
   margin-bottom: var(--space-4);
   max-width: 360px;
 }
+
+/* ---- Lineups tab: team+event pickers, starter count + save, toggles ---- */
+.commish-lineup-pickers { display: flex; flex-wrap: wrap; gap: var(--space-4); }
+.commish-lineup-pickers .commish-team-picker,
+.commish-lineup-pickers .commish-event-picker { flex: 1 1 240px; }
+.commish-lineup-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+.commish-lineup-count {
+  font-family: var(--font-display);
+  font-size: 18px;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
+}
+.commish-lineup-count--full { color: var(--accent-gold); }
+.commish-lineup-save { flex-shrink: 0; }
+
+.commish-lineup-row--starter {
+  border-left: 3px solid var(--accent-gold);
+  background: var(--accent-gold-subtle);
+}
+.commish-lineup-toggle {
+  margin-left: auto;
+  flex-shrink: 0;
+  min-width: 86px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: var(--text-caption);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.commish-lineup-toggle:hover:not(:disabled) { border-color: var(--accent-gold); color: var(--text-primary); }
+.commish-lineup-toggle--on { background: var(--accent-gold); border-color: var(--accent-gold); color: #0E0E10; }
+.commish-lineup-toggle:disabled { opacity: 0.4; cursor: default; }
+
+@media (max-width: 720px) {
+  .commish-lineup-pickers .commish-team-picker,
+  .commish-lineup-pickers .commish-event-picker { flex: 1 1 100%; max-width: none; }
+  .commish-lineup-toggle { min-width: 74px; }
+}
 .commish-roster-pane__title {
   margin: 0 0 var(--space-3);
   font-family: var(--font-display);
