@@ -259,17 +259,24 @@ function renderEventBanner() {
     ? selectedEvent.full_name.split(':')[1].trim()
     : '';
 
-  // Status: past / locked / open. Mirrors the gate logic on the lineup page.
-  const todayISO = new Date().toISOString().split('T')[0];
-  const isPast   = selectedEvent.event_date < todayISO;
+  // Status: final / live / open. "Final" = the event's current window has ended
+  // (Monday-4am-ET cutoff) OR it's marked completed — NOT a UTC date compare,
+  // which used to flip a live Saturday card to "Event final" the moment UTC
+  // ticked over to Sunday. Mirrors the lineup page.
+  const until = (typeof eventCurrentUntil === 'function') ? eventCurrentUntil(selectedEvent.event_date) : null;
+  const isFinal = !!selectedEvent.is_completed || !!(until && Date.now() >= until.getTime());
   const lockTimePassed = !!(selectedEvent.lineup_lock_time &&
                             new Date() >= new Date(selectedEvent.lineup_lock_time));
-  const isLocked = isPast || lockTimePassed;
 
   let statusLabel;
-  if (isPast)         statusLabel = '<span style="color: var(--accent-gold);">&#127942; Event final</span>';
-  else if (isLocked)  statusLabel = '<span style="color: var(--text-tertiary);">&#128274; Lineups locked</span>';
-  else                statusLabel = '<span style="color: #4ade80;">&#128275; Lineups open</span>';
+  if (isFinal) {
+    statusLabel = '<span style="color: var(--accent-gold);">&#127942; Event final</span>';
+  } else if (lockTimePassed) {
+    statusLabel = '<span class="lineup-live-dot"></span>' +
+                  '<span style="color: var(--accent-crimson); font-weight:700;">Live</span>';
+  } else {
+    statusLabel = '<span style="color: #4ade80;">&#128275; Lineups open</span>';
+  }
 
   // Event picker — only shown when there's more than one to choose from
   let pickerHtml = '';
