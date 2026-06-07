@@ -5284,15 +5284,30 @@ body {
 /* Individual fight row — three columns: red side | center divider | blue side.
    Each side is a clickable button (photo + name + rank/ownership). */
 .fight-row {
-  display: grid;
-  grid-template-columns: 1fr 110px 1fr;
-  align-items: center;
-  gap: var(--space-3);
   padding: var(--space-3) var(--space-2);
   border-bottom: 1px solid var(--border-subtle);
 }
 
 .fight-row:last-child { border-bottom: none; }
+
+/* Weight class + badge on their own centered line above the matchup, so they
+   don't eat the middle and squeeze the two names. */
+.fight-row__header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+  flex-wrap: wrap;
+}
+/* The matchup: red | tiny VS | blue. The center is small now that the weight
+   class moved to the header, so the reclaimed width goes to the two names. */
+.fight-row__bout {
+  display: grid;
+  grid-template-columns: 1fr 44px 1fr;
+  align-items: center;
+  gap: var(--space-2);
+}
 
 /* Each fighter side — full clickable area that opens the fighter modal */
 .fight-row__side {
@@ -5433,24 +5448,26 @@ body {
 }
 
 @media (max-width: 38em) {
-  .fight-row {
-    grid-template-columns: 1fr 80px 1fr;
-    gap: var(--space-2);
-    padding: var(--space-2) 0;
+  .fight-row { padding: var(--space-3) 0; }
+  .fight-row__bout {
+    grid-template-columns: 1fr 34px 1fr;
+    gap: var(--space-1);
   }
-  .fight-row__photo { width: 36px; height: 36px; }
-  .fight-row__side  { padding: 4px; gap: var(--space-2); }
+  .fight-row__photo { width: 34px; height: 34px; }
+  .fight-row__side  { padding: 3px; gap: var(--space-2); }
   .fight-row__name  { font-size: var(--text-caption); }
+  /* swap the full name for "F. Lastname" so it never clips. Descendant
+     selectors (higher specificity) so they win over the base
+     ".fight-row__name-abbr { display:none }" that lives later in the file. */
+  .fight-row .fight-row__name-full { display: none; }
+  .fight-row .fight-row__name-abbr { display: inline; }
 }
 
-/* Center column: badge (optional) + weight class + "vs" */
+/* Center column: now just the "VS" (weight/badge moved to the header). */
 .fight-row__center {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 2px;
-  flex-shrink: 0;
-  width: 90px;
+  justify-content: center;
 }
 
 .fight-row__badge {
@@ -5472,10 +5489,11 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-tertiary);
-  text-align: center;
-  line-height: 1.3;
-  max-width: 100px;
+  white-space: nowrap;
 }
+
+/* Full name on desktop, "F. Lastname" on mobile (swapped in the media query). */
+.fight-row__name-abbr { display: none; }
 
 .fight-row__vs {
   font-family: var(--font-display);

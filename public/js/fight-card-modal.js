@@ -115,6 +115,15 @@
     return '';
   }
 
+  // "Belal Muhammad" -> "B. Muhammad". Keeps a multi-word last name intact
+  // (everything after the first token). Used for the mobile name so it fits.
+  function abbrevName(name) {
+    if (!name) return '';
+    var parts = String(name).trim().split(/\s+/);
+    if (parts.length < 2) return name;
+    return parts[0].charAt(0).toUpperCase() + '. ' + parts.slice(1).join(' ');
+  }
+
   // Earned-fantasy-points chip shown once a bout is decided. Mirrors the
   // projection pill's shape (PROJ -> PTS) with a gold "final" treatment.
   function scoreChipHtml(pts) {
@@ -176,7 +185,11 @@
         photoHtml +
         '<div class="fight-row__text">' +
           '<span class="fight-row__name">' +
-            winnerMark + flagHtml + escapeHtml(fighter.name) +
+            winnerMark + flagHtml +
+            // Full name on desktop; "F. Lastname" on mobile so it never clips.
+            // CSS toggles which span shows at the card's mobile breakpoint.
+            '<span class="fight-row__name-full">' + escapeHtml(fighter.name) + '</span>' +
+            '<span class="fight-row__name-abbr">' + escapeHtml(abbrevName(fighter.name)) + '</span>' +
             ' ' + inlineRank(fighter) +
             (ownership ? ' ' + ownership : '') +
           '</span>' +
@@ -200,13 +213,18 @@
     var blueOpp = fight.red  && fight.red.name  ? fight.red.name  : '';
     return (
       '<div class="fight-row">' +
-        fighterSide(fight.red,  'fight-row__side--red',  redIsWinner,  redOpp,  eventName, opts) +
-        '<div class="fight-row__center">' +
+        // Weight class + badge on a full-width header line so they don't eat the
+        // middle and squeeze the two names.
+        '<div class="fight-row__header">' +
           badgeHtml +
           '<span class="fight-row__weight">' + escapeHtml(fight.weightClass) + '</span>' +
-          '<span class="fight-row__vs">vs</span>' +
         '</div>' +
-        fighterSide(fight.blue, 'fight-row__side--blue', blueIsWinner, blueOpp, eventName, opts) +
+        // The matchup: red | tiny VS | blue.
+        '<div class="fight-row__bout">' +
+          fighterSide(fight.red,  'fight-row__side--red',  redIsWinner,  redOpp,  eventName, opts) +
+          '<div class="fight-row__center"><span class="fight-row__vs">VS</span></div>' +
+          fighterSide(fight.blue, 'fight-row__side--blue', blueIsWinner, blueOpp, eventName, opts) +
+        '</div>' +
       '</div>'
     );
   }
