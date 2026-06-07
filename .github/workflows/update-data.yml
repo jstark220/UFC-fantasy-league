@@ -102,6 +102,18 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
+      # ---- Step 5.2: Backfill fighter W-L-D records from ESPN ----
+      # fetchFighters (Octagon) misses fighters who were added by the event
+      # pipeline because they fought, leaving them showing a bogus 0-0 in the UI.
+      # This refreshes every ESPN-linked fighter's overall record from ESPN's
+      # official data. Only writes rows whose record actually changed.
+      - name: Backfill fighter records (ESPN)
+        run: node backfillRecords.js --commit
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
       # ---- Step 5.5: Score events into standings ----
       # Turns the fight_results just ingested into fantasy points in the `scores`
       # table (only for fighters each team STARTED). The Vercel cron already does
