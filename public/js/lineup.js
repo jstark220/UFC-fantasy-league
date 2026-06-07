@@ -365,20 +365,16 @@ async function initLineup() {
 // are no events at all.
 function pickDefaultEvent(events) {
   if (!events || events.length === 0) return null;
-  // Window starts a day back (UTC) so a live Saturday card that's rolled past
-  // midnight UTC still counts as "in play"; "not completed" keeps it current
-  // until the event is actually over. Using event_date >= today (UTC) dropped a
-  // live card the moment UTC ticked over.
-  const cutoffISO = new Date(Date.now() - 86400000).toISOString().split('T')[0];
-  // events arrives sorted desc by event_date.
-  const upcoming = events.filter(function(e) {
-    return e.event_date >= cutoffISO && !e.is_completed;
+  // The "current" card is the soonest event still within its window — i.e. now
+  // is before its Monday-4am-ET cutoff (eventCurrentUntil). Keeps a live
+  // Saturday card current through the weekend and doesn't roll to the next card
+  // until Monday 4am ET. events arrives sorted DESC by event_date.
+  const now = Date.now();
+  const current = events.filter(function(e) {
+    const until = (typeof eventCurrentUntil === 'function') ? eventCurrentUntil(e.event_date) : null;
+    return until && now < until.getTime();
   });
-  if (upcoming.length > 0) {
-    // The latest of upcoming-by-desc-sort is at the END; the soonest is also
-    // useful but for "next event" semantics we want the EARLIEST upcoming.
-    return upcoming[upcoming.length - 1];
-  }
+  if (current.length > 0) return current[current.length - 1]; // soonest still-current
   return events[0]; // most recent past event
 }
 
@@ -438,8 +434,12 @@ function getEffectiveLockTime(event) {
 // Decide whether lineup edits should be blocked. True when the lock_time
 // has passed OR the event is in the past (which is always read-only).
 function recomputeLockStatus() {
-  const todayISO = new Date().toISOString().split('T')[0];
-  isPastEvent = !!(selectedEvent && selectedEvent.event_date < todayISO);
+  // "Past" = the event's current window has ended (4am ET on event_date + 2
+  // days = Monday for a Saturday card). A UTC date compare here used to flip a
+  // live Saturday card to "past/final" the moment UTC ticked over to Sunday.
+  var _until = (selectedEvent && typeof eventCurrentUntil === 'function')
+    ? eventCurrentUntil(selectedEvent.event_date) : null;
+  isPastEvent = !!(selectedEvent && _until && Date.now() >= _until.getTime());
   if (!selectedEvent) {
     isLocked = false;
   } else {
@@ -647,7 +647,7 @@ function renderEventBanner() {
   // interval kicks in for the live state so scores update without manual
   // page reloads.
   var statusLabel;
-  if (isPastEvent) {
+  if (isPastEvent || (selectedEvent && selectedEvent.is_completed)) {
     statusLabel = '<span style="color: var(--accent-gold);">&#127942; Event final</span>';
   } else if (isEventLiveNow()) {
     statusLabel = '<span class="lineup-live-dot"></span>' +
@@ -883,9 +883,11 @@ function clearLiveUpdate() {
 function isEventLiveNow() {
   if (!selectedEvent) return false;
   if (selectedEvent.is_completed) return false;
-  // Event is today?
-  const todayISO = new Date().toISOString().split('T')[0];
-  if (selectedEvent.event_date !== todayISO) return false;
+  // Still within the event's current window (before the Monday-4am-ET cutoff)?
+  // Using "event_date === today (UTC)" here meant a Saturday card stopped being
+  // "live" the moment UTC rolled to Sunday, even while it was still going.
+  const until = (typeof eventCurrentUntil === 'function') ? eventCurrentUntil(selectedEvent.event_date) : null;
+  if (until && Date.now() >= until.getTime()) return false;
   // Lock has passed (event started)?
   const lockTime = getEffectiveLockTime(selectedEvent);
   return lockTime != null && new Date() >= lockTime;

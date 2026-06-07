@@ -154,11 +154,15 @@ function wireFighterClicks() {
 // past event. Mirrors lineup.js so both pages land on the same default.
 function pickDefaultEvent(events) {
   if (events.length === 0) return null;
-  // Window starts a day back (UTC) so a live card past midnight UTC stays
-  // current; "not completed" keeps it the default until the event is over.
-  const cutoffISO = new Date(Date.now() - 86400000).toISOString().split('T')[0];
-  const upcoming = events.filter(function(e) { return e.event_date >= cutoffISO && !e.is_completed; });
-  if (upcoming.length > 0) return upcoming[upcoming.length - 1];
+  // Default to the soonest event still within its current window (now is before
+  // its Monday-4am-ET cutoff), so a live Saturday card stays the default through
+  // the weekend instead of jumping to the next card. events is sorted DESC.
+  const now = Date.now();
+  const current = events.filter(function(e) {
+    const until = (typeof eventCurrentUntil === 'function') ? eventCurrentUntil(e.event_date) : null;
+    return until && now < until.getTime();
+  });
+  if (current.length > 0) return current[current.length - 1];
   return events[0];
 }
 

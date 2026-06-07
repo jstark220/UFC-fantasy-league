@@ -180,6 +180,20 @@ function wp3amEtOnDay(relativeTo, dayDelta) {
   );
 }
 
+// When does an event stop being the "current/active" card? Per Jacob's rule:
+// 4am ET on event_date + 2 days — i.e. Monday 4am ET for a Saturday show. Until
+// then the event stays current (the site shouldn't roll to the next card or
+// mark it "final" just because the date passed in UTC). After it, the next
+// event takes over. event_date is the YYYY-MM-DD ET calendar day of the card.
+function eventCurrentUntil(eventDateStr) {
+  if (!eventDateStr) return null;
+  var p = String(eventDateStr).split('-');
+  // Anchor at noon UTC on the event day, add 2 days, return 4am ET that day.
+  var anchor = new Date(Date.UTC(Number(p[0]), Number(p[1]) - 1, Number(p[2]), 12, 0));
+  anchor.setUTCDate(anchor.getUTCDate() + 2);
+  return wpDateInEt(anchor.getUTCFullYear(), anchor.getUTCMonth() + 1, anchor.getUTCDate(), 4, 0);
+}
+
 // ----- Public API --------------------------------------------------------
 
 // Given an event Date (event_date is a Saturday in DB convention) and a

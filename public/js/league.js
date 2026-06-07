@@ -871,10 +871,11 @@ async function wireNextEventBanner() {
   // midnight UTC while it's still live stays in the window; we then skip any
   // completed events. Using event_date >= today (UTC) used to drop a live card
   // the moment UTC ticked over, jumping the site to the next event mid-card.
-  const cutoffISO = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  // Fetch a window starting a few days back so a card still inside its "current"
+  // window (until Monday 4am ET) is included even after its date passed; then
+  // pick the soonest event still within that window.
+  const cutoffISO = new Date(Date.now() - 3 * 86400000).toISOString().split('T')[0];
 
-  // Overrides can shift an event's date, so fetch a small window + this
-  // league's overrides, merge, then pick the soonest non-completed event in JS.
   const { data: rawEvents, error } = await supabaseClient
     .from('ufc_events')
     .select('id, name, full_name, event_date, venue, lineup_lock_time, is_completed')
@@ -887,9 +888,13 @@ async function wireNextEventBanner() {
   var overrides = await EventOverrides.fetchForLeague(supabaseClient, leagueIdRef, rawEvents.map(function(e){return e.id;}));
   var merged    = EventOverrides.mergeAll(rawEvents, overrides);
   var byDate    = function(a, b) { return String(a.event_date).localeCompare(String(b.event_date)); };
-  // Soonest event that isn't completed (a live card stays current). If they
-  // were all completed somehow, fall back to the soonest of any.
-  var upcoming = merged.filter(function(e) { return e.event_date && !e.is_completed; }).sort(byDate);
+  var nowMs     = Date.now();
+  // Soonest event still within its current window (now < Monday-4am-ET cutoff),
+  // so a live card stays current through the weekend. Fallback: soonest of any.
+  var upcoming = merged.filter(function(e) {
+    var until = (typeof eventCurrentUntil === 'function') ? eventCurrentUntil(e.event_date) : null;
+    return e.event_date && until && nowMs < until.getTime();
+  }).sort(byDate);
   var event = upcoming[0] || merged.slice().sort(byDate)[0];
   if (!event) return;
 
