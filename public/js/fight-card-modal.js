@@ -73,7 +73,11 @@
       .from('fight_results')
       .select(
         'id, fighter_a_id, fighter_b_id, weight_class, card_position, ' +
-        'fight_order, title_type, outcome, winner_id'
+        'fight_order, title_type, is_title_defense, outcome, winner_id, ' +
+        'end_round, end_time_seconds, ' +
+        // per-fighter stats so a decided bout can be scored client-side
+        'fighter_a_sig_strikes, fighter_a_takedowns, fighter_a_knockdowns, fighter_a_control_seconds, fighter_a_opponent_rank, ' +
+        'fighter_b_sig_strikes, fighter_b_takedowns, fighter_b_knockdowns, fighter_b_control_seconds, fighter_b_opponent_rank'
       )
       .eq('event_id', eventId);
     return res.data || [];
@@ -111,6 +115,25 @@
     return '';
   }
 
+  // Earned-fantasy-points chip shown once a bout is decided. Mirrors the
+  // projection pill's shape (PROJ -> PTS) with a gold "final" treatment.
+  function scoreChipHtml(pts) {
+    var val = (Math.round(pts * 100) / 100).toFixed(1);
+    return '<span class="fight-projection fight-projection--final" title="Fantasy points earned">' +
+             '<span class="fight-projection__label">PTS</span>' +
+             '<span class="fight-projection__val">' + val + '</span>' +
+           '</span>';
+  }
+
+  // This league's scoring_config, so decided bouts score by the league's own
+  // rules. Returns null on any miss (computeFighterScore then uses defaults).
+  async function fetchScoringConfig(leagueId) {
+    try {
+      var res = await supabaseClient.from('leagues').select('scoring_config').eq('id', leagueId).maybeSingle();
+      return (res && res.data) ? res.data.scoring_config : null;
+    } catch (e) { return null; }
+  }
+
   function fighterSide(fighter, sideMod, isWinner, opponentName, eventName, opts) {
     if (!fighter || !fighter.id) {
       return '<div class="fight-row__side ' + sideMod + '"><span class="fight-row__name">TBD</span></div>';
@@ -127,7 +150,12 @@
     var odds = (typeof FightOdds !== 'undefined' && opts.oddsMap[fighter.id])
       ? FightOdds.chipHtml(opts.oddsMap[fighter.id], { showBrand: true })
       : '';
-    var proj = (typeof Projections !== 'undefined' && opts.projMap[fighter.id])
+    // Once the bout is decided, show the EARNED fantasy score in place of the
+    // (now-irrelevant) projection.
+    var scorePts  = opts.scoreMap ? opts.scoreMap[fighter.id] : undefined;
+    var hasScore  = scorePts != null;
+    var scoreChip = hasScore ? scoreChipHtml(scorePts) : '';
+    var proj = (!hasScore && typeof Projections !== 'undefined' && opts.projMap[fighter.id])
       ? Projections.pillHtml(opts.projMap[fighter.id], {
           fighterId:    fighter.id,
           fighterName:  fighter.name,
@@ -154,6 +182,7 @@
           '</span>' +
           '<div class="fight-row__chips">' +
             (odds ? '<span class="fight-row__chip-row">' + odds + '</span>' : '') +
+            (scoreChip ? '<span class="fight-row__chip-row">' + scoreChip + '</span>' : '') +
             (proj ? '<span class="fight-row__chip-row">' + proj + '</span>' : '') +
           '</div>' +
         '</div>' +
@@ -290,8 +319,23 @@
     var promises = [fetchFighters(ids)];
     promises.push(typeof FightOdds   !== 'undefined' ? FightOdds.loadFightOdds(ids) : Promise.resolve({}));
     promises.push(typeof Projections !== 'undefined' ? Projections.load(ids)        : Promise.resolve({}));
+    // League scoring_config so a decided bout is scored with this league's rules
+    // (falls back to defaults when there's no league context / config).
+    promises.push(opts.leagueId ? fetchScoringConfig(opts.leagueId) : Promise.resolve(null));
     var results = await Promise.all(promises);
-    var fighterMap = results[0], oddsMap = results[1], projMap = results[2];
+    var fighterMap = results[0], oddsMap = results[1], projMap = results[2], scoringCfg = results[3];
+
+    // Once a fight is decided, compute each fighter's earned fantasy points so
+    // the row shows the SCORE in place of the now-irrelevant projection. Updates
+    // each time the modal is reopened as live stats come in.
+    var scoreMap = {};
+    if (typeof Scoring !== 'undefined') {
+      rawFights.forEach(function (f) {
+        if (!f.outcome) return; // not decided yet — keep the projection
+        if (f.fighter_a_id) scoreMap[f.fighter_a_id] = Scoring.computeFighterScore(f, true,  scoringCfg).total;
+        if (f.fighter_b_id) scoreMap[f.fighter_b_id] = Scoring.computeFighterScore(f, false, scoringCfg).total;
+      });
+    }
 
     var fights = shapeFights(rawFights, fighterMap);
 
@@ -309,6 +353,7 @@
     var rowOpts = {
       oddsMap:    oddsMap,
       projMap:    projMap,
+      scoreMap:   scoreMap,
       rosterIds:  opts.rosterIds  || null,
       starterIds: opts.starterIds || null
     };

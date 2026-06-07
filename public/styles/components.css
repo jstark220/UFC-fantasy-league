@@ -9877,6 +9877,15 @@ select.form-input option,
   opacity: 0.6;
   text-transform: lowercase;
 }
+/* "Final" treatment — gold, shown once a bout is decided and the projection is
+   replaced by the earned fantasy points. Same chip shape as the projection so
+   it inherits the responsive sizing. */
+.fight-projection--final {
+  background: var(--accent-gold-subtle);
+  border-color: rgba(212, 168, 75, 0.35);
+  color: var(--accent-gold);
+}
+.fight-projection--final .fight-projection__label { opacity: 0.85; }
 
 /* Larger badge used in the fighter modal where there's room for "Projected
    24.7 pts" with the word spelled out. */
