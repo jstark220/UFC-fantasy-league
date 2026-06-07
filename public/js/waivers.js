@@ -59,6 +59,13 @@ async function initWaivers() {
 
   document.getElementById('leagueLink').href = 'league.html?id=' + leagueId;
 
+  // Fetch events from a few days back (not just upcoming) so a JUST-COMPLETED
+  // card whose post-event waiver window is still open (through Tue 3am ET) stays
+  // a candidate anchor — see pickWaiverAnchorEvent. Anchoring only on the next
+  // non-completed event dropped the just-finished card's post-window the moment
+  // it was marked complete, flipping the page back to instant-add FA.
+  var eventWindowFrom = new Date(Date.now() - 5 * 86400000).toISOString().slice(0, 10);
+
   var results = await Promise.all([
     supabaseClient
       .from('leagues')
@@ -84,14 +91,14 @@ async function initWaivers() {
       .eq('league_id', leagueId)
       .order('priority')
       .order('submitted_at'),
-    // Next non-completed event drives the phase schedule. We fetch a small
-    // window rather than a single row because per-league overrides can
-    // shift dates around — we re-pick the soonest effective event in JS
-    // after merging overrides (see below).
+    // The waiver-anchor event drives the phase schedule. We fetch a window
+    // (recent past + upcoming) rather than a single row because (a) per-league
+    // overrides can shift dates around and (b) the just-completed card stays the
+    // anchor while its post-window is open. pickWaiverAnchorEvent chooses below.
     supabaseClient
       .from('ufc_events')
       .select('id, name, full_name, event_date, lineup_lock_time, is_completed')
-      .eq('is_completed', false)
+      .gte('event_date', eventWindowFrom)
       .order('event_date', { ascending: true })
       .limit(8),
     // Drop history — used for rolling waivers and the auto-drop bookkeeping
@@ -192,7 +199,7 @@ async function initWaivers() {
   var nextEventOverrides = await EventOverrides.fetchForLeague(supabaseClient, leagueId, rawNextEvents.map(function(e){return e.id;}));
   var nextEventsMerged   = EventOverrides.mergeAll(rawNextEvents, nextEventOverrides);
   nextEventsMerged.sort(function(a, b) { return String(a.event_date || '').localeCompare(String(b.event_date || '')); });
-  nextEvent = nextEventsMerged[0] || null;
+  nextEvent = pickWaiverAnchorEvent(nextEventsMerged);
   recomputePhaseState(dropsRes.data || []);
 
   document.title = 'Free Agency - ' + league.name;
@@ -250,6 +257,33 @@ async function initWaivers() {
   if (claimParam && allFighters.some(function(f) { return f.id === claimParam; })) {
     openClaimModal(claimParam);
   }
+}
+
+// ========================================================================
+// WAIVER ANCHOR EVENT
+// Pick the event whose waiver window is active. After a card, that's the
+// JUST-COMPLETED event until its post-window closes (Tue 3am ET) — NOT the
+// next upcoming event. Anchoring on the soonest non-completed event dropped
+// the just-finished card's post-window the moment it was marked complete,
+// reverting the page to instant-add FA and orphaning pending claims.
+// `events` arrives sorted ascending by event_date (recent past + upcoming).
+// ========================================================================
+function pickWaiverAnchorEvent(events) {
+  if (!events || !events.length) return null;
+  var now = Date.now();
+  // Most recent event whose POST window is open right now:
+  // prelim lock (postOpen) <= now < Tue 3am ET (postClose).
+  var postActive = events
+    .map(function(e) { return { e: e, c: getEventCutoffs(e.event_date, e.lineup_lock_time) }; })
+    .filter(function(x) { return now >= x.c.postOpen.getTime() && now < x.c.postClose.getTime(); })
+    .sort(function(a, b) { return String(b.e.event_date).localeCompare(String(a.e.event_date)); });
+  if (postActive.length) return postActive[0].e;
+  // Otherwise the soonest UPCOMING (non-completed) event — drives the
+  // pre-window / FA schedule. Fallback to the latest known event if all done.
+  var upcoming = events
+    .filter(function(e) { return !e.is_completed; })
+    .sort(function(a, b) { return String(a.event_date).localeCompare(String(b.event_date)); });
+  return upcoming[0] || events[events.length - 1];
 }
 
 // ========================================================================

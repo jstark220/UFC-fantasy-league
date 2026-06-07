@@ -124,12 +124,26 @@ const log = (...a) => console.log(...a);
   log(`\n=== WAIVER PROCESSOR ${COMMIT ? '(COMMIT — WILL WRITE)' : '(DRY RUN — no writes)'} ===`);
   log('now:', new Date().toISOString(), '\n');
 
-  // Soonest non-completed event drives the cutoffs (overrides not applied here).
+  // The waiver-anchor event drives the cutoffs. After a card, the JUST-COMPLETED
+  // event stays the anchor until its post-window closes (Tue 3am ET) — NOT the
+  // next upcoming event. Anchoring only on the soonest non-completed event
+  // orphaned the just-finished card's post-window claims (they never processed).
+  // Fetch a window (recent past + upcoming) and pick in JS. Overrides not applied.
+  const windowFrom = new Date(Date.now() - 5 * 86400000).toISOString().slice(0, 10);
   const { data: evs } = await supabase.from('ufc_events')
-    .select('id, name, full_name, event_date, is_completed, lineup_lock_time').eq('is_completed', false)
-    .order('event_date', { ascending: true }).limit(1);
-  const ev = evs && evs[0];
-  if (!ev) { log('No upcoming event; nothing to anchor cutoffs on.'); return; }
+    .select('id, name, full_name, event_date, is_completed, lineup_lock_time')
+    .gte('event_date', windowFrom)
+    .order('event_date', { ascending: true }).limit(8);
+  if (!evs || !evs.length) { log('No events in window; nothing to anchor cutoffs on.'); return; }
+  const nowMs = Date.now();
+  // Most recent event whose POST window is open: postOpen (prelim lock) <= now < postClose (Tue 3am).
+  const postActive = evs
+    .map((e) => ({ e, c: cutoffs(e.event_date, e.lineup_lock_time) }))
+    .filter((x) => nowMs >= x.c.postOpen && nowMs < x.c.postClose)
+    .sort((a, b) => String(b.e.event_date).localeCompare(String(a.e.event_date)));
+  const ev = postActive.length
+    ? postActive[0].e
+    : (evs.filter((e) => !e.is_completed).sort((a, b) => String(a.event_date).localeCompare(String(b.event_date)))[0] || evs[evs.length - 1]);
   const cut = cutoffs(ev.event_date, ev.lineup_lock_time);
   log(`event: ${ev.name} (${ev.event_date})  preClose=${new Date(cut.preClose).toISOString()}  postClose=${new Date(cut.postClose).toISOString()}\n`);
 
