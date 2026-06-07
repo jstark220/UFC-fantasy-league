@@ -5284,7 +5284,13 @@ body {
 /* Individual fight row — three columns: red side | center divider | blue side.
    Each side is a clickable button (photo + name + rank/ownership). */
 .fight-row {
-  padding: var(--space-3) var(--space-2);
+  /* display:block overrides the legacy ".fight-row { display:flex }" earlier in
+     this file (same selector, only the fight-card modal uses it). Without it the
+     header + bout became flex items side-by-side (header shoved left on desktop,
+     big-gap wrap on mobile) so nothing was centered. Block stacks the centered
+     header over the centered bout. */
+  display: block;
+  padding: var(--space-4) var(--space-5);
   border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -5304,7 +5310,9 @@ body {
    class moved to the header, so the reclaimed width goes to the two names. */
 .fight-row__bout {
   display: grid;
-  grid-template-columns: 1fr 44px 1fr;
+  /* minmax(0, 1fr) (not 1fr) so a long nowrap name ellipsis-clips inside its
+     own column instead of widening the track and pushing the VS off-center. */
+  grid-template-columns: minmax(0, 1fr) 44px minmax(0, 1fr);
   align-items: center;
   gap: var(--space-2);
 }
@@ -5450,11 +5458,13 @@ body {
 @media (max-width: 38em) {
   .fight-row { padding: var(--space-3) 0; }
   .fight-row__bout {
-    grid-template-columns: 1fr 34px 1fr;
-    gap: var(--space-1);
+    grid-template-columns: minmax(0, 1fr) 28px minmax(0, 1fr);
+    gap: 4px;
   }
-  .fight-row__photo { width: 34px; height: 34px; }
-  .fight-row__side  { padding: 3px; gap: var(--space-2); }
+  /* Smaller photo + tighter gaps so even the longest abbreviated name
+     (e.g. "E. Shahbazyan #11") fits without clipping. */
+  .fight-row__photo { width: 28px; height: 28px; }
+  .fight-row__side  { padding: 2px; gap: 5px; }
   .fight-row__name  { font-size: var(--text-caption); }
   /* swap the full name for "F. Lastname" so it never clips. Descendant
      selectors (higher specificity) so they win over the base
