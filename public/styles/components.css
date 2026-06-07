@@ -5323,6 +5323,11 @@ body {
   align-items: center;
   gap: var(--space-3);
   min-width: 0;
+  /* appearance:none is required or iOS Safari refuses to paint box-shadow on a
+     <button> (native form-control chrome) — which hid the starter gold ring on
+     phones. */
+  -webkit-appearance: none;
+  appearance: none;
   background: none;
   border: none;
   padding: var(--space-2);
