@@ -127,6 +127,9 @@ db-backups/
 # ============================================================================
 # PROJECT SPECIFIC
 # ============================================================================
+# Private local notes — never published or pushed. Keep local.
+private/
+
 # Scratch work folder for experiments
 scratch/
 sandbox/
