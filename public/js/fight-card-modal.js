@@ -109,9 +109,13 @@
     return '<span class="fight-row__rank-inline fight-row__rank-inline--unranked">NR</span>';
   }
 
-  function ownershipPill(fid, rosterIds, starterIds) {
-    if (starterIds && starterIds[fid]) return '<span class="fight-row__pill fight-row__pill--starter">STARTER</span>';
-    if (rosterIds  && rosterIds[fid])  return '<span class="fight-row__pill fight-row__pill--yours">YOURS</span>';
+  // Ownership relative to the viewer: 'starter' (in their locked lineup),
+  // 'yours' (rostered but not started), or ''. Drives a highlight on the whole
+  // fighter cell (a gold ring) rather than a trailing text pill that long names
+  // would clip off.
+  function ownershipKind(fid, rosterIds, starterIds) {
+    if (starterIds && starterIds[fid]) return 'starter';
+    if (rosterIds  && rosterIds[fid])  return 'yours';
     return '';
   }
 
@@ -172,16 +176,20 @@
           eventName:    eventName || ''
         })
       : '';
-    var ownership = ownershipPill(fighter.id, opts.rosterIds, opts.starterIds);
+    // Roster/starter status highlights the whole fighter cell (a gold ring on
+    // the side, via this class) instead of a trailing text pill that long names
+    // clipped off on mobile.
+    var ownKind  = ownershipKind(fighter.id, opts.rosterIds, opts.starterIds);
+    var ownClass = ownKind ? ' fight-row__side--' + ownKind : '';
 
     // New uniform layout:
-    //   Line 1: name + rank + (optional) ownership pill, inline
+    //   Line 1: name + rank, inline (ownership now shown by the cell highlight)
     //   Lines 2+: chip column — odds chip on top, projection pill beneath
     //
     // Both chips always stack vertically in the same order, so every row
     // reads with the same rhythm regardless of which chips are present.
     return (
-      '<button class="fight-row__side ' + sideMod + '" data-open-fighter="' + fighter.id + '" type="button">' +
+      '<button class="fight-row__side ' + sideMod + ownClass + '" data-open-fighter="' + fighter.id + '" type="button">' +
         photoHtml +
         '<div class="fight-row__text">' +
           '<span class="fight-row__name">' +
@@ -191,7 +199,6 @@
             '<span class="fight-row__name-full">' + escapeHtml(fighter.name) + '</span>' +
             '<span class="fight-row__name-abbr">' + escapeHtml(abbrevName(fighter.name)) + '</span>' +
             ' ' + inlineRank(fighter) +
-            (ownership ? ' ' + ownership : '') +
           '</span>' +
           '<div class="fight-row__chips">' +
             (odds ? '<span class="fight-row__chip-row">' + odds + '</span>' : '') +

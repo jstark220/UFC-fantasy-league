@@ -5339,6 +5339,20 @@ body {
 .fight-row__side--red  { flex-direction: row-reverse; text-align: right; }
 .fight-row__side--blue { flex-direction: row;        text-align: left;  }
 
+/* Owned-fighter highlight — replaces the old "STARTER"/"YOURS" text pill that a
+   long name would clip off on mobile. The viewer's starter gets a gold ring +
+   faint fill + gold name; a fighter merely on their roster gets a fainter ring.
+   Lives on the whole cell, so it can never be clipped by the name. */
+.fight-row__side--starter {
+  background: rgba(212, 175, 55, 0.10);
+  box-shadow: inset 0 0 0 1.5px rgba(212, 175, 55, 0.55);
+}
+.fight-row__side--starter:hover { background: rgba(212, 175, 55, 0.16); }
+.fight-row__side--starter .fight-row__name { color: var(--accent-gold); }
+.fight-row__side--yours {
+  box-shadow: inset 0 0 0 1px rgba(212, 175, 55, 0.28);
+}
+
 .fight-row__photo {
   width: 48px;
   height: 48px;
