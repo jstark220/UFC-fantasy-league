@@ -170,14 +170,23 @@ async function fetchEventFights(espnEventId) {
       });
     }
 
+    // A real title fight is ALWAYS scheduled for 5 rounds. ESPN's "title" type
+    // text has over-fired on 3-round prospect / Road-to-UFC bouts, handing out
+    // phantom divisional-title bonuses — so only accept a title tag on a known
+    // 5-rounder. (When ESPN omits the round count we keep the tag rather than
+    // risk dropping a real title fight.)
+    const scheduledRounds = c.format && c.format.regulation ? c.format.regulation.periods : null;
+    let titleType = titleTypeFromTypes(c.types);
+    if (titleType !== 'none' && scheduledRounds != null && scheduledRounds < 5) titleType = 'none';
+
     fights.push({
       espnCompetitionId: String(c.id),
       matchNumber: c.matchNumber,
       fightOrder: c.matchNumber,
       cardPosition: cardPositionFromMatchNumber(c.matchNumber),
       weightClass: mapWeightClass(c.type && c.type.text),
-      rounds: c.format && c.format.regulation ? c.format.regulation.periods : null,
-      titleType: titleTypeFromTypes(c.types),
+      rounds: scheduledRounds,
+      titleType: titleType,
       completed,
       method,
       endRound: completed && status ? status.period : null,
