@@ -573,10 +573,11 @@ async function runLazyProcessor() {
     await processClaimBatch(rollingByFighter[fid], rosterMap);
   }
 
-  // ---- Step 2: Wednesday 3am ET auto-drop ----
-  if (now.getTime() >= cutoffs.autoDrop.getTime()) {
-    await runAutoDropIfNeeded(cutoffs);
-  }
+  // ---- Wednesday 3am ET auto-drop now runs SERVER-SIDE ----
+  // The trim-back-to-base sweep moved into scripts/processWaivers.js (the cron)
+  // so it runs reliably instead of only when a commissioner opens this page.
+  // (Old client runAutoDropIfNeeded removed — it also had a stale "+3" drop
+  // assumption.)
 
   // Refresh local state if anything was processed
   if (preClaimsToRun.length || postClaimsToRun.length || Object.keys(rollingByFighter).length) {
@@ -854,63 +855,11 @@ async function rejectClaim(claim, reason) {
   return res;
 }
 
-// ========================================================================
-// AUTO-DROP — runs on/after Wed 3am ET. For each manager: if they've made
-// fewer than 3 manual drops since the most recent cap-expansion (Thu 3am
-// ET event week), drop their most-recently-added fighters until roster
-// size is back to ROSTER_SIZE_BASE. Each forced drop is logged with source='auto'.
-//
-// Idempotent: skipped for any manager who already has source='auto' drops
-// recorded since this cycle's autoDrop time.
-// ========================================================================
-async function runAutoDropIfNeeded(cutoffs) {
-  var rosterMap = await loadFreshRosters();
-  var dropsRes  = await supabaseClient
-    .from('roster_drops')
-    .select('league_member_id, source, dropped_at')
-    .eq('league_id', leagueId)
-    .gte('dropped_at', cutoffs.capExpand.toISOString());
-  var drops = dropsRes.data || [];
-
-  // Per-manager tally: # manual drops since cap expansion, # auto drops since this cycle's autoDrop time
-  var manualSince = {};
-  var autoSince   = {};
-  drops.forEach(function(d) {
-    var t = new Date(d.dropped_at).getTime();
-    if (d.source === 'manual' && t >= cutoffs.capExpand.getTime()) {
-      manualSince[d.league_member_id] = (manualSince[d.league_member_id] || 0) + 1;
-    }
-    if (d.source === 'auto' && t >= cutoffs.autoDrop.getTime()) {
-      autoSince[d.league_member_id] = (autoSince[d.league_member_id] || 0) + 1;
-    }
-  });
-
-  for (var i = 0; i < members.length; i++) {
-    var m = members[i];
-    if (autoSince[m.id]) continue;                      // already auto-dropped this cycle
-    if ((manualSince[m.id] || 0) >= 3) continue;        // dropped enough manually
-    var roster = rosterMap[m.id] || [];
-    if (roster.length <= ROSTER_SIZE_BASE) continue;    // already compliant
-
-    // Drop most recently added until size = ROSTER_SIZE_BASE
-    roster.sort(function(a, b) {
-      return new Date(b.acquired_at || 0).getTime() - new Date(a.acquired_at || 0).getTime();
-    });
-    var toDrop = roster.slice(0, roster.length - ROSTER_SIZE_BASE);
-    for (var j = 0; j < toDrop.length; j++) {
-      await supabaseClient.from('rosters').delete()
-        .eq('league_id', leagueId)
-        .eq('league_member_id', m.id)
-        .eq('fighter_id', toDrop[j].fighter_id);
-      await supabaseClient.from('roster_drops').insert({
-        league_id: leagueId,
-        league_member_id: m.id,
-        fighter_id: toDrop[j].fighter_id,
-        source: 'auto'
-      });
-    }
-  }
-}
+// AUTO-DROP — moved server-side to scripts/processWaivers.js (runs in the cron
+// at the Wed 3am ET deadline, trimming the most-recently-acquired fighters back
+// to the base cap). It used to live here as runAutoDropIfNeeded() but only fired
+// when a commissioner opened this page, and carried a stale "+3 manual drops"
+// assumption. Removed so there's a single, reliable source of truth.
 
 // ========================================================================
 // TABS

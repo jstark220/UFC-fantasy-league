@@ -82,7 +82,47 @@ function cutoffs(eventDateStr, lockTime) {
     postClose:et3amOnEventDelta(eventDateStr, +3),  // Tue 3am ET
     capExpand:et3amOnEventDelta(eventDateStr, -2),  // Thu 3am ET
     capRevert:sun3am,                               // Sun 3am ET (cap revert stays here)
+    autoDrop: et3amOnEventDelta(eventDateStr, +4),  // Wed 3am ET (trim back to base cap)
   };
+}
+
+// Wednesday auto-drop: trim every roster back to its base cap by removing the
+// MOST-RECENTLY-ACQUIRED fighters (LIFO) — the same rule the client used, now
+// server-side so it runs reliably from the cron instead of needing a commish to
+// open the page. Count-based only (mirrors the client): a roster that was valid
+// before the expansion add stays valid after trimming the newest ones.
+async function runAutoDrop(supabase, leagues, commit, log) {
+  let dropped = 0;
+  for (const league of leagues) {
+    const base = (typeof league.roster_size === 'number') ? league.roster_size : ROSTER_SIZE_BASE;
+    const { data: rosters } = await supabase.from('rosters')
+      .select('league_member_id, fighter_id, acquired_at')
+      .eq('league_id', league.id);
+    if (!rosters || !rosters.length) continue;
+    const names = {};
+    const { data: fs } = await supabase.from('fighters').select('id, name').in('id', [...new Set(rosters.map(r => r.fighter_id))]);
+    (fs || []).forEach(f => { names[f.id] = f.name; });
+    const byMember = {};
+    rosters.forEach(r => { (byMember[r.league_member_id] = byMember[r.league_member_id] || []).push(r); });
+    for (const mid of Object.keys(byMember)) {
+      const list = byMember[mid].sort((a, b) => new Date(b.acquired_at || 0) - new Date(a.acquired_at || 0));
+      const excess = list.length - base;
+      if (excess <= 0) continue;                 // already at/under the base cap
+      const toDrop = list.slice(0, excess);      // the most-recently-acquired
+      for (const r of toDrop) {
+        log(`  ⛔ ${league.name}: auto-drop ${names[r.fighter_id] || r.fighter_id} (newest add, ${r.acquired_at})`);
+        if (commit) {
+          await supabase.from('rosters').delete()
+            .eq('league_id', league.id).eq('league_member_id', mid).eq('fighter_id', r.fighter_id);
+          await supabase.from('roster_drops').insert({
+            league_id: league.id, league_member_id: mid, fighter_id: r.fighter_id, source: 'auto',
+          });
+        }
+        dropped++;
+      }
+    }
+  }
+  return dropped;
 }
 function rollingClear(droppedAtMs) {
   // 3am ET on (drop day + 2). Compute via the same ET helper using the drop's ET date.
@@ -283,6 +323,27 @@ const log = (...a) => console.log(...a);
         await supabase.from('league_members').update({ waiver_priority: winners[mid] }).eq('id', mid);
       }
     }
+  }
+
+  // ---- Wednesday auto-drop: trim over-cap rosters back to base ----
+  // Fires once the most-recent past card's auto-drop deadline (Wed 3am ET, i.e.
+  // event + 4 days) has passed, but NOT while we're inside the next card's
+  // expansion window (capExpand..capRevert) — otherwise we'd trim fighters that
+  // were just added for the upcoming card. Runs across ALL leagues (independent
+  // of pending claims, which the loop above skips when there are none).
+  const inExpansion = evs.some(e => { const c = cutoffs(e.event_date, e.lineup_lock_time); return now >= c.capExpand && now < c.capRevert; });
+  const pastEvents = evs
+    .filter(e => now >= cutoffs(e.event_date, e.lineup_lock_time).postOpen)   // prelim lock passed = card happened
+    .sort((a, b) => String(b.event_date).localeCompare(String(a.event_date)));
+  const recentPast = pastEvents[0];
+  const autoDropDue = !!recentPast && !inExpansion
+    && now >= cutoffs(recentPast.event_date, recentPast.lineup_lock_time).autoDrop;
+  if (autoDropDue) {
+    log(`\n--- Auto-drop to base cap (ref ${recentPast.name} ${recentPast.event_date}; Wed 3am ET deadline passed) ---`);
+    const n = await runAutoDrop(supabase, leagues, COMMIT, log);
+    log(`  auto-drop ${COMMIT ? 'removed' : 'would remove'} ${n} fighter(s).`);
+  } else {
+    log(`\n(auto-drop not due: ${inExpansion ? 'inside an expansion window' : recentPast ? 'before the Wed 3am ET deadline' : 'no recent event'})`);
   }
 
   log(`\n=== ${COMMIT ? 'COMMITTED. Approved ' + grandApproved + ' claim(s).' : 'DRY RUN complete. Re-run with --commit to apply.'} ===\n`);
