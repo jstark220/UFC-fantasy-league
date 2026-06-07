@@ -303,11 +303,27 @@ function renderEventBanner() {
         '<p class="this-week-card__name">' + escapeHtml(selectedEvent.name) + '</p>' +
         '<p class="this-week-card__date">' + escapeHtml(dateStr) + venueStr + '</p>' +
         (matchup ? '<p class="this-week-card__matchup">' + escapeHtml(matchup) + '</p>' : '') +
+        '<button class="btn-ghost fight-card-btn" id="lineupsViewCardBtn" type="button" style="margin-top: var(--space-3); display: inline-flex; align-items: center; gap: 7px;">' +
+          '<span class="fight-card-btn__icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h10M7 13h10M7 17h6"/></svg></span>' +
+          '<span class="fight-card-btn__label">View fight card</span>' +
+          '<span class="fight-card-btn__arrow" aria-hidden="true">&rarr;</span>' +
+        '</button>' +
       '</div>' +
       '<div class="this-week-card__right">' +
         '<p style="font-size: 14px; font-weight: 700; letter-spacing: 0.04em;">' + statusLabel + '</p>' +
       '</div>' +
     '</div>';
+
+  // "View fight card" — opens the shared fight-card modal for this event.
+  // Pass the viewer's own starters so the modal highlights them on the card.
+  const cardBtn = document.getElementById('lineupsViewCardBtn');
+  if (cardBtn && typeof FightCardModal !== 'undefined') {
+    cardBtn.addEventListener('click', function() {
+      const myStarterIds = {};
+      ((myMember && selectionsByMember[myMember.id]) || []).forEach(function(fid) { myStarterIds[fid] = true; });
+      FightCardModal.show(selectedEvent.id, { leagueId: leagueId, starterIds: myStarterIds });
+    });
+  }
 
   // Wire the picker — re-loads event data and re-renders both regions.
   const pickEl = document.getElementById('lineupsEventSelect');
