@@ -79,7 +79,7 @@ async function initLineups() {
   const [leagueRes, membersRes, eventsRes] = await Promise.all([
     supabaseClient.from('leagues').select('id, name, scoring_config').eq('id', leagueId).single(),
     supabaseClient.from('league_members').select('id, user_id, team_name, is_commissioner').eq('league_id', leagueId),
-    supabaseClient.from('ufc_events').select('id, name, full_name, event_date, venue, lineup_lock_time').order('event_date', { ascending: false })
+    supabaseClient.from('ufc_events').select('id, name, full_name, event_date, venue, lineup_lock_time, is_completed').order('event_date', { ascending: false })
   ]);
 
   if (leagueRes.error || !leagueRes.data) {
@@ -154,8 +154,10 @@ function wireFighterClicks() {
 // past event. Mirrors lineup.js so both pages land on the same default.
 function pickDefaultEvent(events) {
   if (events.length === 0) return null;
-  const todayISO = new Date().toISOString().split('T')[0];
-  const upcoming = events.filter(function(e) { return e.event_date >= todayISO; });
+  // Window starts a day back (UTC) so a live card past midnight UTC stays
+  // current; "not completed" keeps it the default until the event is over.
+  const cutoffISO = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+  const upcoming = events.filter(function(e) { return e.event_date >= cutoffISO && !e.is_completed; });
   if (upcoming.length > 0) return upcoming[upcoming.length - 1];
   return events[0];
 }

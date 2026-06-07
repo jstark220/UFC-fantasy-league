@@ -866,18 +866,19 @@ function _lastNameOf(fullName) {
 var _nextEventInterval = null;
 
 async function wireNextEventBanner() {
-  const todayISO = new Date().toISOString().split('T')[0];
+  // "Current" event = the soonest one that hasn't COMPLETED yet. The window
+  // starts one day back (UTC) so a Saturday card that's already rolled past
+  // midnight UTC while it's still live stays in the window; we then skip any
+  // completed events. Using event_date >= today (UTC) used to drop a live card
+  // the moment UTC ticked over, jumping the site to the next event mid-card.
+  const cutoffISO = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-  // Fetch the soonest upcoming event. We have to be careful here: this
-  // league might have an override that bumps an event's date EARLIER than
-  // the soonest one in ufc_events, OR bumps the soonest event LATER than
-  // it would otherwise be. So we can't just `.gte(today)` on ufc_events.
-  // Strategy: fetch a small recent window of events + this league's
-  // overrides, merge, then pick the soonest effective upcoming event in JS.
+  // Overrides can shift an event's date, so fetch a small window + this
+  // league's overrides, merge, then pick the soonest non-completed event in JS.
   const { data: rawEvents, error } = await supabaseClient
     .from('ufc_events')
-    .select('id, name, full_name, event_date, venue, lineup_lock_time')
-    .gte('event_date', todayISO)
+    .select('id, name, full_name, event_date, venue, lineup_lock_time, is_completed')
+    .gte('event_date', cutoffISO)
     .order('event_date', { ascending: true })
     .limit(8);
 
@@ -885,11 +886,11 @@ async function wireNextEventBanner() {
 
   var overrides = await EventOverrides.fetchForLeague(supabaseClient, leagueIdRef, rawEvents.map(function(e){return e.id;}));
   var merged    = EventOverrides.mergeAll(rawEvents, overrides);
-  // Pick the soonest effective event whose date is today or later. If every
-  // event got overridden into the past, fall back to the soonest of any.
-  var upcoming = merged.filter(function(e) { return e.event_date && e.event_date >= todayISO; });
-  upcoming.sort(function(a, b) { return String(a.event_date).localeCompare(String(b.event_date)); });
-  var event = upcoming[0] || merged[0];
+  var byDate    = function(a, b) { return String(a.event_date).localeCompare(String(b.event_date)); };
+  // Soonest event that isn't completed (a live card stays current). If they
+  // were all completed somehow, fall back to the soonest of any.
+  var upcoming = merged.filter(function(e) { return e.event_date && !e.is_completed; }).sort(byDate);
+  var event = upcoming[0] || merged.slice().sort(byDate)[0];
   if (!event) return;
 
   // Headline name — Fight Nights show as "UFC <City>" instead of the
@@ -1121,7 +1122,10 @@ async function loadFreeAgents() {
   // roster_drops (for the per-fighter rolling-waiver check) in parallel.
   // The next-event date drives whether we're in WINDOW_PRE / WINDOW_POST
   // (in which case ALL adds are claims) or in plain free agency.
-  const todayISO = new Date().toISOString().split('T')[0];
+  // Window for the "current" event (drives waiver phase math): one day back so
+  // a live card that's rolled past midnight UTC stays current; we then prefer
+  // the soonest non-completed event below.
+  const eventCutoffISO = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
   const [rostersRes, fightersRes, nextEventRes, dropsRes] = await Promise.all([
     supabaseClient
       .from('rosters')
@@ -1139,8 +1143,8 @@ async function loadFreeAgents() {
     // isn't enough.
     supabaseClient
       .from('ufc_events')
-      .select('id, event_date')
-      .gte('event_date', todayISO)
+      .select('id, event_date, is_completed')
+      .gte('event_date', eventCutoffISO)
       .order('event_date', { ascending: true })
       .limit(8),
     supabaseClient
@@ -1189,7 +1193,7 @@ async function loadFreeAgents() {
   var nextEventOverrides = await EventOverrides.fetchForLeague(supabaseClient, leagueIdRef, rawNextEvents.map(function(e){return e.id;}));
   var nextEventsMerged   = EventOverrides.mergeAll(rawNextEvents, nextEventOverrides);
   nextEventsMerged = nextEventsMerged
-    .filter(function(e) { return e.event_date && e.event_date >= todayISO; })
+    .filter(function(e) { return e.event_date && !e.is_completed; })
     .sort(function(a, b) { return String(a.event_date).localeCompare(String(b.event_date)); });
   const nextEventDate = nextEventsMerged[0] ? nextEventsMerged[0].event_date : null;
   const phaseInfo = (typeof getWaiverPhase === 'function')

@@ -96,7 +96,11 @@ async function initDashboard() {
     supabaseClient
       .from('ufc_events')
       .select('id, name, event_date, venue, lineup_lock_time')
-      .gte('event_date', todayISO)
+      // Soonest event that isn't completed. The window starts a day back (UTC)
+      // so a live Saturday card that's rolled past midnight UTC stays current
+      // instead of the site jumping to the next event mid-card.
+      .gte('event_date', new Date(Date.now() - 86400000).toISOString().slice(0, 10))
+      .eq('is_completed', false)
       .order('event_date', { ascending: true })
       .limit(1)
       .maybeSingle()
@@ -420,11 +424,13 @@ async function loadNextEventTiles() {
   var lockEl    = document.getElementById('statLineupLock');
   var welcomeEl = document.getElementById('welcomeSub');
 
-  var todayISO = new Date().toISOString().slice(0, 10);
+  // Soonest event that isn't completed (window starts a day back so a live
+  // card past midnight UTC stays current).
   var res = await supabaseClient
     .from('ufc_events')
     .select('id, name, event_date, venue, lineup_lock_time')
-    .gte('event_date', todayISO)
+    .gte('event_date', new Date(Date.now() - 86400000).toISOString().slice(0, 10))
+    .eq('is_completed', false)
     .order('event_date', { ascending: true })
     .limit(1)
     .maybeSingle();

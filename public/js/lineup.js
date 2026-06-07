@@ -365,11 +365,14 @@ async function initLineup() {
 // are no events at all.
 function pickDefaultEvent(events) {
   if (!events || events.length === 0) return null;
-  const todayISO = new Date().toISOString().split('T')[0];
-  // events arrives sorted desc by event_date — find the latest one that's
-  // either future or today AND not completed (i.e., still in play).
+  // Window starts a day back (UTC) so a live Saturday card that's rolled past
+  // midnight UTC still counts as "in play"; "not completed" keeps it current
+  // until the event is actually over. Using event_date >= today (UTC) dropped a
+  // live card the moment UTC ticked over.
+  const cutoffISO = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+  // events arrives sorted desc by event_date.
   const upcoming = events.filter(function(e) {
-    return e.event_date >= todayISO && !e.is_completed;
+    return e.event_date >= cutoffISO && !e.is_completed;
   });
   if (upcoming.length > 0) {
     // The latest of upcoming-by-desc-sort is at the END; the soonest is also
