@@ -260,7 +260,7 @@ async function initWaivers() {
 function recomputePhaseState(drops) {
   var now = new Date();
   var eventDate = nextEvent ? nextEvent.event_date : null;
-  phaseInfo  = getWaiverPhase(now, eventDate);
+  phaseInfo  = getWaiverPhase(now, eventDate, nextEvent ? nextEvent.lineup_lock_time : null);
   rosterCap  = getRosterCap(now, eventDate);
 
   // Build a map of (fighter_id) → most recent drop row. `drops` arrives
@@ -500,7 +500,7 @@ async function runLazyProcessor() {
   if (!nextEvent) return;
 
   var now      = new Date();
-  var cutoffs  = getEventCutoffs(nextEvent.event_date);
+  var cutoffs  = getEventCutoffs(nextEvent.event_date, nextEvent.lineup_lock_time);
   var rosterMap = await loadFreshRosters();
 
   // ---- Step 1: window claims that have passed their close time ----
@@ -554,7 +554,7 @@ async function runLazyProcessor() {
 // lazy processor uses, but exposed for the My Claims UI.
 function computeClaimProcessTime(claim) {
   if (!nextEvent) return null;
-  var cutoffs = getEventCutoffs(nextEvent.event_date);
+  var cutoffs = getEventCutoffs(nextEvent.event_date, nextEvent.lineup_lock_time);
   var t = new Date(claim.submitted_at).getTime();
   if (t >= cutoffs.preOpen.getTime()  && t < cutoffs.preClose.getTime())  return cutoffs.preClose;
   if (t >= cutoffs.postOpen.getTime() && t < cutoffs.postClose.getTime()) return cutoffs.postClose;

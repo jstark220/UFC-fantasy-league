@@ -7,7 +7,8 @@
 // Phases relative to the next event_date (a Saturday):
 //
 //   WINDOW_PRE   — Thu 3am ET (event week)        → Fri 3am ET
-//   WINDOW_POST  — Sun 3am ET (after event)       → Tue 3am ET
+//   WINDOW_POST  — prelims start (lineup lock)     → Tue 3am ET
+//                  (falls back to Sun 3am ET if the event has no lock time)
 //   FA           — anywhere else
 //
 // Roster cap expansion (independent of phase): +3 from Thu 3am ET (event
@@ -199,28 +200,35 @@ function eventCurrentUntil(eventDateStr) {
 // Given an event Date (event_date is a Saturday in DB convention) and a
 // "now" Date, returns the four key cutoff timestamps for that event cycle.
 // Times are 3am ET. event_date itself is a YYYY-MM-DD string from the DB.
-function getEventCutoffs(eventDateStr) {
+function getEventCutoffs(eventDateStr, lockTime) {
   // event_date is "YYYY-MM-DD" — interpret as ET midnight on that day so
   // weekday math is stable regardless of the parsing browser's tz.
   var parts = eventDateStr.split('-');
   var anchor = wpDateInEt(parseInt(parts[0], 10), parseInt(parts[1], 10),
                           parseInt(parts[2], 10), 12, 0); // noon ET on event day
+  var sun3am = wp3amEtOnDay(anchor, +1); // legacy Sun 3am ET
+  // Post-event waivers OPEN when prelims start — the event's lineup lock time —
+  // instead of a fixed Sun 3am ET. This closes the live-event instant-add
+  // window: once prelims begin, adds become priority claims. Falls back to
+  // Sun 3am ET when the event has no lock time set.
+  var lt = lockTime ? new Date(lockTime) : null;
+  var postOpen = (lt && !isNaN(lt.getTime())) ? lt : sun3am;
   return {
     preOpen:    wp3amEtOnDay(anchor, -2), // Thu 3am ET (event week)
     preClose:   wp3amEtOnDay(anchor, -1), // Fri 3am ET
-    postOpen:   wp3amEtOnDay(anchor, +1), // Sun 3am ET
+    postOpen:   postOpen,                 // prelims start (lock time), else Sun 3am ET
     postClose:  wp3amEtOnDay(anchor, +3), // Tue 3am ET
     autoDrop:   wp3amEtOnDay(anchor, +4), // Wed 3am ET (auto-drop sweep)
     capExpand:  wp3amEtOnDay(anchor, -2), // Thu 3am ET — same as preOpen
-    capRevert:  wp3amEtOnDay(anchor, +1)  // Sun 3am ET — same as postOpen
+    capRevert:  sun3am                    // Sun 3am ET (cap revert stays here, decoupled from postOpen)
   };
 }
 
 // Returns the active phase for `now` given the next event date string.
 // `nextEventDateStr` may be null — in which case we're always in FA.
-function getWaiverPhase(now, nextEventDateStr) {
+function getWaiverPhase(now, nextEventDateStr, lockTime) {
   if (!nextEventDateStr) return { phase: 'FA', closesAt: null, opensAt: null };
-  var c = getEventCutoffs(nextEventDateStr);
+  var c = getEventCutoffs(nextEventDateStr, lockTime);
   var t = now.getTime();
   if (t >= c.preOpen.getTime()  && t < c.preClose.getTime())  {
     return { phase: 'WINDOW_PRE',  closesAt: c.preClose,  opensAt: c.preOpen };

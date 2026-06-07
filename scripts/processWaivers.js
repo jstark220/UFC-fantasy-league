@@ -69,14 +69,19 @@ function et3amOnEventDelta(eventDateStr, dayDelta) {
   }
   return Date.UTC(y, m - 1, d, 7, 0);          // fallback EDT
 }
-function cutoffs(eventDateStr) {
+function cutoffs(eventDateStr, lockTime) {
+  const sun3am = et3amOnEventDelta(eventDateStr, +1);   // legacy Sun 3am ET
+  // postOpen = prelims start (event lineup_lock_time) instead of Sun 3am ET, so
+  // live-event adds become priority claims; fall back to Sun 3am with no lock.
+  let postOpen = sun3am;
+  if (lockTime) { const ms = new Date(lockTime).getTime(); if (!Number.isNaN(ms)) postOpen = ms; }
   return {
     preOpen:  et3amOnEventDelta(eventDateStr, -2),  // Thu 3am ET
     preClose: et3amOnEventDelta(eventDateStr, -1),  // Fri 3am ET
-    postOpen: et3amOnEventDelta(eventDateStr, +1),  // Sun 3am ET
+    postOpen: postOpen,                             // prelims start (lock), else Sun 3am ET
     postClose:et3amOnEventDelta(eventDateStr, +3),  // Tue 3am ET
     capExpand:et3amOnEventDelta(eventDateStr, -2),  // Thu 3am ET
-    capRevert:et3amOnEventDelta(eventDateStr, +1),  // Sun 3am ET
+    capRevert:sun3am,                               // Sun 3am ET (cap revert stays here)
   };
 }
 function rollingClear(droppedAtMs) {
@@ -117,11 +122,11 @@ const log = (...a) => console.log(...a);
 
   // Soonest non-completed event drives the cutoffs (overrides not applied here).
   const { data: evs } = await supabase.from('ufc_events')
-    .select('id, name, full_name, event_date, is_completed').eq('is_completed', false)
+    .select('id, name, full_name, event_date, is_completed, lineup_lock_time').eq('is_completed', false)
     .order('event_date', { ascending: true }).limit(1);
   const ev = evs && evs[0];
   if (!ev) { log('No upcoming event; nothing to anchor cutoffs on.'); return; }
-  const cut = cutoffs(ev.event_date);
+  const cut = cutoffs(ev.event_date, ev.lineup_lock_time);
   log(`event: ${ev.name} (${ev.event_date})  preClose=${new Date(cut.preClose).toISOString()}  postClose=${new Date(cut.postClose).toISOString()}\n`);
 
   // Which leagues to process.

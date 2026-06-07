@@ -1148,7 +1148,7 @@ async function loadFreeAgents() {
     // isn't enough.
     supabaseClient
       .from('ufc_events')
-      .select('id, event_date, is_completed')
+      .select('id, event_date, is_completed, lineup_lock_time')
       .gte('event_date', eventCutoffISO)
       .order('event_date', { ascending: true })
       .limit(8),
@@ -1200,9 +1200,10 @@ async function loadFreeAgents() {
   nextEventsMerged = nextEventsMerged
     .filter(function(e) { return e.event_date && !e.is_completed; })
     .sort(function(a, b) { return String(a.event_date).localeCompare(String(b.event_date)); });
-  const nextEventDate = nextEventsMerged[0] ? nextEventsMerged[0].event_date : null;
+  const nextEventObj  = nextEventsMerged[0] || null;
+  const nextEventDate = nextEventObj ? nextEventObj.event_date : null;
   const phaseInfo = (typeof getWaiverPhase === 'function')
-    ? getWaiverPhase(now, nextEventDate)
+    ? getWaiverPhase(now, nextEventDate, nextEventObj ? nextEventObj.lineup_lock_time : null)
     : { phase: 'FA' };
   const inClaimWindow = phaseInfo.phase === 'WINDOW_PRE' || phaseInfo.phase === 'WINDOW_POST';
 
