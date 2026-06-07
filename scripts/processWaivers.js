@@ -92,10 +92,14 @@ function rollingClear(droppedAtMs) {
 }
 
 // roster-construction check (mirrors checkRosterConstruction with expansion)
-function constructionError(divList, league, ev, useExpansion) {
+function constructionError(divList, league, ev, useExpansion, currentSize) {
   const cfg = league.scoring_config || {};
-  const bonus = useExpansion ? eventBonus(ev, cfg) : 0;
   const baseTotal = typeof league.roster_size === 'number' ? league.roster_size : ROSTER_SIZE_BASE;
+  // Expanded limits also apply when the roster ALREADY holds temp/+window
+  // fighters above base (they auto-drop Wed) — so a net-neutral swap (drop+add)
+  // isn't bounced at the base cap by a temp fighter that legitimately sits above it.
+  const useExp = useExpansion || ((currentSize || 0) > baseTotal);
+  const bonus = useExp ? eventBonus(ev, cfg) : 0;
   const baseAnyFlex = Math.max(0, baseTotal - (MENS_DIVISION_COUNT * ROSTER_SLOTS_PER_DIVISION + ROSTER_WOMENS_FLEX_SLOTS));
   const totalLimit = baseTotal + bonus;
   const flexLimit  = baseAnyFlex + bonus;
@@ -222,7 +226,7 @@ const log = (...a) => console.log(...a);
         else {
           const projected = roster.filter(fid => fid !== drop).map(fid => fInfo[fid] && fInfo[fid].primary_division).filter(Boolean);
           if (fInfo[add]) projected.push(fInfo[add].primary_division);
-          reason = constructionError(projected, league, ev, useExp);
+          reason = constructionError(projected, league, ev, useExp, roster.length);
         }
 
         if (reason) { actions.push({ type: 'reject', c, reason }); continue; }

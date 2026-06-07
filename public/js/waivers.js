@@ -636,7 +636,7 @@ async function applyOneClaim(claim, rosterMap, claimedThisCycle, fighterMap, cap
   // no-drop add isn't bounced at the base 15 cap during the +window. Passing
   // the event lets the bonus match the card type (+3 numbered / +2 Fight Night).
   var baseTotal = (league && typeof league.roster_size === 'number') ? league.roster_size : ROSTER_SIZE_BASE;
-  var constructionErr = checkRosterConstruction(projected, { useExpansion: cap > baseTotal, event: nextEvent });
+  var constructionErr = checkRosterConstruction(projected, { useExpansion: cap > baseTotal, event: nextEvent, currentSize: memberRoster.length });
   if (constructionErr) return { ok: false, reason: constructionErr };
 
   // ---- Apply the swap ----
@@ -2177,7 +2177,7 @@ function validateClaimModal() {
     message  = 'You are at the ' + effectiveCap + '-fighter cap. Select a fighter to drop.';
     blocking = true;
   } else {
-    var constructionErr = checkRosterConstruction(projectedRoster, { useExpansion: useExpansion, event: nextEvent });
+    var constructionErr = checkRosterConstruction(projectedRoster, { useExpansion: useExpansion, event: nextEvent, currentSize: myRoster.length });
     if (constructionErr) {
       message  = constructionErr;
       blocking = true;
@@ -2233,7 +2233,7 @@ async function submitClaim() {
   var projectedRoster = myRoster
     .filter(function(f) { return !dropId || f.id !== dropId; })
     .concat([claimingFighter]);
-  var constructionErr = checkRosterConstruction(projectedRoster, { useExpansion: useExpansion, event: nextEvent });
+  var constructionErr = checkRosterConstruction(projectedRoster, { useExpansion: useExpansion, event: nextEvent, currentSize: myRoster.length });
   if (constructionErr) {
     alert(constructionErr);
     return;
@@ -2294,7 +2294,7 @@ async function submitInstantAdd() {
   var projectedRoster = myRoster
     .filter(function(f) { return !dropId || f.id !== dropId; })
     .concat([claimingFighter]);
-  var constructionErr = checkRosterConstruction(projectedRoster, { useExpansion: useExpansion, event: nextEvent });
+  var constructionErr = checkRosterConstruction(projectedRoster, { useExpansion: useExpansion, event: nextEvent, currentSize: myRoster.length });
   if (constructionErr) {
     alert(constructionErr);
     return;
@@ -2481,14 +2481,20 @@ async function refreshData() {
 // without it we fall back to the +3 numbered-event default.
 function checkRosterConstruction(fighters, opts) {
   opts = opts || {};
-  var bonus = (opts.useExpansion && typeof getEventBonusSize === 'function')
+  var baseTotal   = (league && typeof league.roster_size === 'number') ? league.roster_size : ROSTER_SIZE_BASE;
+  // Expanded limits apply when THIS add opts into a temp spot (opts.useExpansion)
+  // OR the roster is already holding temp/+window fighters above the base cap
+  // (opts.currentSize > base — those auto-drop Wed). The latter is what lets a
+  // net-neutral swap (drop + add) go through instead of being bounced by a temp
+  // fighter that legitimately sits above the base cap.
+  var useExp = opts.useExpansion || ((opts.currentSize || 0) > baseTotal);
+  var bonus = (useExp && typeof getEventBonusSize === 'function')
     ? getEventBonusSize(opts.event, league && league.scoring_config)
-    : (opts.useExpansion ? (ROSTER_SIZE_EXPANDED - ROSTER_SIZE_BASE) : 0);
+    : (useExp ? (ROSTER_SIZE_EXPANDED - ROSTER_SIZE_BASE) : 0);
   // Any-flex cap + total cap both follow the commissioner's roster_size
   // (via getAnyFlexSlots) rather than the v1.2 baseline. Event-week
   // expansion adds the same +bonus to both.
   var baseAnyFlex = typeof getAnyFlexSlots === 'function' ? getAnyFlexSlots(league) : ROSTER_FLEX_SLOTS;
-  var baseTotal   = (league && typeof league.roster_size === 'number') ? league.roster_size : ROSTER_SIZE_BASE;
   var flexLimit   = baseAnyFlex + bonus;
   var totalLimit  = baseTotal   + bonus;
 
