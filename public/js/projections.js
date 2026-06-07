@@ -18,7 +18,10 @@
     if (!fighterIds || fighterIds.length === 0) return {};
     if (typeof supabaseClient === 'undefined') return {};
 
-    const todayISO = new Date().toISOString().split('T')[0];
+    // Use the EASTERN date, not UTC. Events are dated by their ET calendar day,
+    // and a Saturday card runs into the next UTC day — a UTC "today" filter
+    // dropped the live card's projections the moment UTC rolled past midnight.
+    const todayISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 
     // Inner join + event-date filter ensures we never return a projection
     // for a fight that already happened (defensive — recomputeProjections

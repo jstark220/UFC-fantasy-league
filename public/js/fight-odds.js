@@ -24,7 +24,9 @@
     if (!fighterIds || fighterIds.length === 0) return {};
     if (typeof supabaseClient === 'undefined') return {};
 
-    const todayISO = new Date().toISOString().split('T')[0];
+    // Eastern date, not UTC — a Saturday card runs into the next UTC day, so a
+    // UTC "today" filter dropped the live card's odds once UTC passed midnight.
+    const todayISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 
     // Pull every odds row whose fight is at a future event. With ~25 active
     // UFC markets globally and one row per fight, this is small enough to
