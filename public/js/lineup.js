@@ -164,6 +164,10 @@ let selections    = new Set();  // fighter IDs currently started
 let selectionRowIds = {};       // fighter_id -> starter_selections DB row id
 let selectionSlots  = {};       // fighter_id -> slot_position (1, 2, or 3)
 let rosterRowIds    = {};       // fighter_id -> rosters table row id (needed to delete)
+// Fighter data for STARTED fighters who are no longer on the current roster
+// (e.g. dropped after a past event). A past event's lineup must stay a historic
+// snapshot of who was started, so we resolve these even though they're off-roster.
+let selectionFighters = {};     // fighter_id -> fighter data (off-roster starters)
 
 // Fight card for the currently selected event. Populated by loadEventData()
 // from fight_results table. Each entry:
@@ -508,6 +512,22 @@ async function loadEventData() {
     selectionRowIds[s.fighter_id] = s.id;
     selectionSlots[s.fighter_id]  = s.slot_position;
   });
+
+  // Historic accuracy: a fighter who was STARTED at this event may since have
+  // been dropped from the roster. Load fighter data for any started fighter not
+  // on the current roster so a past lineup still shows who was actually started
+  // (renderStarterSlots falls back to this map).
+  selectionFighters = {};
+  var startedOffRoster = Array.from(selections).filter(function(id) {
+    return !myRoster.some(function(f) { return f.id === id; });
+  });
+  if (startedOffRoster.length > 0) {
+    var sfRes = await supabaseClient
+      .from('fighters')
+      .select('id, name, primary_division, current_rank, is_champion, is_sub_champion, sub_title_type, record_wins, record_losses, record_draws, photo_url, age, country')
+      .in('id', startedOffRoster);
+    (sfRes.data || []).forEach(function(f) { selectionFighters[f.id] = f; });
+  }
 
   (scoresRes.data || []).forEach(function(row) {
     selectedEventScores[row.fighter_id] = row.total_points;
@@ -919,7 +939,9 @@ function renderStarterSlots() {
   // Which fighters are starters, in insertion order (Set preserves order)
   const startedIds   = Array.from(selections);
   const startedFighters = startedIds.map(function(id) {
-    return myRoster.find(function(f) { return f.id === id; });
+    // Prefer the live roster object; fall back to off-roster starter data so a
+    // fighter started at a PAST event still shows even after being dropped.
+    return myRoster.find(function(f) { return f.id === id; }) || selectionFighters[id];
   }).filter(Boolean);
 
   // Fight card lookup is needed by buildStarterCard to thread opponent
