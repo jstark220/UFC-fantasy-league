@@ -159,6 +159,7 @@ let isPastEvent   = false;       // true when selectedEvent.event_date is before
 let isViewMode    = false;   // true when browsing another manager's lineup from standings
 let viewedMember  = null;    // the member object being viewed (null when viewing own lineup)
 let isCommish     = false;   // true when the viewer is a commissioner of this league
+let leagueMembers = [];      // all league_members in this league (for the team picker)
 let lockCountdownTimer = null;  // interval id for the per-second lock countdown
 let selections    = new Set();  // fighter IDs currently started
 let selectionRowIds = {};       // fighter_id -> starter_selections DB row id
@@ -246,6 +247,7 @@ async function initLineup() {
   league = leagueRes.data;
   leagueScoringConfig = league.scoring_config || null;
   const members = membersRes.data || [];
+  leagueMembers = members;  // expose to renderEventBanner for the team picker
   const myMember = members.find(function(m) { return m.user_id === user.id; });
   if (!myMember) { window.location.href = 'dashboard.html'; return; }
 
@@ -273,7 +275,11 @@ async function initLineup() {
   availableEvents.sort(function(a, b) {
     return String(b.event_date || '').localeCompare(String(a.event_date || ''));
   });
-  selectedEvent   = pickDefaultEvent(availableEvents);
+  // Honor an explicit ?event= (e.g. preserved across a team switch); otherwise
+  // pick the sensible default (current card, else most recent past).
+  var eventParam  = new URLSearchParams(window.location.search).get('event');
+  selectedEvent   = (eventParam && availableEvents.find(function(e) { return e.id === eventParam; }))
+                    || pickDefaultEvent(availableEvents);
   recomputeLockStatus(); // sets isLocked / isPastEvent based on selectedEvent
 
   document.title = (isViewMode ? targetMember.team_name : 'Roster') + ' - ' + league.name;
@@ -649,6 +655,17 @@ async function onSelectEvent(eventId) {
   startLiveUpdate();
 }
 
+// Switch to another manager's roster (or back to your own) from the team
+// picker. We navigate with ?member= so all the view-mode setup in initLineup
+// runs fresh (own team = editable, others = read-only), preserving the
+// currently-selected event via ?event=.
+function onSelectTeam(memberId) {
+  if (!memberId || memberId === myMemberId) return; // already viewing this team
+  var url = 'lineup.html?id=' + encodeURIComponent(leagueId) + '&member=' + encodeURIComponent(memberId);
+  if (selectedEvent) url += '&event=' + encodeURIComponent(selectedEvent.id);
+  window.location.href = url;
+}
+
 // ========================================================================
 // RENDER EVENT BANNER
 // Uses the this-week-card CSS. Pulls name, date, and venue from selectedEvent.
@@ -728,28 +745,50 @@ function renderEventBanner() {
     }
   }
 
-  // Event picker: built from availableEvents, current selection pre-marked.
-  // Hidden in view mode (we follow the standings link's intent — a single
-  // member's lineup at the implied event).
-  var picker = '';
-  if (!isViewMode && availableEvents.length > 1) {
-    // data-custom-dropdown opts the select into CustomDropdown.enhance,
-    // which swaps it for a div-based component with stylable rows. The
-    // date goes on data-sub so the menu can render it as a muted second
-    // column instead of cramming "(Aug 15, 2026)" into the label.
-    picker = '<div class="lineup-event-picker">' +
+  // Controls row above the banner: an event picker + a team picker, side by
+  // side (they wrap to stacked on mobile via .lineup-picker-row). The team
+  // picker lets the viewer jump to any manager's roster — their own (editable)
+  // or another's (read-only view mode). Both <select>s carry
+  // data-custom-dropdown so CustomDropdown.enhance swaps them for the styled
+  // div component (data-sub renders a muted second line).
+  var eventPicker = '';
+  if (availableEvents.length > 1) {
+    eventPicker = '<div class="lineup-event-picker">' +
                '<label for="lineupEventSelect" class="lineup-event-picker__label">Viewing</label>' +
                '<select id="lineupEventSelect" class="waiver-filter" data-custom-dropdown="true">';
     availableEvents.forEach(function(ev) {
       var d = new Date(ev.event_date + 'T12:00:00');
       var dStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
       var sel  = (selectedEvent && ev.id === selectedEvent.id) ? ' selected' : '';
-      picker  += '<option value="' + ev.id + '"' + sel + ' data-sub="' + escapeHtml(dStr) + '">' +
+      eventPicker += '<option value="' + ev.id + '"' + sel + ' data-sub="' + escapeHtml(dStr) + '">' +
                    escapeHtml(displayEventName(ev)) +
                  '</option>';
     });
-    picker += '</select></div>';
+    eventPicker += '</select></div>';
   }
+
+  // Team picker — all managers in the league, sorted by team name, with the
+  // currently-viewed team pre-selected (and tagged "Your team").
+  var teamPicker = '';
+  if (leagueMembers.length > 1) {
+    teamPicker = '<div class="lineup-event-picker lineup-event-picker--team">' +
+               '<label for="lineupTeamSelect" class="lineup-event-picker__label">Team</label>' +
+               '<select id="lineupTeamSelect" class="waiver-filter" data-custom-dropdown="true">';
+    leagueMembers.slice().sort(function(a, b) {
+      return String(a.team_name || '').localeCompare(String(b.team_name || ''));
+    }).forEach(function(m) {
+      var sel = (m.id === myMemberId) ? ' selected' : '';
+      var sub = (m.id === myMemberId) ? ' data-sub="Your team"' : '';
+      teamPicker += '<option value="' + escapeHtml(m.id) + '"' + sel + sub + '>' +
+                   escapeHtml(m.team_name || 'Team') +
+                 '</option>';
+    });
+    teamPicker += '</select></div>';
+  }
+
+  var picker = (eventPicker || teamPicker)
+    ? '<div class="lineup-picker-row">' + eventPicker + teamPicker + '</div>'
+    : '';
 
   // "Set Your Lineup" eyebrow doesn't fit a past event — adapt by phase.
   var eyebrow;
@@ -822,6 +861,11 @@ function renderEventBanner() {
     // no cleanup is needed here — innerHTML replacement above already
     // wiped the previous instance.
     if (typeof CustomDropdown !== 'undefined') CustomDropdown.enhance(pickEl);
+  }
+  var teamEl = document.getElementById('lineupTeamSelect');
+  if (teamEl) {
+    teamEl.addEventListener('change', function() { onSelectTeam(this.value); });
+    if (typeof CustomDropdown !== 'undefined') CustomDropdown.enhance(teamEl);
   }
 
   // Always restart the countdown after a banner render — it clears any

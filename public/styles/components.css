@@ -11274,6 +11274,29 @@ label .form-label__hint {
   flex: 0 1 360px;
 }
 
+/* Row holding the event + team pickers side by side above the banner. Wraps
+   to stacked on narrow screens so neither <select> overflows. */
+.lineup-picker-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-6);
+  margin-bottom: var(--space-3);
+}
+.lineup-picker-row .lineup-event-picker {
+  margin-bottom: 0;            /* the row owns the bottom margin now */
+}
+/* Team names are short, so the team select doesn't need the event's width. */
+.lineup-event-picker--team .waiver-filter {
+  flex: 0 1 240px;
+}
+@media (max-width: 720px) {
+  /* Stack the two pickers full-width on phones; each select fills its row. */
+  .lineup-picker-row { gap: var(--space-3); }
+  .lineup-picker-row .lineup-event-picker { width: 100%; }
+  .lineup-picker-row .lineup-event-picker .waiver-filter { flex: 1 1 auto; }
+}
+
 /* Inline points on a starter card — sits to the right of the record at
    the bottom of the card, NOT in a corner. Avoids collisions with the
    rank badge (top-left) and CHAMP badge (top-right) which both occupy
