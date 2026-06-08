@@ -8670,6 +8670,24 @@ body {
   margin-bottom: var(--space-4);
 }
 
+/* Caption above the single-event standings table ("Points scored at UFC 318"). */
+.standings-scope-caption {
+  font-size: var(--text-caption);
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-3);
+}
+.standings-scope-caption strong { color: var(--text-primary); font-weight: 700; }
+
+/* Season-total reference column in single-event mode — muted so the event
+   points (the thing being ranked) stay the focus. */
+.standings-pts-cell--muted { color: var(--text-tertiary); }
+/* On phones the single-event table drops the season-total reference column
+   (same pattern as the season table hiding its secondary columns), leaving
+   rank / team / event pts so nothing spills off the right edge. */
+@media (max-width: 767px) {
+  .standings-col--season { display: none; }
+}
+
 /* ============================================================
    WAIVERS PAGE
    ============================================================ */

@@ -13,6 +13,15 @@ var leagueId;
 var leagueScoringConfig = null;
 var membersCache = [];
 
+// Standings scope state — powers the "Scores from" dropdown that re-ranks the
+// table by a single card. 'all' = season total (default), else an event id.
+// Caches let the dropdown re-render instantly without refetching.
+var scoresCache          = [];
+var seasonStandingsCache = [];
+var scoredEventsCache    = [];   // [{ id, name, date }] for events with scores, newest first
+var myMemberIdCache      = null;
+var selectedScoreEvent   = 'all';
+
 async function initStandings() {
   var user = await requireAuth();
   if (!user) return;
@@ -40,7 +49,7 @@ async function initStandings() {
     // Join scores with the event so we can group by date for period columns
     supabaseClient
       .from('scores')
-      .select('league_member_id, total_points, event:ufc_events(id, event_date)')
+      .select('league_member_id, total_points, event:ufc_events(id, event_date, name, full_name)')
       .eq('league_id', leagueId)
   ]);
 
@@ -73,8 +82,12 @@ async function initStandings() {
     active:   'standings'
   });
 
-  var standings = computeStandings(members, scores);
-  renderStandings(standings, myMember.id);
+  // Cache everything the "Scores from" dropdown needs to re-render without refetching.
+  scoresCache          = scores;
+  myMemberIdCache      = myMember.id;
+  seasonStandingsCache = computeStandings(members, scores);
+  scoredEventsCache    = buildScoredEvents(scores);
+  renderStandingsView();
 
   document.getElementById('pageContent').style.display = 'block';
 }
@@ -254,7 +267,7 @@ function medalSvg(rank) {
 // ========================================================================
 // RENDER
 // ========================================================================
-function renderStandings(standings, myMemberId) {
+function buildSeasonTable(standings, myMemberId) {
   // Assign ranks with proper tie handling (tied managers share the same rank number)
   var ranks = [];
   standings.forEach(function(entry, idx) {
@@ -311,7 +324,7 @@ function renderStandings(standings, myMemberId) {
   var emptyNote = hasAnyScores ? '' :
     '<p class="standings-empty-note">No events have been scored yet. Points will appear here after the first event.</p>';
 
-  document.getElementById('standingsContent').innerHTML =
+  return (
     emptyNote +
     '<div class="standings-card">' +
     '<table class="standings-table">' +
@@ -328,9 +341,37 @@ function renderStandings(standings, myMemberId) {
       '</thead>' +
       '<tbody>' + rows + '</tbody>' +
     '</table>' +
-    '</div>';
+    '</div>'
+  );
+}
 
-  // Wire the clickable Total Pts cells to open the points-breakdown modal.
+// ========================================================================
+// SCORES-FROM SCOPE: dropdown + per-event table
+// "All events" (default) shows the cumulative season table above; picking a
+// single event re-ranks a focused table by just that card's points.
+// ========================================================================
+
+// Top-level render: builds the "Scores from" picker + the season OR single-
+// event table, then wires both. Re-run on every dropdown change.
+function renderStandingsView() {
+  var tableHtml = (selectedScoreEvent === 'all')
+    ? buildSeasonTable(seasonStandingsCache, myMemberIdCache)
+    : buildEventTable(selectedScoreEvent);
+
+  document.getElementById('standingsContent').innerHTML =
+    buildScoresPicker() + tableHtml;
+
+  // Wire the picker (change + custom-dropdown styling).
+  var sel = document.getElementById('standingsScopeSelect');
+  if (sel) {
+    sel.addEventListener('change', function () {
+      selectedScoreEvent = this.value;
+      renderStandingsView();
+    });
+    if (typeof CustomDropdown !== 'undefined') CustomDropdown.enhance(sel);
+  }
+
+  // Wire the clickable Total Pts cells (season mode only — event mode has none).
   document.querySelectorAll('.standings-pts-link').forEach(function (btn) {
     btn.addEventListener('click', function () {
       showPointsBreakdownModal(
@@ -340,6 +381,125 @@ function renderStandings(standings, myMemberId) {
       );
     });
   });
+}
+
+// Distinct events that have any scores, newest first — the dropdown options.
+function buildScoredEvents(scores) {
+  var byId = {};
+  scores.forEach(function (s) {
+    if (s.event && s.event.id && !byId[s.event.id]) {
+      byId[s.event.id] = {
+        id:   s.event.id,
+        name: s.event.name || s.event.full_name || 'Event',
+        date: s.event.event_date
+      };
+    }
+  });
+  return Object.keys(byId).map(function (id) { return byId[id]; })
+    .sort(function (a, b) { return String(b.date).localeCompare(String(a.date)); });
+}
+
+// The "Scores from" dropdown. Hidden until at least one event has scored
+// (nothing to pick from otherwise). Reuses the lineup picker + custom-dropdown
+// styling for consistency with the rest of the app.
+function buildScoresPicker() {
+  if (!scoredEventsCache.length) return '';
+  var html =
+    '<div class="lineup-event-picker standings-scope-picker">' +
+      '<label for="standingsScopeSelect" class="lineup-event-picker__label">Scores from</label>' +
+      '<select id="standingsScopeSelect" class="waiver-filter" data-custom-dropdown="true">' +
+        '<option value="all"' + (selectedScoreEvent === 'all' ? ' selected' : '') +
+          ' data-sub="All events">Season Total</option>';
+  scoredEventsCache.forEach(function (ev) {
+    var d    = new Date(ev.date + 'T12:00:00');
+    var dStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    var sel  = (ev.id === selectedScoreEvent) ? ' selected' : '';
+    html += '<option value="' + escapeHtml(ev.id) + '"' + sel + ' data-sub="' + escapeHtml(dStr) + '">' +
+              escapeHtml(ev.name) +
+            '</option>';
+  });
+  html += '</select></div>';
+  return html;
+}
+
+// Single-event standings: each team's points for the chosen card, re-ranked,
+// with their season total alongside for context. Team links jump straight to
+// that manager's lineup FOR THAT EVENT (?event= is honored by the roster page).
+function buildEventTable(eventId) {
+  // Sum each member's points for this event (scores rows are per-fighter).
+  var ptsByMember = {};
+  scoresCache.forEach(function (s) {
+    if (s.event && s.event.id === eventId) {
+      ptsByMember[s.league_member_id] = (ptsByMember[s.league_member_id] || 0) + (s.total_points || 0);
+    }
+  });
+  var seasonTotalByMember = {};
+  seasonStandingsCache.forEach(function (e) { seasonTotalByMember[e.member.id] = e.total; });
+
+  var list = membersCache.map(function (m) {
+    return {
+      member:      m,
+      eventPts:    ptsByMember[m.id] || 0,
+      seasonTotal: seasonTotalByMember[m.id] || 0
+    };
+  }).sort(function (a, b) { return b.eventPts - a.eventPts; });
+
+  // Tie-aware ranks on event points.
+  var ranks = [];
+  list.forEach(function (entry, idx) {
+    if (idx === 0) { ranks.push(1); return; }
+    ranks.push(list[idx].eventPts === list[idx - 1].eventPts ? ranks[idx - 1] : idx + 1);
+  });
+
+  var rows = list.map(function (entry, idx) {
+    var member = entry.member;
+    var rank   = ranks[idx];
+    var isMe   = member.id === myMemberIdCache;
+    var rankClass = rank === 1 ? ' standings-rank--gold'
+                  : rank === 2 ? ' standings-rank--silver'
+                  : rank === 3 ? ' standings-rank--bronze' : '';
+    var rankGlyph = medalSvg(rank);
+    return (
+      '<tr class="standings-row' + (isMe ? ' standings-row--me' : '') + '">' +
+        '<td class="standings-rank-cell">' +
+          '<span class="standings-rank' + rankClass + '">' + (rankGlyph || rank) + '</span>' +
+        '</td>' +
+        '<td class="standings-team-cell">' +
+          '<a href="lineup.html?id=' + leagueId + '&member=' + escapeHtml(member.id) +
+              '&event=' + escapeHtml(eventId) + '" class="standings-team-link">' +
+            escapeHtml(member.team_name) +
+          '</a>' +
+          (isMe ? '<span class="standings-you">you</span>' : '') +
+        '</td>' +
+        '<td class="standings-pts-cell">' + (entry.eventPts > 0 ? entry.eventPts.toFixed(1) : '—') + '</td>' +
+        '<td class="standings-pts-cell standings-pts-cell--muted standings-col--season">' +
+          (entry.seasonTotal > 0 ? entry.seasonTotal.toFixed(1) : '—') +
+        '</td>' +
+      '</tr>'
+    );
+  }).join('');
+
+  var ev = scoredEventsCache.find(function (e) { return e.id === eventId; });
+  var caption = ev
+    ? '<p class="standings-scope-caption">Points scored at <strong>' + escapeHtml(ev.name) + '</strong></p>'
+    : '';
+
+  return (
+    caption +
+    '<div class="standings-card">' +
+    '<table class="standings-table">' +
+      '<thead>' +
+        '<tr>' +
+          '<th class="standings-th standings-th--rank">#</th>' +
+          '<th class="standings-th standings-th--team">Team</th>' +
+          '<th class="standings-th standings-th--pts">Event Pts</th>' +
+          '<th class="standings-th standings-th--pts standings-col--season">Season Total</th>' +
+        '</tr>' +
+      '</thead>' +
+      '<tbody>' + rows + '</tbody>' +
+    '</table>' +
+    '</div>'
+  );
 }
 
 // ========================================================================
