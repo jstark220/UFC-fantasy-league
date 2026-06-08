@@ -27,6 +27,7 @@ var allFighters       = [];
 var availableFighters = [];
 var ownedByMap        = {}; // fighter_id -> team_name for rostered fighters
 var fighterPointsMap  = {}; // fighter_id -> { totalPts, recentPts, avgPts, fightCount }
+var fvReady           = false; // true once FantasyValue.ensureLoaded() resolves
 var fighterNextFight  = {}; // fighter_id -> next-fight info from NextFight.loadNextFights
 var fighterFightOdds  = {}; // fighter_id -> Polymarket odds info from FightOdds.loadFightOdds
 var fighterProjections = {}; // fighter_id -> { projectedPoints, ... } from Projections.load
@@ -235,6 +236,7 @@ async function initWaivers() {
   // simply omit the rank.
   if (typeof FantasyValue !== 'undefined' && FantasyValue.ensureLoaded) {
     FantasyValue.ensureLoaded(leagueId, league.scoring_config).then(function () {
+      fvReady = true; // switch the list's FV score + sort to the windowed module
       renderAvailableFighters();
     }).catch(function () { /* silent - rows just omit the rank */ });
   }
@@ -1199,6 +1201,19 @@ function computeFantasyValue(fighter) {
        + (pts.sosBonus || 0);
 }
 
+// The FV score shown + sorted on this page comes from the FantasyValue module
+// (the windowed, tuned value that ALSO drives the "#N" rank badge), so the list
+// order, the score, and the rank can never disagree. The local
+// computeFantasyValue() above is only the pre-load fallback, used until the
+// module's heavy fight-results cache has resolved.
+function fvScoreFor(fighter) {
+  if (fvReady && typeof FantasyValue !== 'undefined' && FantasyValue.scoreFor) {
+    var v = FantasyValue.scoreFor(fighter.id);
+    return v != null ? v : 0;   // loaded but no in-window fights => 0 FV
+  }
+  return computeFantasyValue(fighter);
+}
+
 // Open a modal showing the breakdown of one fighter's fantasy value score.
 function showFvBreakdown(fighterId) {
   var fighter = allFighters.find(function(f) { return f.id === fighterId; });
@@ -1400,8 +1415,8 @@ function renderAvailableFighters() {
     }
 
     if (sortBy === 'fantasy_value') {
-      var fva = computeFantasyValue(a);
-      var fvb = computeFantasyValue(b);
+      var fva = fvScoreFor(a);
+      var fvb = fvScoreFor(b);
       if (fvb !== fva) return fvb - fva;
       return rankA - rankB;
     }
@@ -1468,7 +1483,7 @@ function renderAvailableFighters() {
     var pts      = fighterPointsMap[f.id];
     var statVal, statLabel, statFvId;
     if (sortBy === 'fantasy_value') {
-      statVal   = pts ? computeFantasyValue(f).toFixed(1) : '—';
+      statVal   = pts ? fvScoreFor(f).toFixed(1) : '—';
       // Overall FV rank (same source the draft board uses), shown next to the
       // score as "· #N" when the rank cache is available.
       var fvRankObj = (typeof FantasyValue !== 'undefined' && FantasyValue.rankFor) ? FantasyValue.rankFor(f.id) : null;
@@ -1601,7 +1616,15 @@ function renderAvailableFighters() {
   el.querySelectorAll('.fv-score-btn').forEach(function(btn) {
     btn.addEventListener('click', function(e) {
       e.stopPropagation();
-      showFvBreakdown(btn.getAttribute('data-fv-fighter'));
+      var fid = btn.getAttribute('data-fv-fighter');
+      // Use the canonical (windowed) breakdown so the popup matches the score
+      // + rank shown on the row; fall back to the local one before it's loaded.
+      var fighter = (allFighters || []).find(function(x) { return x.id === fid; });
+      if (fvReady && fighter && typeof FantasyValue !== 'undefined' && FantasyValue.showBreakdownModal) {
+        FantasyValue.showBreakdownModal(fighter);
+      } else {
+        showFvBreakdown(fid);
+      }
     });
   });
 }
