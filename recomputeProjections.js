@@ -14,8 +14,19 @@
 
 const Engine = require('./projectionEngine.js');
 
+// PROJECTION WINDOW: only fights within the last N years feed the base-rate /
+// finish-distribution math, so ingesting older history for context doesn't move
+// projections. Keep in sync with FV_WINDOW_YEARS in public/js/fantasy-value.js.
+const PROJECTION_WINDOW_YEARS = 3;
+function projectionCutoffISO() {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - PROJECTION_WINDOW_YEARS);
+  return d.toISOString().slice(0, 10);
+}
+
 // Shared select column list — same fields the engine needs from past fights
-// to compute base activity + finish distribution.
+// to compute base activity + finish distribution. !inner on the event so the
+// event_date window filter on each history query actually constrains rows.
 const FIGHT_HISTORY_COLS = `
   id, fighter_a_id, fighter_b_id, winner_id, outcome,
   end_round, end_time_seconds, card_position, title_type, is_title_defense,
@@ -23,7 +34,7 @@ const FIGHT_HISTORY_COLS = `
   fighter_b_sig_strikes, fighter_b_takedowns, fighter_b_knockdowns, fighter_b_control_seconds,
   fighter_a_opponent_rank, fighter_b_opponent_rank,
   weight_class,
-  event:ufc_events(id, event_date)
+  event:ufc_events!inner(id, event_date)
 `;
 
 // ---- Loaders ---------------------------------------------------------------
@@ -81,6 +92,7 @@ async function loadPastFightsByFighter(supabase, fighterIds) {
         .select(FIGHT_HISTORY_COLS)
         .in(column, fighterIds)
         .not('outcome', 'is', null)
+        .gte('event.event_date', projectionCutoffISO())  // projection window
         .range(from, from + PAGE - 1);
       if (error) throw new Error('loadPastFightsByFighter[' + column + '] failed: ' + error.message);
       if (!data || data.length === 0) break;
@@ -114,6 +126,7 @@ async function loadDivisionPerspectives(supabase, divisions) {
       .select(FIGHT_HISTORY_COLS)
       .in('weight_class', divisions)
       .not('outcome', 'is', null)
+      .gte('event.event_date', projectionCutoffISO())  // projection window
       .range(from, from + PAGE - 1);
     if (error) throw new Error('loadDivisionPerspectives failed: ' + error.message);
     if (!data || data.length === 0) break;

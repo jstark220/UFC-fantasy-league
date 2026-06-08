@@ -36,6 +36,11 @@ if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
 const supabaseClient = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 const DRY_RUN = process.argv.includes('--dry-run');
+// --attach-only: never INSERT new events, only attach espn_event_id (+refresh
+// is_completed) to events we already have. Used by the historical backfill so a
+// deep range (e.g. 2020+) doesn't pull in Contender Series / TUF / cancelled
+// cards we don't carry — it just lights up the real UFC cards already seeded.
+const ATTACH_ONLY = process.argv.includes('--attach-only');
 const daysArg = process.argv.find((a) => a.startsWith('--days='));
 const backArg = process.argv.find((a) => a.startsWith('--back='));
 const DAYS_AHEAD = daysArg ? parseInt(daysArg.split('=')[1], 10) : 240;
@@ -121,7 +126,7 @@ function matchExisting(espnEvent, existing, byEspnId) {
   if (error) { console.error('Failed to load ufc_events:', error.message); process.exit(1); }
   const byEspnId = new Map(existing.filter((e) => e.espn_event_id).map((e) => [e.espn_event_id, e]));
 
-  let updated = 0, inserted = 0, unchanged = 0;
+  let updated = 0, inserted = 0, unchanged = 0, skippedInsert = 0;
 
   for (const ev of espnEvents) {
     const match = matchExisting(ev, existing, byEspnId);
@@ -139,6 +144,7 @@ function matchExisting(espnEvent, existing, byEspnId) {
         if (r.error) console.log('   write failed: ' + r.error.message);
       }
     } else {
+      if (ATTACH_ONLY) { skippedInsert++; continue; }  // backfill mode: no new events
       const row = {
         espn_event_id: ev.espnEventId,
         full_name: ev.name,
@@ -157,6 +163,7 @@ function matchExisting(espnEvent, existing, byEspnId) {
     }
   }
 
-  console.log(`\nSummary: ${inserted} inserted, ${updated} updated, ${unchanged} unchanged.`);
+  console.log(`\nSummary: ${inserted} inserted, ${updated} updated, ${unchanged} unchanged` +
+              (ATTACH_ONLY ? `, ${skippedInsert} new-event inserts skipped (attach-only)` : '') + '.');
   if (DRY_RUN) console.log('(dry run - nothing written)');
 })().catch((err) => { console.error('Fatal error:', err); process.exit(1); });

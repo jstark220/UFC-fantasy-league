@@ -24,6 +24,19 @@
 
 (function (root) {
 
+  // FV WINDOW: only fights within the last FV_WINDOW_YEARS count toward fantasy
+  // value. Older history can be ingested for context (it still shows in a
+  // fighter's fight log) without moving FV. The fetch is filtered by event_date
+  // so out-of-window rows aren't even loaded — FV stays the same and the client
+  // never pays for the extra history. Keep in sync with PROJECTION_WINDOW_YEARS
+  // in recomputeProjections.js.
+  var FV_WINDOW_YEARS = 3;
+  function fvCutoffISO() {
+    var d = new Date();
+    d.setFullYear(d.getFullYear() - FV_WINDOW_YEARS);
+    return d.toISOString().slice(0, 10);
+  }
+
   // -------- Pure: build per-fighter points map ----------------------------
   // Lifted verbatim from waivers.js so behavior matches. "Recent" means the
   // last 12 months of today (the fighter's activity multiplier).
@@ -106,7 +119,9 @@
     Object.keys(map).forEach(function (id) {
       var e = map[id];
       var blendedAvg   = (e.fightCount * e.avgPts + K * leagueMean) / (e.fightCount + K);
-      var last3Weight  = 0.45 * Math.min(e.fightCount, 3) / 3;
+      // Recency weight: last-3 form is 55% of the base score (scaled down for
+      // fighters with <3 fights). Was 0.45; bumped so current form matters more.
+      var last3Weight  = 0.55 * Math.min(e.fightCount, 3) / 3;
       var careerWeight = 1 - last3Weight;
       var baseScore    = careerWeight * blendedAvg + last3Weight * e.last3Avg;
 
@@ -187,7 +202,7 @@
   // Pass the fighter row (for rank/champion) and their pts entry.
   function computeFantasyValue(fighter, pts) {
     if (!pts || !pts.baseScore) return 0;
-    var rankBonus = fighter.is_champion                                ? 10
+    var rankBonus = fighter.is_champion                                ? 13
                   : (fighter.current_rank && fighter.current_rank <= 5)  ? 6
                   : (fighter.current_rank && fighter.current_rank <= 10) ? 3
                   : (fighter.current_rank && fighter.current_rank <= 15) ? 1
@@ -209,8 +224,10 @@
       'fighter_a_opponent_rank,' +
       'fighter_b_sig_strikes,fighter_b_takedowns,fighter_b_knockdowns,fighter_b_control_seconds,' +
       'fighter_b_opponent_rank,' +
-      'event:ufc_events(event_date)';
+      // !inner so the event_date window filter below actually constrains rows.
+      'event:ufc_events!inner(event_date)';
 
+    var cutoffISO = fvCutoffISO();
     var all = [];
     var PAGE = 1000, from = 0;
     while (true) {
@@ -218,6 +235,9 @@
         .from('fight_results')
         .select(FIGHT_COLS)
         .not('outcome', 'is', null)
+        // FV window: only count fights inside the last FV_WINDOW_YEARS. Ingesting
+        // older history for context won't move FV (and isn't even fetched here).
+        .gte('event.event_date', cutoffISO)
         // Unique tiebreaker so paginated .range() windows are stable across
         // queries. Without a deterministic ORDER BY, multi-page fetches can
         // repeat or skip rows — here that would double-count or drop fights
@@ -344,7 +364,7 @@
 
     var rankBonus, rankLabel;
     if (fighter.is_champion) {
-      rankBonus = 10; rankLabel = 'Champion';
+      rankBonus = 13; rankLabel = 'Champion';
     } else if (fighter.current_rank && fighter.current_rank <= 5) {
       rankBonus = 6;  rankLabel = 'Top 5 (#' + fighter.current_rank + ')';
     } else if (fighter.current_rank && fighter.current_rank <= 10) {
@@ -403,7 +423,7 @@
             row('Career avg',  pts.avgPts,     pts.fightCount + ' fight' + (pts.fightCount === 1 ? '' : 's')) +
             row('Adjusted avg', pts.blendedAvg, 'Sample-size correction') +
             row(last3Label,    pts.last3Avg,   'Recent form') +
-            row('Base score',  pts.baseScore,  '55% adjusted avg + 45% recent') +
+            row('Base score',  pts.baseScore,  '45% adjusted avg + 55% recent') +
           '</div>' +
 
           '<p class="fv-breakdown-section" style="margin-top:var(--space-4)">Multipliers &amp; bonuses</p>' +
