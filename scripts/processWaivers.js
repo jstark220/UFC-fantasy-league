@@ -176,10 +176,19 @@ const log = (...a) => console.log(...a);
     .order('event_date', { ascending: true }).limit(8);
   if (!evs || !evs.length) { log('No events in window; nothing to anchor cutoffs on.'); return; }
   const nowMs = Date.now();
-  // Most recent event whose POST window is open: postOpen (prelim lock) <= now < postClose (Tue 3am).
+  // POST_GRACE: post-window claims become DUE at postClose (Tue 3am ET), but the
+  // cron that processes them runs AFTER the cutoff (08:30 UTC = 4:30am ET). If we
+  // dropped the event as anchor the instant its window closed, that run would no
+  // longer anchor on it and the now-due claims would orphan (never process). So
+  // keep a just-closed event as the anchor for a grace period past postClose —
+  // long enough to cover the twice-daily cron (and delays/missed runs), but well
+  // short of the next event's pre-window (~days away), so the cycles don't collide.
+  const POST_GRACE = 36 * 3600 * 1000;  // 36h
+  // Most recent event whose POST window is open (postOpen <= now) or just closed
+  // (within POST_GRACE of postClose).
   const postActive = evs
     .map((e) => ({ e, c: cutoffs(e.event_date, e.lineup_lock_time) }))
-    .filter((x) => nowMs >= x.c.postOpen && nowMs < x.c.postClose)
+    .filter((x) => nowMs >= x.c.postOpen && nowMs < x.c.postClose + POST_GRACE)
     .sort((a, b) => String(b.e.event_date).localeCompare(String(a.e.event_date)));
   const ev = postActive.length
     ? postActive[0].e
