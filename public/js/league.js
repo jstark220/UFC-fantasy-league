@@ -186,6 +186,11 @@ async function initLeague() {
 
   var headerEl = document.getElementById('headerActions');
   headerEl.innerHTML = '<div id="leagueNavStrip"></div>';
+  // Fight Night Hub CTA on the this-week card (crimson primary during the
+  // event window; plain link otherwise — the hub itself handles all states).
+  var hubBtn = document.getElementById('fightNightHubBtn');
+  if (hubBtn) hubBtn.href = 'fight-night.html?id=' + leagueId;
+
   LeagueNav.renderInto('leagueNavStrip', {
     leagueId: leagueId,
     memberId: myMemberId,

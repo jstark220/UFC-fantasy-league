@@ -18,12 +18,12 @@
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="styles/tokens.css">
-  <link rel="stylesheet" href="styles/components.css?v=17">
+  <link rel="stylesheet" href="styles/components.css?v=34">
 
-  <title>All Lineups - Knockdown Fantasy</title>
+  <title>Fight Night - Knockdown Fantasy</title>
   <script src="js/loading-screen.js"></script>
 </head>
-<body>
+<body class="page-fight-night">
 
   <div class="dashboard-page" id="pageContent" style="display: none;">
 
@@ -32,7 +32,7 @@
         <span class="kf-red">Knockdown</span> Fantasy
       </a>
       <div class="top-nav__links">
-        <a href="#" class="btn-ghost" id="lineupBackLink">← My lineup</a>
+        <a href="#" class="btn-ghost" id="leagueLink">← League</a>
       </div>
       <div class="top-nav__actions">
         <button class="btn-theme" onclick="toggleTheme()" aria-label="Toggle theme">☾</button>
@@ -42,33 +42,58 @@
 
     <div class="league-header">
       <div class="league-header__inner">
-        <h1 class="league-header__name" id="leagueName">All Lineups</h1>
+        <h1 class="league-header__name" id="leagueName">Fight Night</h1>
+        <div class="league-header__actions" id="headerActions"></div>
       </div>
     </div>
 
     <div class="dashboard-body">
-      <!-- Event banner — name, date, status, picker. Rendered by lineups.js. -->
-      <div id="eventBanner"></div>
+      <!-- FINAL-state event winner banner -->
+      <div id="hubWinner"></div>
 
-      <!-- Per-member starter cards. Rendered by lineups.js. -->
-      <div id="lineupsGrid"></div>
+      <!-- Event hero: name, venue, status / countdown, updated stamp -->
+      <div id="hubHero"></div>
+
+      <!-- Mobile-only: MY BAR (sticky one-glance status) + segmented tabs -->
+      <div class="hub-mybar" id="hubMyBar"></div>
+      <div class="hub-tabs" id="hubTabs"></div>
+
+      <div class="hub-layout">
+        <div class="hub-main">
+          <div class="hub-section hub-now" id="hubNowSection"></div>
+          <div class="hub-section" id="hubUpNextSection"></div>
+          <div class="hub-section" id="hubFeedSection"></div>
+          <div class="hub-section" id="hubCardSection"></div>
+        </div>
+        <aside class="hub-rail">
+          <div class="hub-section" id="hubRaceSection"></div>
+        </aside>
+      </div>
+
+      <!-- Desktop-only docked chat column (filled + initialized by fight-night.js;
+           empty on mobile so the floating popup keeps sole ownership of the chat DOM).
+           Lives inside dashboard-body so its top aligns with the event hero. -->
+      <aside class="hub-chat-dock" id="hubChatDock" aria-label="League chat"></aside>
     </div>
 
   </div>
+
+  <!-- toast layer -->
+  <div class="hub-toasts" id="hubToasts"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/supabase-config.js"></script>
   <script src="js/auth-guard.js"></script>
   <script src="js/empty-state.js"></script>
+  <script src="js/league-nav.js"></script>
   <script src="js/chat.js"></script>
+  <script>window.CHAT_POPUP_DISABLED = window.matchMedia('(min-width: 1101px)').matches;</script>
   <script src="js/chat-widget.js"></script>
   <script src="js/chat-nav.js"></script>
   <script src="js/waiver-phase.js?v=2"></script>
-  <script src="js/custom-dropdown.js"></script>
   <script src="js/page-help-modal.js"></script>
   <script src="js/league-primer.js"></script>
   <script src="js/event-overrides.js"></script>
-  <!-- Fighter modal + its data deps (opened by clicking a starter cell) -->
   <script src="js/scoring.js"></script>
   <script src="js/score-breakdown.js"></script>
   <script src="js/country-flags.js"></script>
@@ -78,8 +103,8 @@
   <script src="js/fantasy-value.js?v=1"></script>
   <script src="js/fighter-modal.js"></script>
   <script src="js/fight-rows.js?v=2"></script>
-  <script src="js/fight-card-modal.js?v=5"></script>
-  <script src="js/lineups.js?v=8"></script>
+  <script src="js/fight-night-store.js?v=1"></script>
+  <script src="js/fight-night.js?v=15"></script>
 
   <script>
     document.querySelectorAll('.btn-theme').forEach(function(btn) {

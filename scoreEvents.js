@@ -198,6 +198,19 @@ async function scoreEvents(opts = {}) {
   }
 
   console.log('Wrote ' + written + ' score rows.');
+
+  // 7) Stamp the hub's version token. The Fight Night Hub treats a higher
+  //    last_scored_at as strictly newer data (its only merge rule), and its
+  //    fallback poll watches this one column instead of refetching scores.
+  //    Stamped AFTER the upserts so a client that sees the new token is
+  //    guaranteed to read the rows that produced it. Failure is non-fatal:
+  //    the column may not exist until 2026-06-10_hub_realtime.sql runs.
+  const stamp = await supabase
+    .from('ufc_events')
+    .update({ last_scored_at: new Date().toISOString() })
+    .in('id', eventIds);
+  if (stamp.error) console.warn('last_scored_at stamp failed (run 2026-06-10_hub_realtime.sql):', stamp.error.message);
+
   return { eventsScored: eventIds.length, rowsWritten: written, skippedNoFight };
 }
 

@@ -57,6 +57,13 @@
         '<path d="M5 21V4" />' +
         '<path d="M5 5h11l-2 3 2 3H5" />' +
       '</svg>',
+    fightNight:
+      // Flame — the live fight-night hub.
+      '<svg class="nav-tab__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+        '<path d="M12 3c1 3-1 4-2 6a4.5 4.5 0 0 0 2 6.5" />' +
+        '<path d="M12 3c4 3 6 6.5 6 10a6 6 0 0 1-12 0c0-1.6.5-3 1.4-4.4" />' +
+        '<path d="M12 15.5a2.2 2.2 0 0 0 2-3.2" />' +
+      '</svg>',
     draftRoom:
       // Play-in-circle — reads as "live event in progress." The play
       // triangle gets a filled override so it pops clearly inside the
@@ -97,6 +104,7 @@
   // want everywhere: Standings → Free Agency → Trades → Lineup → Score Event.
   var TAB_HREF = {
     leagueHome: function (id) { return 'league.html?id='      + encodeURIComponent(id); },
+    fightNight: function (id) { return 'fight-night.html?id=' + encodeURIComponent(id); },
     standings:  function (id) { return 'standings.html?id='   + encodeURIComponent(id); },
     freeAgency: function (id) { return 'waivers.html?id='     + encodeURIComponent(id); },
     trades:     function (id) { return 'trades.html?id='      + encodeURIComponent(id); },
@@ -107,6 +115,7 @@
   };
   var TAB_LABEL = {
     leagueHome: 'League Home',
+    fightNight: 'Fight Night',
     standings:  'Standings',
     freeAgency: 'Free Agency',
     trades:     'Trades',
@@ -114,7 +123,7 @@
     scoreEvent: 'Score Event',
     draftRoom:  'Draft Room'
   };
-  var DEFAULT_TABS = ['leagueHome', 'standings', 'freeAgency', 'trades', 'lineup'];
+  var DEFAULT_TABS = ['leagueHome', 'fightNight', 'standings', 'freeAgency', 'trades', 'lineup'];
 
   function render(opts) {
     opts = opts || {};

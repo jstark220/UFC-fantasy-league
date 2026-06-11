@@ -16529,3 +16529,840 @@ label .form-label__hint {
   text-align: right;
 }
 .dbx__foot::before { content: ''; }
+
+/* ========================================================================
+   FIGHT NIGHT HUB (fight-night.html)
+   Live second-screen page: hero, current fight, card, league race,
+   My Corner, round-by-round feed. Desktop = card column + sticky rail;
+   mobile = single column with MY BAR + Card/Race/Feed segmented control.
+   Crimson is reserved for the LIVE dot and MY BAR rank; gold for FINAL.
+   ======================================================================== */
+
+/* ---- layout ---- */
+.hub-layout {
+  display: grid;
+  /* minmax(0,1fr) so nowrap fight rows can't blow the track on narrow screens */
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: var(--space-6);
+  align-items: start;
+}
+.hub-rail {
+  position: sticky;
+  top: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+.hub-main { min-width: 0; display: flex; flex-direction: column; gap: var(--space-4); }
+
+/* ---- hero ---- */
+.hub-hero {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: var(--space-4) var(--space-6);
+  display: grid;
+  /* event identity | MY CORNER chips (flexes) | status */
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-6);
+  margin-bottom: var(--space-4);
+}
+.hub-hero__info { min-width: 0; }
+/* ---- MY CORNER in the hero ---- */
+.hub-hero__corner {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding-left: var(--space-6);
+  border-left: 1px solid var(--border-subtle);
+}
+.hub-corner-label {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--text-tertiary);
+}
+/* the corner label as a team picker: styled like the label, opens a select */
+.hub-corner-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: none;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  font-family: inherit;
+  padding: 2px 16px 2px 0;
+  cursor: pointer;
+  /* chevron caret, inherits the muted tone */
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='6' viewBox='0 0 8 6'><path d='M1 1l3 3 3-3' fill='none' stroke='%236A6A65' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 2px center;
+}
+.hub-corner-select:hover { color: var(--text-secondary); }
+.hub-corner-select:focus { outline: none; color: var(--text-primary); }
+.hub-corner-chips {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  max-width: 100%;
+}
+.hub-corner-chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  padding: 4px 12px 4px 4px;
+  max-width: 100%;
+}
+.hub-corner-chip__photo {
+  width: 28px; height: 28px; border-radius: 50%;
+  object-fit: cover; object-position: top;
+  background: var(--bg-primary); flex: none;
+}
+.hub-corner-chip__text { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+.hub-corner-chip__name {
+  font-size: 13px; font-weight: 600; color: var(--text-primary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 16ch;
+}
+.hub-corner-chip__sub { font-size: 10px; color: var(--text-tertiary); white-space: nowrap; }
+.hub-corner-chip__sub--live { color: var(--accent-crimson); font-weight: 700; }
+.hub-corner-chip__pts { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; padding-left: 2px; }
+.hub-corner-chip__pts--win  { color: var(--accent-success); }
+.hub-corner-chip__pts--loss { color: var(--text-tertiary); }
+.hub-corner-chip--total {
+  background: transparent; border-color: var(--border-strong);
+  padding: 4px 12px; gap: 8px;
+}
+.hub-corner-total-num {
+  font-family: 'Bebas Neue', sans-serif; font-size: 18px; line-height: 1;
+  font-variant-numeric: tabular-nums; color: var(--text-primary);
+}
+/* projected total: same shape, muted + dashed border so the real Total stays the star */
+.hub-corner-chip--proj { border-style: dashed; }
+.hub-corner-total-num--proj { color: var(--text-secondary); }
+.hub-corner-chip--cta {
+  text-decoration: none; padding: 6px 14px;
+  color: var(--text-primary); font-size: 13px; font-weight: 600;
+  border-color: var(--border-strong);
+}
+.hub-corner-chip--cta:hover { background: var(--bg-tertiary); }
+/* fighter chips are buttons (open the fighter modal); neutralize button chrome */
+button.hub-corner-chip {
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  position: relative;            /* anchors the hover tooltip */
+}
+button.hub-corner-chip:hover { border-color: var(--border-strong); }
+
+/* ---- hover breakdown tooltip (hover-capable devices only) ---- */
+.hub-chip-tip { display: none; }
+@media (hover: hover) and (pointer: fine) {
+  .hub-chip-tip {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    z-index: 320;
+    min-width: 210px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    padding: 10px 12px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-3px);
+    transition: opacity 0.12s ease, transform 0.12s ease, visibility 0.12s;
+    pointer-events: none;          /* never traps the cursor */
+  }
+  .hub-corner-chip:hover .hub-chip-tip,
+  .hub-corner-chip:focus-visible .hub-chip-tip {
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+  }
+  .hub-chip-tip__title {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--text-tertiary);
+    margin-bottom: 2px;
+  }
+  .hub-chip-tip__row {
+    display: flex; justify-content: space-between; gap: var(--space-4);
+    font-size: 12px; color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .hub-chip-tip__row--total {
+    color: var(--text-primary); font-weight: 700;
+    border-top: 1px solid var(--border-subtle);
+    padding-top: 4px; margin-top: 2px;
+  }
+}
+.hub-hero__eyebrow {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--text-tertiary); margin: 0;
+}
+.hub-hero__name {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 28px; line-height: 1.1; margin: 2px 0 0;
+  color: var(--text-primary);
+}
+.hub-hero__sub { font-size: 13px; color: var(--text-secondary); margin: 2px 0 0; }
+.hub-hero__right { text-align: right; min-width: 0; }
+.hub-hero__stamp { font-size: 11px; color: var(--text-tertiary); margin-top: 4px; font-variant-numeric: tabular-nums; }
+.hub-status {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+}
+.hub-status--live  { color: var(--accent-crimson); }
+.hub-status--final { color: var(--accent-gold); }
+.hub-status--preview { color: var(--text-secondary); }
+.hub-live-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent-crimson);
+  animation: hub-pulse 1.6s ease-in-out infinite;
+}
+@keyframes hub-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+.hub-countdown {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 26px; letter-spacing: 0.04em;
+  color: var(--text-primary); font-variant-numeric: tabular-nums;
+}
+.hub-reconnect {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 600;
+  color: var(--accent-warning);
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px; padding: 2px 10px; margin-top: 4px;
+}
+/* loud staleness: greyed numbers when data is old mid-LIVE */
+.hub-stale .hub-race-row__pts, .hub-stale .hub-mybar__pts, .hub-stale .hub-corner-chip__pts { opacity: 0.45; }
+
+/* ---- section cards ---- */
+.hub-section {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: var(--space-4);
+}
+.hub-section__label {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--text-secondary);
+  margin: 0 0 var(--space-3);
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+}
+
+/* ---- IN THE OCTAGON (current fight) + stat bars ---- */
+.hub-now .fight-row { border: none; padding-top: 0; }
+.hub-statbars { display: flex; flex-direction: column; gap: 6px; margin-top: var(--space-3); }
+.hub-statbar {
+  display: grid;
+  grid-template-columns: 4ch minmax(0, 1fr) 9ch minmax(0, 1fr) 4ch;
+  align-items: center; gap: 8px;
+  font-size: 12px; font-variant-numeric: tabular-nums;
+}
+.hub-statbar__label { text-align: center; color: var(--text-tertiary); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; }
+.hub-statbar__val { color: var(--text-secondary); }
+.hub-statbar__val--l { text-align: right; }
+.hub-statbar__track { height: 6px; border-radius: 3px; background: var(--bg-tertiary); position: relative; overflow: hidden; }
+.hub-statbar__fill { position: absolute; top: 0; bottom: 0; background: var(--text-secondary); border-radius: 3px; }
+.hub-statbar__track--l .hub-statbar__fill { right: 0; }
+.hub-statbar__track--r .hub-statbar__fill { left: 0; }
+.hub-now__pending { font-size: 12px; color: var(--text-tertiary); margin: var(--space-2) 0 0; }
+
+/* ---- league race ---- */
+.hub-toggle { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 6px; overflow: hidden; }
+.hub-toggle__btn {
+  background: transparent; border: none; cursor: pointer;
+  font-size: 11px; font-weight: 600; padding: 4px 10px;
+  color: var(--text-secondary);
+}
+.hub-toggle__btn--active { background: var(--bg-tertiary); color: var(--text-primary); }
+.hub-race-row {
+  display: grid;
+  grid-template-columns: 2.2ch minmax(0, 1fr) auto auto;
+  gap: var(--space-3);
+  align-items: center;
+  width: 100%;
+  padding: 8px 10px;
+  border: none; border-radius: 6px;
+  background: transparent; cursor: pointer; text-align: left;
+  font-size: 14px; color: var(--text-primary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.hub-race-row:last-of-type { border-bottom: none; }
+.hub-race-row:hover { background: var(--bg-tertiary); }
+.hub-race-row--me { background: var(--accent-crimson-subtle); }
+.hub-race-row__rank { font-weight: 700; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.hub-race-row__team { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.hub-race-row__you { font-size: 10px; color: var(--accent-crimson); font-weight: 700; margin-left: 6px; text-transform: uppercase; }
+.hub-race-row__pts { font-weight: 700; font-variant-numeric: tabular-nums; }
+.hub-race-row__sub { font-size: 12px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.hub-race-detail { padding: 4px 10px 10px 28px; border-bottom: 1px solid var(--border-subtle); }
+.hub-race-detail__row {
+  display: flex; justify-content: space-between; gap: var(--space-3);
+  font-size: 13px; padding: 3px 0; color: var(--text-secondary);
+}
+.hub-race-detail__row b { color: var(--text-primary); font-weight: 600; }
+.hub-race-detail__pts { font-variant-numeric: tabular-nums; }
+
+/* ---- My Corner ---- */
+.hub-corner-row {
+  display: flex; align-items: center; gap: var(--space-3);
+  padding: 8px 0; border-bottom: 1px solid var(--border-subtle);
+}
+.hub-corner-row:last-child { border-bottom: none; }
+.hub-corner-row__photo {
+  width: 36px; height: 36px; border-radius: 6px; object-fit: cover; object-position: top;
+  background: var(--bg-tertiary); flex: none;
+}
+.hub-corner-row__text { min-width: 0; flex: 1; }
+.hub-corner-row__name { font-size: 14px; font-weight: 600; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-corner-row__sub { font-size: 12px; color: var(--text-tertiary); margin: 1px 0 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-corner-row__pts { font-weight: 700; font-variant-numeric: tabular-nums; flex: none; }
+.hub-corner-row__pts--win  { color: var(--accent-success); }
+.hub-corner-row__pts--loss { color: var(--text-tertiary); }
+.hub-corner__total {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-top: var(--space-3); padding-top: var(--space-3);
+  border-top: 1px solid var(--border-strong);
+  font-weight: 700;
+}
+.hub-corner__total span:last-child { font-family: 'Bebas Neue', sans-serif; font-size: 22px; font-variant-numeric: tabular-nums; }
+
+/* ---- feed ---- */
+.hub-feed-row { display: flex; gap: var(--space-3); padding: 6px 0; font-size: 13px; border-bottom: 1px solid var(--border-subtle); }
+.hub-feed-row:last-child { border-bottom: none; }
+.hub-feed-row__time { color: var(--text-tertiary); font-variant-numeric: tabular-nums; flex: none; font-size: 12px; }
+.hub-feed-row__text { color: var(--text-secondary); min-width: 0; }
+.hub-feed-row__text b { color: var(--text-primary); font-weight: 600; }
+
+/* ---- winner banner (FINAL) ---- */
+.hub-winner {
+  border: 1px solid var(--accent-gold);
+  box-shadow: 0 0 24px -10px var(--accent-gold);
+  border-radius: 8px;
+  background: var(--accent-gold-subtle);
+  padding: var(--space-4);
+  text-align: center;
+  margin-bottom: var(--space-4);
+}
+.hub-winner__eyebrow { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent-gold); font-weight: 700; margin: 0; }
+.hub-winner__team { font-family: 'Bebas Neue', sans-serif; font-size: 26px; margin: 2px 0 0; }
+.hub-winner__pts { font-size: 13px; color: var(--text-secondary); margin: 2px 0 0; font-variant-numeric: tabular-nums; }
+
+/* ---- toasts ---- */
+.hub-toasts { position: fixed; left: 50%; transform: translateX(-50%); bottom: 76px; z-index: 600; display: flex; flex-direction: column; gap: 8px; width: min(92vw, 420px); }
+.hub-toast {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-strong);
+  border-left: 3px solid var(--accent-success);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+  animation: hub-toast-in 0.18s ease-out;
+}
+.hub-toast--loss { border-left-color: var(--text-tertiary); }
+.hub-toast--win  { border-left-color: var(--accent-gold); }
+@keyframes hub-toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* ---- MY BAR + mobile tabs (hidden on desktop) ---- */
+.hub-mybar, .hub-tabs { display: none; }
+
+@media (max-width: 900px) {
+  .hub-layout { grid-template-columns: minmax(0, 1fr); }
+  .hub-rail { position: static; }
+}
+
+@media (max-width: 720px) {
+  /* MY BAR: the one-glance answer, sticky under the header */
+  .hub-mybar {
+    display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3);
+    position: sticky; top: 0; z-index: 250;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin-bottom: var(--space-3);
+  }
+  .hub-mybar__label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-tertiary); font-weight: 700; }
+  .hub-mybar__pts { font-family: 'Bebas Neue', sans-serif; font-size: 22px; font-variant-numeric: tabular-nums; }
+  .hub-mybar__rank { font-size: 13px; font-weight: 700; color: var(--accent-crimson); font-variant-numeric: tabular-nums; }
+
+  /* segmented control */
+  .hub-tabs {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0;
+    position: sticky; top: 46px; z-index: 240;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-strong);
+    border-radius: 8px; overflow: hidden;
+    margin-bottom: var(--space-3);
+  }
+  .hub-tabs__btn {
+    background: transparent; border: none; cursor: pointer;
+    padding: 10px 0; font-size: 13px; font-weight: 600;
+    color: var(--text-secondary);
+    border-right: 1px solid var(--border-subtle);
+  }
+  .hub-tabs__btn:last-child { border-right: none; }
+  .hub-tabs__btn--active { background: var(--bg-tertiary); color: var(--text-primary); }
+
+  /* tab switching: only the active group shows */
+  body[data-hub-tab="card"] .hub-rail { display: none; }
+  body[data-hub-tab="card"] #hubFeedSection { display: none; }
+  body[data-hub-tab="race"] .hub-main { display: none; }
+  body[data-hub-tab="feed"] #hubNowSection,
+  body[data-hub-tab="feed"] #hubUpNextSection,
+  body[data-hub-tab="feed"] #hubCardSection { display: none; }
+  body[data-hub-tab="feed"] .hub-rail { display: none; }
+
+  .hub-hero {
+    padding: var(--space-3) var(--space-4);
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-3);
+  }
+  .hub-hero__name { font-size: 22px; }
+  .hub-hero__right { text-align: left; }
+  .hub-hero__corner { padding-left: 0; border-left: none; }
+  .hub-corner-chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+    padding-bottom: 2px;
+  }
+  .hub-countdown { font-size: 22px; }
+  .hub-statbar { grid-template-columns: 3ch minmax(0, 1fr) 8ch minmax(0, 1fr) 3ch; gap: 5px; font-size: 11px; }
+  .hub-toasts { bottom: 64px; }
+}
+
+/* ---- hub collapsible card section ---- */
+.hub-section__head {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+  width: 100%;
+  background: transparent; border: none; padding: 0; cursor: pointer;
+  text-align: left;
+}
+.hub-section__label--inhead { margin: 0; }
+.hub-section__head-right { display: inline-flex; align-items: center; gap: 10px; }
+.hub-section__summary { font-size: 12px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.hub-chevron {
+  width: 8px; height: 8px; flex: none;
+  border-right: 2px solid var(--text-secondary);
+  border-bottom: 2px solid var(--text-secondary);
+  transform: rotate(45deg);            /* pointing down = collapsed, tap to open */
+  transition: transform 0.15s ease;
+  margin-top: -3px;
+}
+.hub-chevron--open { transform: rotate(225deg); margin-top: 3px; }
+/* breathing room between the header and the card rows when open */
+.hub-section__head + .fight-card-section__label { margin-top: var(--space-3); }
+
+/* ---- hub desktop chat dock (fight-night.html only) ----
+   ≥1101px: chat is a permanent right column; the floating popup is
+   suppressed via window.CHAT_POPUP_DISABLED and content shifts left.
+   ≤1100px: the dock stays empty + hidden and the popup owns chat. */
+.hub-chat-dock { display: none; }
+
+@media (min-width: 1101px) {
+  /* Two-column page grid: hub content left, chat dock right. The dock is a
+     normal grid child, so its top edge aligns with the event hero (it never
+     rises into the league-header / nav-tab zone), and it sticks in place
+     while the content scrolls. */
+  .page-fight-night .dashboard-body {
+    max-width: none;
+    margin: 0;                                   /* left-aligned, not centered */
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 360px;
+    column-gap: var(--space-8);
+    align-items: start;
+  }
+  .page-fight-night .dashboard-body > :not(.hub-chat-dock) { grid-column: 1; }
+  /* header stays full-width; just left-align its contents to match the body */
+  .page-fight-night .league-header__inner {
+    max-width: none;
+    margin: 0;
+  }
+  .hub-chat-dock {
+    /* FIXED, not sticky: a sticky grid child whose height changes on scroll
+       re-layouts the page (and can change document height), which moves the
+       scrollbar mid-scroll — the glitch. Fixed positioning takes the dock
+       out of flow entirely; the grid's 360px column simply reserves the
+       space. sizeDock() pins top to the hero until the page scrolls past
+       it, then to the nav, writing styles only when values change. */
+    position: fixed;
+    top: calc(var(--nav-height) + var(--space-4));   /* pre-JS fallback */
+    right: var(--space-8);
+    width: 360px;
+    height: calc(100vh - var(--nav-height) - var(--space-6));
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    overflow: hidden;
+    z-index: 90;
+  }
+  .hub-chat-dock__head {
+    flex: none;
+    padding: 10px 16px;
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  /* Reuse the popup-body chat layout but adapted to a tall narrow column:
+     the thread sidebar stacks ON TOP as a compact strip (the popup's own
+     mobile treatment) so the message pane and composer get the full width. */
+  .hub-chat-dock .chat-popup__body {
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    max-height: none;
+    height: auto;
+    display: flex;
+  }
+  .hub-chat-dock .chat-popup__body .chat-sidebar {
+    width: auto;
+    max-height: 132px;
+    overflow-y: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .hub-chat-dock .chat-window { flex: 1; min-width: 0; min-height: 0; border: none; border-radius: 0; }
+  .hub-chat-dock .chat-messages { min-height: 0; }
+}
+
+@media (min-width: 1101px) {
+  /* center toasts on the content area, not the viewport (dock offsets it) */
+  .page-fight-night .hub-toasts { left: calc((100vw - 360px - var(--space-8)) / 2); }
+}
+
+/* ========================================================================
+   HUB FINISH PASS + MOTION LAYER
+   ======================================================================== */
+
+/* ---- skeleton shimmer (first paint, replaced by real renders) ---- */
+.hub-skel {
+  display: block;
+  height: 12px;
+  border-radius: 4px;
+  margin: 8px 0;
+  background: linear-gradient(90deg, var(--bg-tertiary) 25%, var(--border-subtle) 50%, var(--bg-tertiary) 75%);
+  background-size: 200% 100%;
+  animation: hub-shimmer 1.4s linear infinite;
+}
+.hub-skel--lg { height: 24px; }
+@keyframes hub-shimmer { to { background-position: -200% 0; } }
+
+/* ---- W-L record beside rank on bout rows ---- */
+.fight-row__record {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+  margin-left: 6px;
+  white-space: nowrap;
+}
+
+/* ---- NOW / NEXT placement pills in the card list ---- */
+.fight-row__livepill {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+  border-radius: 4px; padding: 1px 6px;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-strong);
+}
+.fight-row__livepill--now {
+  color: #fff;
+  background: var(--accent-crimson);
+  border-color: var(--accent-crimson);
+  animation: hub-pulse 1.6s ease-in-out infinite;
+}
+
+/* ---- one-shot settle flash when a fight goes final ---- */
+.fight-row--flash { animation: hub-row-flash 1.6s ease-out 1; }
+@keyframes hub-row-flash {
+  0%   { background: var(--accent-gold-subtle); box-shadow: inset 3px 0 0 var(--accent-gold); }
+  100% { background: transparent; box-shadow: inset 3px 0 0 transparent; }
+}
+
+/* ---- LIVE dot radar ping ---- */
+.hub-live-dot { position: relative; }
+.hub-live-dot::after {
+  content: '';
+  position: absolute; inset: 0;
+  border-radius: 50%;
+  background: var(--accent-crimson);
+  animation: hub-ping 1.6s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+@keyframes hub-ping {
+  0%   { transform: scale(1);   opacity: 0.6; }
+  80%, 100% { transform: scale(2.6); opacity: 0; }
+}
+
+/* ---- IT'S TIME lock takeover (one-shot) ---- */
+.hub-itstime {
+  position: fixed; inset: 0; z-index: 900;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(10, 8, 9, 0.88);
+  animation: hub-itstime-bg 2.4s ease forwards;
+  pointer-events: none;
+}
+.hub-itstime__text {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: clamp(64px, 14vw, 180px);
+  letter-spacing: 0.06em;
+  color: var(--accent-crimson);
+  text-shadow: 0 0 48px rgba(193, 59, 46, 0.5);
+  animation: hub-itstime-text 2.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+@keyframes hub-itstime-bg {
+  0% { opacity: 0; } 8% { opacity: 1; } 78% { opacity: 1; } 100% { opacity: 0; }
+}
+@keyframes hub-itstime-text {
+  0% { transform: scale(0.82); opacity: 0; }
+  12% { transform: scale(1); opacity: 1; }
+  80% { transform: scale(1.04); opacity: 1; }
+  100% { transform: scale(1.06); opacity: 0; }
+}
+
+/* ---- photo fade-in (hub only; placeholders are divs and unaffected) ---- */
+.page-fight-night img.fight-row__photo,
+.page-fight-night img.hub-corner-chip__photo {
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+.page-fight-night img.img-loaded { opacity: 1; }
+
+/* ---- keyboard focus (design system 8.2) ---- */
+.hub-race-row:focus-visible,
+.hub-tabs__btn:focus-visible,
+.hub-toggle__btn:focus-visible,
+.hub-corner-select:focus-visible,
+button.hub-corner-chip:focus-visible,
+.hub-section__head:focus-visible {
+  outline: 2px solid var(--accent-crimson);
+  outline-offset: 2px;
+}
+
+/* ---- mobile: records crowd the abbreviated names; density is desktop's ---- */
+@media (max-width: 720px) {
+  .fight-row__record { display: none; }
+}
+
+/* ---- reduced motion: kill all hub animation, keep state changes ---- */
+@media (prefers-reduced-motion: reduce) {
+  .hub-skel, .hub-live-dot, .hub-live-dot::after,
+  .fight-row__livepill--now, .fight-row--flash, .hub-itstime,
+  .hub-itstime__text, .hub-toast { animation: none !important; }
+  .hub-live-dot::after { display: none; }
+}
+
+/* ========================================================================
+   HUB CRAFT PASS — surfaces, bars, rings, scrollbars, VS mark, poster hero
+   ======================================================================== */
+
+/* ---- 1. surface & depth: every hub card gets the "lit edge" treatment ---- */
+.page-fight-night .hub-section,
+.page-fight-night .hub-hero,
+.page-fight-night .hub-chat-dock,
+.page-fight-night .hub-mybar,
+.page-fight-night .hub-tabs,
+.page-fight-night .hub-winner {
+  border-radius: 10px;
+  /* inner top highlight (light catching the surface) + layered drop shadow */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 1px 2px rgba(0, 0, 0, 0.30),
+    0 10px 28px -16px rgba(0, 0, 0, 0.55);
+}
+/* the page itself: faint top-center lift instead of dead-flat black */
+body.page-fight-night {
+  background:
+    radial-gradient(900px 420px at 50% -80px, rgba(255, 255, 255, 0.025), transparent 70%),
+    var(--bg-primary);
+}
+
+/* ---- 2. race rows as a live bar chart ---- */
+.hub-race-row { position: relative; overflow: hidden; }
+.hub-race-row::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: calc(var(--race-frac, 0) * 100%);
+  /* gradient builds toward the bar's end + a crisp cap line: reads as a
+     chart, not a hover/selection wash */
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.015), rgba(255, 255, 255, 0.07));
+  border-right: 2px solid rgba(255, 255, 255, 0.16);
+  border-radius: 6px 3px 3px 6px;
+  transition: width 600ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  pointer-events: none;
+}
+/* gold belongs to the leader (earned moment) */
+.hub-race-row--leader::before {
+  background: linear-gradient(90deg, rgba(212, 168, 75, 0.07), rgba(212, 168, 75, 0.24));
+  border-right-color: rgba(212, 168, 75, 0.85);
+  box-shadow: inset -1px 0 8px -2px rgba(212, 168, 75, 0.30);
+}
+/* your row races in crimson */
+.hub-race-row--me::before {
+  background: linear-gradient(90deg, rgba(193, 59, 46, 0.04), rgba(193, 59, 46, 0.16));
+  border-right-color: rgba(193, 59, 46, 0.60);
+}
+.hub-race-row > * { position: relative; }
+
+/* ---- 3. status rings on corner chip photos ---- */
+.hub-corner-chip--win  .hub-corner-chip__photo { box-shadow: 0 0 0 2px var(--accent-success); }
+.hub-corner-chip--loss .hub-corner-chip__photo { box-shadow: 0 0 0 2px var(--border-strong); opacity: 0.75; }
+.hub-corner-chip--octagon .hub-corner-chip__photo {
+  box-shadow: 0 0 0 2px var(--accent-crimson);
+  animation: hub-ring-pulse 1.6s ease-in-out infinite;
+}
+@keyframes hub-ring-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px var(--accent-crimson); }
+  50%      { box-shadow: 0 0 0 2px var(--accent-crimson), 0 0 12px 0 rgba(193, 59, 46, 0.55); }
+}
+
+/* ---- 4. scrollbars + micro-interactions ---- */
+body.page-fight-night,
+.page-fight-night .chat-messages,
+.page-fight-night .chat-sidebar,
+.page-fight-night .hub-corner-chips {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+.page-fight-night ::-webkit-scrollbar { width: 8px; height: 8px; }
+.page-fight-night ::-webkit-scrollbar-track { background: transparent; }
+.page-fight-night ::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 99px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.hub-race-row { transition: background 0.12s ease, transform 0.12s ease; }
+.hub-race-row:hover { transform: translateY(-1px); }
+button.hub-corner-chip { transition: border-color 0.12s ease, transform 0.12s ease; }
+button.hub-corner-chip:hover { transform: translateY(-1px); }
+.hub-tabs__btn:active, .hub-toggle__btn:active,
+button.hub-corner-chip:active, .hub-section__head:active { transform: scale(0.985); }
+
+/* ---- 5. the VS mark: fight-poster signature ---- */
+.fight-row__vs {
+  position: relative;
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 15px;
+  letter-spacing: 0.06em;
+  color: var(--accent-crimson);
+  transform: skewX(-8deg);
+  display: inline-block;
+  padding: 0 10px;
+}
+.fight-row__vs::before,
+.fight-row__vs::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 1px;
+  height: 14px;
+  background: var(--border-strong);
+  transform: translateY(-50%) rotate(22deg);
+}
+.fight-row__vs::before { left: 0; }
+.fight-row__vs::after  { right: 0; }
+
+/* ---- 6. POSTER HERO: fighter cutouts + phase identity ---- */
+/* Clipping lives on a dedicated background layer (NOT the hero itself) so
+   the corner chips' hover tooltips can extend below the card. */
+.hub-hero { position: relative; }
+.hub-hero__bg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  z-index: 0;
+  pointer-events: none;
+}
+.hub-hero__info, .hub-hero__corner, .hub-hero__right { position: relative; z-index: 1; }
+.hub-hero__cutout {
+  position: absolute;
+  top: 2px;                 /* head + shoulders in the band, body cropped below */
+  height: 190%;
+  width: auto;
+  opacity: 0.11;            /* atmosphere, never competing with text */
+  z-index: 0;
+  pointer-events: none;
+  filter: grayscale(30%) contrast(105%);
+}
+/* bleed half off the card edge and fade out well before the text zones */
+.hub-hero__cutout--l {
+  left: -28px;
+  -webkit-mask-image: linear-gradient(to right, black 15%, transparent 65%);
+          mask-image: linear-gradient(to right, black 15%, transparent 65%);
+}
+.hub-hero__cutout--r {
+  right: -28px;
+  -webkit-mask-image: linear-gradient(to left, black 15%, transparent 65%);
+          mask-image: linear-gradient(to left, black 15%, transparent 65%);
+}
+/* hero text owns its contrast over the cutouts */
+.hub-hero__info, .hub-hero__right {
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.85), 0 0 2px rgba(0, 0, 0, 0.6);
+}
+/* phase edge-glow along the hero's top edge */
+.hub-hero::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 6%; right: 6%;
+  height: 2px;
+  border-radius: 2px;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+  pointer-events: none;
+}
+.hub-hero--live::after {
+  opacity: 1;
+  background: linear-gradient(90deg, transparent, var(--accent-crimson), transparent);
+  box-shadow: 0 0 18px 1px rgba(193, 59, 46, 0.45);
+}
+.hub-hero--final::after {
+  opacity: 1;
+  background: linear-gradient(90deg, transparent, var(--accent-gold), transparent);
+  box-shadow: 0 0 18px 1px rgba(212, 168, 75, 0.40);
+}
+/* phase ambience inside the hero surface */
+.hub-hero--live {
+  background:
+    radial-gradient(120% 200% at 50% -40%, rgba(193, 59, 46, 0.08), transparent 55%),
+    var(--bg-secondary);
+}
+.hub-hero--final {
+  background:
+    radial-gradient(120% 200% at 50% -40%, rgba(212, 168, 75, 0.07), transparent 55%),
+    var(--bg-secondary);
+}
+@media (min-width: 1101px) {
+  .hub-hero { min-height: 116px; }
+}
+@media (max-width: 720px) {
+  .hub-hero__cutout { display: none; }   /* phones: clarity beats atmosphere */
+}
+@media (prefers-reduced-motion: reduce) {
+  .hub-corner-chip--octagon .hub-corner-chip__photo { animation: none; }
+  .hub-race-row::before { transition: none; }
+  .hub-race-row:hover, button.hub-corner-chip:hover { transform: none; }
+}
+
+/* lineup-incomplete nag chip (warning gold — earned attention, not crimson) */
+.hub-corner-chip--warn {
+  text-decoration: none;
+  padding: 6px 14px;
+  font-size: 13px; font-weight: 600;
+  color: var(--accent-warning);
+  border-color: var(--accent-warning);
+}
+.hub-corner-chip--warn:hover { background: var(--accent-gold-subtle); }

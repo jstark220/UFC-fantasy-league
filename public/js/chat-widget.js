@@ -139,6 +139,7 @@
   // Public API
   // ----------------------------------------------------------------------
   async function open() {
+    if (window.CHAT_POPUP_DISABLED) return;   // page renders chat elsewhere (e.g. hub dock)
     const lid = getLeagueId();
     if (!lid) return;
 
@@ -183,6 +184,7 @@
   // minimized; if the user had it open last time on this league, reopen.
   // ----------------------------------------------------------------------
   function restore() {
+    if (window.CHAT_POPUP_DISABLED) return;   // page renders chat elsewhere (e.g. hub dock)
     const lid = getLeagueId();
     if (!lid) return;
     const persisted = loadState();

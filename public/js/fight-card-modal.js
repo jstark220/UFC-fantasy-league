@@ -2,9 +2,12 @@
 // FIGHT CARD MODAL — shared module
 //
 // Opens a centered modal listing every fight on a UFC event's card. Used
-// from the league page's "View fight card" button, and (eventually) from
-// other surfaces where we want a quick card preview without taking the
-// user into the lineup page.
+// from the league page's "View fight card" button and other surfaces that
+// want a quick card preview without taking the user into the lineup page.
+//
+// Bout-row rendering lives in fight-rows.js (FightRows.shape / .rowHtml),
+// shared with the Fight Night Hub so both surfaces render identically.
+// fight-rows.js must be loaded before this file.
 //
 // Public API:
 //   FightCardModal.show(eventId, opts)
@@ -12,50 +15,23 @@
 //     opts.leagueId    — optional league uuid. When provided, fetches
 //                        league_event_overrides and merges them so the
 //                        modal shows this league's (possibly customized)
-//                        event name / date / venue. Omit for surfaces
-//                        without a league context (global views).
+//                        event name / date / venue.
 //     opts.rosterIds   — optional Set/Object of fighter ids on the
-//                        viewer's roster (drives YOURS pill)
+//                        viewer's roster (drives YOURS highlight)
 //     opts.starterIds  — optional Set/Object of fighter ids in starter
-//                        slots for the event (drives STARTER pill)
+//                        slots for the event (drives STARTER highlight)
 //
-// Reuses the .fight-card-modal-overlay + .fight-row CSS already defined
-// in components.css. Optional deps: FightOdds, Projections, countryFlag,
-// showFighterModal — feature-gates each chunk on `typeof X !== 'undefined'`.
+// Optional deps: FightOdds, Projections, Scoring, EventOverrides,
+// showFighterModal — feature-gated on `typeof X !== 'undefined'`.
 // ========================================================================
 
 (function (root) {
-  // Division-id → display label. Same set used across the app.
-  var DIVISION_LABELS = {
-    strawweight:       "Women's Strawweight",
-    flyweight_w:       "Women's Flyweight",
-    bantamweight_w:    "Women's Bantamweight",
-    flyweight:         "Men's Flyweight",
-    bantamweight:      "Men's Bantamweight",
-    featherweight:     "Men's Featherweight",
-    lightweight:       "Men's Lightweight",
-    welterweight:      "Men's Welterweight",
-    middleweight:      "Men's Middleweight",
-    light_heavyweight: "Men's Light Heavyweight",
-    heavyweight:       "Men's Heavyweight"
-  };
-
-  // Map ufc_events.weight_class → display label, with sensible fallback
-  // for unrecognized values.
-  function divisionLabel(raw) {
-    if (!raw) return '';
-    return DIVISION_LABELS[raw] || raw.replace(/_/g, ' ');
-  }
-
   function escapeHtml(str) {
     if (str == null) return '';
     var d = document.createElement('div');
     d.textContent = String(str);
     return d.innerHTML;
   }
-
-  // Card-position ordering for fallback sort when fight_order is null.
-  var CARD_POSITION_ORDER = { main_event: 0, co_main: 1, main_card: 2 };
 
   // ---- Data loaders ------------------------------------------------------
 
@@ -87,55 +63,11 @@
     if (!ids.length) return {};
     var res = await supabaseClient
       .from('fighters')
-      .select('id, name, photo_url, current_rank, is_champion, is_sub_champion, sub_title_type, country')
+      .select('id, name, photo_url, current_rank, is_champion, is_sub_champion, sub_title_type, country, record_wins, record_losses, record_draws')
       .in('id', ids);
     var map = {};
     (res.data || []).forEach(function (f) { map[f.id] = f; });
     return map;
-  }
-
-  // ---- Render helpers ----------------------------------------------------
-
-  // Compact rank that lives inline with the fighter's name. Same logic
-  // as the old sub-line rank but trimmed to fit alongside the name —
-  // "Champion" → "CHAMP", "Interim Champion" → "INT" — so long names
-  // don't get pushed off the row.
-  function inlineRank(f) {
-    if (!f) return '';
-    if (f.isChampion)                                  return '<span class="fight-row__rank-inline fight-row__rank-inline--champ">CHAMP</span>';
-    if (f.isSubChamp && f.subTitleType === 'interim')  return '<span class="fight-row__rank-inline fight-row__rank-inline--interim">INT</span>';
-    if (f.isSubChamp && f.subTitleType === 'bmf')      return '<span class="fight-row__rank-inline fight-row__rank-inline--bmf">BMF</span>';
-    if (f.currentRank)                                 return '<span class="fight-row__rank-inline">#' + f.currentRank + '</span>';
-    return '<span class="fight-row__rank-inline fight-row__rank-inline--unranked">NR</span>';
-  }
-
-  // Ownership relative to the viewer: 'starter' (in their locked lineup),
-  // 'yours' (rostered but not started), or ''. Drives a highlight on the whole
-  // fighter cell (a gold ring) rather than a trailing text pill that long names
-  // would clip off.
-  function ownershipKind(fid, rosterIds, starterIds) {
-    if (starterIds && starterIds[fid]) return 'starter';
-    if (rosterIds  && rosterIds[fid])  return 'yours';
-    return '';
-  }
-
-  // "Belal Muhammad" -> "B. Muhammad". Keeps a multi-word last name intact
-  // (everything after the first token). Used for the mobile name so it fits.
-  function abbrevName(name) {
-    if (!name) return '';
-    var parts = String(name).trim().split(/\s+/);
-    if (parts.length < 2) return name;
-    return parts[0].charAt(0).toUpperCase() + '. ' + parts.slice(1).join(' ');
-  }
-
-  // Earned-fantasy-points chip shown once a bout is decided. Mirrors the
-  // projection pill's shape (PROJ -> PTS) with a gold "final" treatment.
-  function scoreChipHtml(pts) {
-    var val = (Math.round(pts * 100) / 100).toFixed(1);
-    return '<span class="fight-projection fight-projection--final" title="Fantasy points earned">' +
-             '<span class="fight-projection__label">PTS</span>' +
-             '<span class="fight-projection__val">' + val + '</span>' +
-           '</span>';
   }
 
   // This league's scoring_config, so decided bouts score by the league's own
@@ -145,140 +77,6 @@
       var res = await supabaseClient.from('leagues').select('scoring_config').eq('id', leagueId).maybeSingle();
       return (res && res.data) ? res.data.scoring_config : null;
     } catch (e) { return null; }
-  }
-
-  function fighterSide(fighter, sideMod, isWinner, opponentName, eventName, opts) {
-    if (!fighter || !fighter.id) {
-      return '<div class="fight-row__side ' + sideMod + '"><span class="fight-row__name">TBD</span></div>';
-    }
-    var photoHtml = fighter.photoUrl
-      ? '<img class="fight-row__photo" src="' + escapeHtml(fighter.photoUrl) + '" alt="' + escapeHtml(fighter.name) + '" onerror="this.style.display=\'none\'">'
-      : '<div class="fight-row__photo fight-row__photo--placeholder"></div>';
-    var winnerMark = isWinner ? '<span class="fight-row__winner-mark" title="Winner">✓</span>' : '';
-    var flag = (typeof countryFlag === 'function') ? countryFlag(fighter.country) : '';
-    var flagHtml = flag ? '<span class="fight-row__flag">' + flag + '</span>' : '';
-    // showBrand:true tacks "POLYMARKET" onto the chip — makes the source
-    // of the percentage obvious instead of leaving a naked "80%" floating
-    // among the other stats.
-    var odds = (typeof FightOdds !== 'undefined' && opts.oddsMap[fighter.id])
-      ? FightOdds.chipHtml(opts.oddsMap[fighter.id], { showBrand: true })
-      : '';
-    // Once the bout is decided, show the EARNED fantasy score in place of the
-    // (now-irrelevant) projection.
-    var scorePts  = opts.scoreMap ? opts.scoreMap[fighter.id] : undefined;
-    var hasScore  = scorePts != null;
-    var scoreChip = hasScore ? scoreChipHtml(scorePts) : '';
-    var proj = (!hasScore && typeof Projections !== 'undefined' && opts.projMap[fighter.id])
-      ? Projections.pillHtml(opts.projMap[fighter.id], {
-          fighterId:    fighter.id,
-          fighterName:  fighter.name,
-          opponentName: opponentName || '',
-          eventName:    eventName || ''
-        })
-      : '';
-    // Roster/starter status highlights the whole fighter cell (a gold ring on
-    // the side, via this class) instead of a trailing text pill that long names
-    // clipped off on mobile.
-    var ownKind  = ownershipKind(fighter.id, opts.rosterIds, opts.starterIds);
-    var ownClass = ownKind ? ' fight-row__side--' + ownKind : '';
-
-    // New uniform layout:
-    //   Line 1: name + rank, inline (ownership now shown by the cell highlight)
-    //   Lines 2+: chip column — odds chip on top, projection pill beneath
-    //
-    // Both chips always stack vertically in the same order, so every row
-    // reads with the same rhythm regardless of which chips are present.
-    return (
-      '<button class="fight-row__side ' + sideMod + ownClass + '" data-open-fighter="' + fighter.id + '" type="button">' +
-        photoHtml +
-        '<div class="fight-row__text">' +
-          '<span class="fight-row__name">' +
-            winnerMark + flagHtml +
-            // Full name on desktop; "F. Lastname" on mobile so it never clips.
-            // CSS toggles which span shows at the card's mobile breakpoint.
-            '<span class="fight-row__name-full">' + escapeHtml(fighter.name) + '</span>' +
-            '<span class="fight-row__name-abbr">' + escapeHtml(abbrevName(fighter.name)) + '</span>' +
-            ' ' + inlineRank(fighter) +
-          '</span>' +
-          '<div class="fight-row__chips">' +
-            (odds ? '<span class="fight-row__chip-row">' + odds + '</span>' : '') +
-            (scoreChip ? '<span class="fight-row__chip-row">' + scoreChip + '</span>' : '') +
-            (proj ? '<span class="fight-row__chip-row">' + proj + '</span>' : '') +
-          '</div>' +
-        '</div>' +
-      '</button>'
-    );
-  }
-
-  function fightRowHtml(fight, eventName, opts) {
-    var badgeHtml = fight.badge
-      ? '<span class="fight-row__badge">' + escapeHtml(fight.badge) + '</span>'
-      : '';
-    var redIsWinner  = fight.outcome && fight.winnerId === fight.redId;
-    var blueIsWinner = fight.outcome && fight.winnerId === fight.blueId;
-    var redOpp  = fight.blue && fight.blue.name ? fight.blue.name : '';
-    var blueOpp = fight.red  && fight.red.name  ? fight.red.name  : '';
-    return (
-      '<div class="fight-row">' +
-        // Weight class + badge on a full-width header line so they don't eat the
-        // middle and squeeze the two names.
-        '<div class="fight-row__header">' +
-          badgeHtml +
-          '<span class="fight-row__weight">' + escapeHtml(fight.weightClass) + '</span>' +
-        '</div>' +
-        // The matchup: red | tiny VS | blue.
-        '<div class="fight-row__bout">' +
-          fighterSide(fight.red,  'fight-row__side--red',  redIsWinner,  redOpp,  eventName, opts) +
-          '<div class="fight-row__center"><span class="fight-row__vs">VS</span></div>' +
-          fighterSide(fight.blue, 'fight-row__side--blue', blueIsWinner, blueOpp, eventName, opts) +
-        '</div>' +
-      '</div>'
-    );
-  }
-
-  // Build the structured card array — same shape lineup.js uses.
-  function shapeFights(rawFights, fighterMap) {
-    function info(id) {
-      var f = fighterMap[id];
-      if (!f) return { name: '?' };
-      return {
-        id:           f.id,
-        name:         f.name,
-        photoUrl:     f.photo_url || null,
-        currentRank:  f.current_rank,
-        isChampion:   !!f.is_champion,
-        isSubChamp:   !!f.is_sub_champion,
-        subTitleType: f.sub_title_type,
-        country:      f.country || null
-      };
-    }
-    return rawFights.map(function (f) {
-      var red  = info(f.fighter_a_id);
-      var blue = info(f.fighter_b_id);
-      return {
-        id:           f.id,
-        red:          red,
-        blue:         blue,
-        redId:        f.fighter_a_id,
-        blueId:       f.fighter_b_id,
-        weightClass:  divisionLabel(f.weight_class),
-        cardPosition: f.card_position,
-        fightOrder:   f.fight_order,
-        outcome:      f.outcome,
-        winnerId:     f.winner_id,
-        badge:        f.card_position === 'main_event' ? 'Main Event'
-                    : f.card_position === 'co_main'    ? 'Co-Main'
-                    : f.title_type && f.title_type !== 'none' ? 'Title Fight'
-                    : null
-      };
-    }).sort(function (a, b) {
-      if (a.fightOrder != null && b.fightOrder != null) return a.fightOrder - b.fightOrder;
-      if (a.fightOrder != null) return -1;
-      if (b.fightOrder != null) return 1;
-      var oa = CARD_POSITION_ORDER[a.cardPosition] != null ? CARD_POSITION_ORDER[a.cardPosition] : 99;
-      var ob = CARD_POSITION_ORDER[b.cardPosition] != null ? CARD_POSITION_ORDER[b.cardPosition] : 99;
-      return oa - ob;
-    });
   }
 
   // ---- Modal lifecycle ---------------------------------------------------
@@ -362,7 +160,7 @@
       });
     }
 
-    var fights = shapeFights(rawFights, fighterMap);
+    var fights = FightRows.shape(rawFights, fighterMap);
 
     // Group main card vs prelims
     var hasOrder = fights.some(function (f) { return f.fightOrder != null; });
@@ -396,14 +194,14 @@
         sectionsHtml +=
           '<div class="fight-card-section">' +
             '<p class="fight-card-section__label">Main Card</p>' +
-            mainCard.map(function (f) { return fightRowHtml(f, event.name, rowOpts); }).join('') +
+            mainCard.map(function (f) { return FightRows.rowHtml(f, event.name, rowOpts); }).join('') +
           '</div>';
       }
       if (prelims.length > 0) {
         sectionsHtml +=
           '<div class="fight-card-section">' +
             '<p class="fight-card-section__label">Prelims</p>' +
-            prelims.map(function (f) { return fightRowHtml(f, event.name, rowOpts); }).join('') +
+            prelims.map(function (f) { return FightRows.rowHtml(f, event.name, rowOpts); }).join('') +
           '</div>';
       }
     }

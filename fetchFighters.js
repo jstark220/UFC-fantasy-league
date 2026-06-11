@@ -76,6 +76,12 @@ function parseIntSafe(value, fallback = 0) {
 }
 
 // ============================================================================
+// Manual flag corrections: slug -> country shown in the app. Used when the
+// represented flag differs from the birthplace ESPN reports.
+const COUNTRY_OVERRIDES = {
+  'ilia-topuria': 'Georgia',   // born Halle, Germany; fights under the Georgian flag
+};
+
 // HELPER: Extract country from "City, Country" format
 // Octagon stores place of birth like "Rochester, United States"
 // We just want the country, which is the part after the last comma.
@@ -146,8 +152,11 @@ function transformFighter(octagonId, fighter) {
     record_draws: parseIntSafe(fighter.draws),
     record_no_contests: 0,  // Octagon doesn't track NCs separately
     
-    // Geographic info
-    country: parseCountry(fighter.placeOfBirth),
+    // Geographic info. Birthplace parsing is wrong for fighters whose flag
+    // differs from where they were born (Topuria: born Halle, Germany; bills
+    // as Georgian). COUNTRY_OVERRIDES wins until we switch the source to
+    // ESPN citizenship and backfill properly.
+    country: COUNTRY_OVERRIDES[octagonId] || parseCountry(fighter.placeOfBirth),
 
     // Age (Octagon returns this as a string, e.g. "32"). Refreshed weekly so
     // staleness is at most ~7 days. Null when API doesn't report it.
