@@ -17441,21 +17441,14 @@ button.hub-corner-chip:active, .hub-section__head:active { transform: scale(0.98
     scroll-snap-type: none;
     gap: 6px;
   }
-  /* full-width applies ONLY to starter rows — header stat chips stay pills */
-  .hub-corner-chips .hub-corner-chip { width: 100%; border-radius: 10px; }
+  /* full-width applies ONLY to starter rows — header stat chips stay pills.
+     border-box so padding+border don't push the row past the card edge. */
+  .hub-corner-chips .hub-corner-chip { width: 100%; box-sizing: border-box; border-radius: 10px; }
+  .hub-corner-chip--warn { box-sizing: border-box; width: 100%; }
   .hub-corner-chips .hub-corner-chip__text { flex: 1; min-width: 0; }
   .hub-corner-chips .hub-corner-chip__name { max-width: none; }
   .hub-corner-chips .hub-corner-chip__pts { margin-left: auto; }
-  .hub-corner-chip--cta, .hub-corner-chip--warn {
-    justify-content: center;
-    min-height: 44px;                 /* proper tap target; balances the full width */
-    margin-top: 2px;
-    border-radius: 10px;
-    font-size: 14px;
-  }
-  .hub-corner-chip--warn {
-    background: var(--accent-gold-subtle);   /* filled = intentional, not a stretched outline */
-  }
+  .hub-corner-chip--cta, .hub-corner-chip--warn { justify-content: center; }
 }
 
 /* Proj/Total placement: inline with chips on desktop, header pills on mobile */
