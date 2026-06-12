@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <!-- iOS home-screen app: icon + full-screen (standalone) launch. -->
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="Knockdown">
@@ -17,8 +20,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="styles/tokens.css">
-  <link rel="stylesheet" href="styles/components.css?v=6">
+  <link rel="stylesheet" href="styles/tokens.css?v=2">
+  <link rel="stylesheet" href="styles/components.css?v=42">
 
   <title>League - Knockdown Fantasy</title>
   <script src="js/loading-screen.js"></script>
@@ -75,14 +78,16 @@
       <!-- ================================================================
            THIS WEEK CARD
            Full-width event banner. Cage-grid background. Crimson top border.
-           Hardcoded to UFC 329 for now — will be wired to live event data.
+           Neutral placeholders only — wireNextEventBanner() in league.js
+           fills name / date / matchup and runs the countdown, so nothing
+           stale can flash (or stick around if the fetch fails).
            ================================================================ -->
       <div class="this-week-card">
         <div class="this-week-card__event">
           <p class="this-week-card__eyebrow">Next Event</p>
-          <p class="this-week-card__name">UFC 329</p>
-          <p class="this-week-card__date">Saturday, May 3 &middot; T-Mobile Arena, Las Vegas</p>
-          <p class="this-week-card__matchup">Makhachev vs. Tsarukyan II</p>
+          <p class="this-week-card__name">&mdash;</p>
+          <p class="this-week-card__date">Loading next card&hellip;</p>
+          <p class="this-week-card__matchup" style="display: none;"></p>
         </div>
         <div class="this-week-card__right">
           <div class="this-week-card__countdown">
@@ -117,84 +122,13 @@
            ================================================================ -->
       <div class="league-live-row">
 
-        <!-- Left: top performers -->
+        <!-- Left: top performers. Placeholder only — the renderer in
+             league.js strips .performer-row / .draft-empty elements and
+             rebuilds the list from the most recent scored event. -->
         <div class="league-live-panel">
-          <p class="section-label">Top Performers &middot; UFC 327</p>
+          <p class="section-label">Top Performers</p>
 
-          <div class="performer-row performer-row--gold">
-            <span class="performer-row__rank">1</span>
-            <div class="performer-row__photo-wrap">
-              <img class="performer-row__photo" data-fighter-name="Islam Makhachev" alt="Islam Makhachev" onerror="this.style.display='none'">
-            </div>
-            <div class="performer-row__info">
-              <span class="performer-row__name">Islam Makhachev</span>
-              <span class="performer-row__division">Lightweight</span>
-            </div>
-            <div class="performer-row__right">
-              <span class="performer-row__pts">186</span>
-              <span class="performer-row__owner">Stark 1</span>
-            </div>
-          </div>
-
-          <div class="performer-row performer-row--silver">
-            <span class="performer-row__rank">2</span>
-            <div class="performer-row__photo-wrap">
-              <img class="performer-row__photo" data-fighter-name="Alex Pereira" alt="Alex Pereira" onerror="this.style.display='none'">
-            </div>
-            <div class="performer-row__info">
-              <span class="performer-row__name">Alex Pereira</span>
-              <span class="performer-row__division">Light Heavyweight</span>
-            </div>
-            <div class="performer-row__right">
-              <span class="performer-row__pts">142</span>
-              <span class="performer-row__owner">Stark 2</span>
-            </div>
-          </div>
-
-          <div class="performer-row performer-row--bronze">
-            <span class="performer-row__rank">3</span>
-            <div class="performer-row__photo-wrap">
-              <img class="performer-row__photo" data-fighter-name="Ilia Topuria" alt="Ilia Topuria" onerror="this.style.display='none'">
-            </div>
-            <div class="performer-row__info">
-              <span class="performer-row__name">Ilia Topuria</span>
-              <span class="performer-row__division">Lightweight</span>
-            </div>
-            <div class="performer-row__right">
-              <span class="performer-row__pts">124</span>
-              <span class="performer-row__owner">Stark 1</span>
-            </div>
-          </div>
-
-          <div class="performer-row">
-            <span class="performer-row__rank">4</span>
-            <div class="performer-row__photo-wrap">
-              <img class="performer-row__photo" data-fighter-name="Jon Jones" alt="Jon Jones" onerror="this.style.display='none'">
-            </div>
-            <div class="performer-row__info">
-              <span class="performer-row__name">Jon Jones</span>
-              <span class="performer-row__division">Heavyweight</span>
-            </div>
-            <div class="performer-row__right">
-              <span class="performer-row__pts">112</span>
-              <span class="performer-row__owner">Stark 3</span>
-            </div>
-          </div>
-
-          <div class="performer-row">
-            <span class="performer-row__rank">5</span>
-            <div class="performer-row__photo-wrap">
-              <img class="performer-row__photo" data-fighter-name="Dustin Poirier" alt="Dustin Poirier" onerror="this.style.display='none'">
-            </div>
-            <div class="performer-row__info">
-              <span class="performer-row__name">Dustin Poirier</span>
-              <span class="performer-row__division">Lightweight</span>
-            </div>
-            <div class="performer-row__right">
-              <span class="performer-row__pts">98</span>
-              <span class="performer-row__owner">Stark 2</span>
-            </div>
-          </div>
+          <p class="draft-empty">Loading top performers&hellip;</p>
 
           <a href="#" class="btn-secondary league-live-panel__cta" id="rosterLink">View my lineup &rarr;</a>
         </div>
@@ -318,27 +252,9 @@
       var theme = document.documentElement.getAttribute('data-theme');
       btn.textContent = theme === 'light' ? '☀' : '☾';
     });
-
-    // Countdown to UFC 329 main card (PDT)
-    (function () {
-      var eventDate = new Date('2026-05-03T20:00:00-07:00');
-
-      function updateCountdown() {
-        var diff = eventDate - Date.now();
-        if (diff <= 0) {
-          document.getElementById('twDays').textContent  = '00';
-          document.getElementById('twHours').textContent = '00';
-          document.getElementById('twMins').textContent  = '00';
-          return;
-        }
-        document.getElementById('twDays').textContent  = Math.floor(diff / 86400000);
-        document.getElementById('twHours').textContent = String(Math.floor((diff % 86400000) / 3600000)).padStart(2, '0');
-        document.getElementById('twMins').textContent  = String(Math.floor((diff % 3600000)  / 60000)).padStart(2, '0');
-      }
-
-      updateCountdown();
-      setInterval(updateCountdown, 60000);
-    }());
+    // The next-event countdown is owned entirely by league.js
+    // (startNextEventCountdown). The old hardcoded countdown that used to
+    // live here fought it, blanking the digits to 00 every 60 seconds.
   </script>
 
 </body>

@@ -2763,7 +2763,9 @@ body {
   border-bottom: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
-  min-height: 80vh;
+  /* Capped so tall monitors don't balloon the band and float the headline
+     in dead space — slides are abs-positioned, so this IS the band height. */
+  min-height: min(80vh, 820px);
 }
 
 /* Light mode: swap white lines for dark lines so the cage mesh is visible
@@ -4439,8 +4441,15 @@ body {
 }
 .home-footer__logo .kf-red { color: var(--accent-crimson); }
 
+.home-footer__tagline {
+  color: var(--text-tertiary);
+  font-size: var(--text-caption);
+  margin: var(--space-2) 0 0 0;
+}
+
 .home-footer__links {
   display: flex;
+  flex-wrap: wrap; /* five links now — must never spill on a phone */
   gap: var(--space-6);
 }
 
@@ -7460,6 +7469,12 @@ body {
     flex-direction: column;
     align-items: flex-start;
     padding: var(--space-6) var(--space-4);
+  }
+  /* Tighter link spacing so all five links sit on one clean line at 390px;
+     flex-wrap still catches the very narrowest screens. */
+  .home-footer__links {
+    gap: var(--space-4);
+    row-gap: var(--space-2);
   }
 
   .fighter-hero__inner {
@@ -17522,3 +17537,32 @@ button.hub-corner-chip:active, .hub-section__head:active { transform: scale(0.98
 }
 [data-theme="light"] .hub-chip-tip { box-shadow: 0 10px 28px rgba(26, 26, 28, 0.18); }
 [data-theme="light"] .hub-toast    { box-shadow: 0 8px 24px rgba(26, 26, 28, 0.16); }
+
+/* ========================================================================
+   TABULAR NUMERALS
+   Every number that updates in place (countdowns, live scores, standings,
+   deltas) renders with fixed-width digits so values never jiggle or
+   reflow as they tick. Space Grotesk ships the tnum OpenType feature;
+   where a font lacks it this is a harmless no-op. Applies identically
+   at every breakpoint and in both themes.
+   ======================================================================== */
+.countdown-unit__value,
+.standings-table td,
+.standings-pts-cell,
+.standings-delta,
+.st-delta,
+.dashboard-stat__value,
+.performer-row__pts,
+.fighter-card__pts-val,
+.fighter-card__record,
+.card-fp__pts,
+.fight-projection__val,
+.fight-row__record,
+.hub-race-row__pts,
+.hub-race-detail__pts,
+.hub-mybar__pts,
+.hub-mybar__rank,
+.hub-corner__total,
+.hub-chip-tip__row {
+  font-variant-numeric: tabular-nums;
+}
