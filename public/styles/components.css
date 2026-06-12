@@ -17446,7 +17446,16 @@ button.hub-corner-chip:active, .hub-section__head:active { transform: scale(0.98
   .hub-corner-chips .hub-corner-chip__text { flex: 1; min-width: 0; }
   .hub-corner-chips .hub-corner-chip__name { max-width: none; }
   .hub-corner-chips .hub-corner-chip__pts { margin-left: auto; }
-  .hub-corner-chip--cta, .hub-corner-chip--warn { justify-content: center; }
+  .hub-corner-chip--cta, .hub-corner-chip--warn {
+    justify-content: center;
+    min-height: 44px;                 /* proper tap target; balances the full width */
+    margin-top: 2px;
+    border-radius: 10px;
+    font-size: 14px;
+  }
+  .hub-corner-chip--warn {
+    background: var(--accent-gold-subtle);   /* filled = intentional, not a stretched outline */
+  }
 }
 
 /* Proj/Total placement: inline with chips on desktop, header pills on mobile */
