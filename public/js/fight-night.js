@@ -1235,6 +1235,26 @@
   function renderMyBar() {
     var el = document.getElementById('hubMyBar');
     if (!el) return;
+    var phase = currentPhase || computePhase();
+    if (phase === 'PREVIEW') {
+      // "0.0 pts · 1st" is noise before anyone can score — show the night's
+      // projection and lineup readiness instead.
+      var mine0 = state.starters.filter(function (s) { return s.league_member_id === myMemberId; });
+      var projSum = 0;
+      mine0.forEach(function (s) {
+        var pr = projMap[s.fighter_id];
+        if (pr && pr.projectedPoints != null) projSum += Number(pr.projectedPoints);
+      });
+      var required0 = (typeof getStarterCountForEvent === 'function' && state.event)
+        ? getStarterCountForEvent(state.event, state.league && state.league.scoring_config) : 3;
+      el.innerHTML =
+        '<span class="hub-mybar__label">You</span>' +
+        '<span class="hub-mybar__pts">' + (projSum > 0 ? 'Proj ' + projSum.toFixed(1) : '—') + '</span>' +
+        '<span class="hub-mybar__rank">' + mine0.length + '/' + required0 + ' set</span>';
+      prevMyBarPts = null;
+      updateDocTitle(null);
+      return;
+    }
     var rows = store.raceRows(state, 'event');
     var mine = rows.find(function (r) { return r.member.id === myMemberId; });
     if (!mine) { el.innerHTML = ''; return; }

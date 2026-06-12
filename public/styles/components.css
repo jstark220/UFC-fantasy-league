@@ -17366,3 +17366,49 @@ button.hub-corner-chip:active, .hub-section__head:active { transform: scale(0.98
   border-color: var(--accent-warning);
 }
 .hub-corner-chip--warn:hover { background: var(--accent-gold-subtle); }
+
+/* ========================================================================
+   HUB MOBILE POLISH PASS
+   ======================================================================== */
+
+/* chips are pills — they never wrap internally, on any screen */
+.hub-corner-chip { white-space: nowrap; flex: none; }
+
+@media (max-width: 720px) {
+  /* ---- compact hero rhythm ---- */
+  .hub-hero { gap: var(--space-2); padding: var(--space-3) var(--space-4) var(--space-4); }
+  .hub-hero__name { font-size: 20px; }
+  .hub-hero__sub  { font-size: 12px; }
+  /* hairline separations give the stacked zones structure */
+  .hub-hero__corner {
+    border-top: 1px solid var(--border-subtle);
+    padding-top: var(--space-3);
+    margin-top: var(--space-2);
+  }
+  /* status zone collapses to one inline line: label · countdown · stamp */
+  .hub-hero__right {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+    border-top: 1px solid var(--border-subtle);
+    padding-top: var(--space-3);
+    margin-top: var(--space-2);
+  }
+  .hub-hero__right .hub-countdown { font-size: 18px; }
+  .hub-hero__right .hub-hero__stamp { margin-top: 0; }
+
+  /* ---- chip strip: visible scroll affordance + snap ---- */
+  .hub-corner-chips {
+    scroll-snap-type: x proximity;
+    -webkit-mask-image: linear-gradient(to right, black 90%, transparent);
+            mask-image: linear-gradient(to right, black 90%, transparent);
+    padding-right: 24px;   /* room so the last chip can scroll out of the fade */
+  }
+  .hub-corner-chip { scroll-snap-align: start; }
+
+  /* ---- clearance for the floating Chat pill ---- */
+  .page-fight-night .dashboard-body {
+    padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  }
+}
