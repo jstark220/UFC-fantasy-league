@@ -1081,6 +1081,7 @@
 
     var theirs = state.starters.filter(function (s) { return s.league_member_id === memberId; });
     var body;
+    var statsHtml = '';
     if (!theirs.length) {
       body = isMe
         ? '<a class="hub-corner-chip hub-corner-chip--cta" href="lineup.html?id=' + leagueId + '">Set your lineup →</a>'
@@ -1145,10 +1146,16 @@
             theirs.length + '/' + required + ' set · Finish lineup →</a>';
         }
       }
-      body = '<span class="hub-corner-chips">' + chips + warnChip + projChip + totalChip + '</span>';
+      // Proj/Total render twice: in the header (visible on MOBILE, where the
+      // chips stack vertically) and inline after the chips (visible on
+      // DESKTOP, the classic row). CSS picks one per breakpoint.
+      if (projChip || totalChip) statsHtml = '<span class="hub-corner-stats">' + projChip + totalChip + '</span>';
+      var statsInline = (projChip || totalChip)
+        ? '<span class="hub-corner-stats-inline">' + projChip + totalChip + '</span>' : '';
+      body = '<span class="hub-corner-chips">' + chips + warnChip + statsInline + '</span>';
     }
 
-    el.innerHTML = selectHtml + body;
+    el.innerHTML = '<div class="hub-corner-head">' + selectHtml + statsHtml + '</div>' + body;
     var sel = document.getElementById('hubCornerSelect');
     if (sel) {
       // native selects size to their WIDEST option; shrink to the selected
