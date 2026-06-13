@@ -267,6 +267,10 @@ async function showFighterModal(fighterId) {
       });
     }
   });
+
+  // Fight History / News tabs. News is fetched lazily the first time its
+  // tab is opened, so the common case (history) costs no extra query.
+  _wireFighterModalTabs(fighter);
 }
 
 function closeFighterModal() {
@@ -590,12 +594,19 @@ function buildFighterModalHtml(fighter, fights, fighterId, opponentMap, tradeCtx
         '</div>' +
       '</div>' +
 
-      // Fight history
+      // Fight history + News, as two tabs. News loads lazily the first time
+      // its tab is opened (see _wireFighterModalTabs / _loadFighterNews).
       '<div class="fighter-modal__body">' +
-        '<p class="fighter-modal__section-label">Fight History ' +
-          '<span style="opacity:.5;font-size:.85em">(' + fights.length + ')</span>' +
-        '</p>' +
-        historyHtml +
+        '<div class="fighter-modal__tabs" role="tablist">' +
+          '<button class="fighter-modal__tab fighter-modal__tab--active" type="button" data-modal-tab="history">' +
+            'Fight History <span class="fighter-modal__tab-count">' + fights.length + '</span>' +
+          '</button>' +
+          '<button class="fighter-modal__tab" type="button" data-modal-tab="news">News</button>' +
+        '</div>' +
+        '<div data-modal-panel="history">' + historyHtml + '</div>' +
+        '<div data-modal-panel="news" hidden>' +
+          '<p class="draft-empty">Loading news&hellip;</p>' +
+        '</div>' +
       '</div>' +
 
     '</div>'
@@ -627,6 +638,90 @@ function _fvStatTile(score, rankInfo, fighter) {
       '<span class="fighter-modal__stat-sub">' + _mEsc(sub) + '</span>' +
     '</button>'
   );
+}
+
+// ========================================================================
+// NEWS TAB — articles about this fighter
+//
+// An article counts as "about" a fighter if they're its cover fighter
+// (hero_fighter_id) OR their name appears in the headline / summary / body.
+// (Phase 2's {{fighter:}} embeds will make this an exact tag.) Reads the
+// public `articles` table directly — no dependency on articles.js, and
+// works for anonymous viewers since published rows are public-readable.
+// ========================================================================
+var _FIGHTER_NEWS_CATS = {
+  waiver_wire: 'Waiver Wire', rankings: 'Rankings', event_preview: 'Event Preview',
+  recap: 'Recap', strategy: 'Strategy'
+};
+function _fighterNewsCat(id) { return _FIGHTER_NEWS_CATS[id] || 'Analysis'; }
+
+// Resets each time the modal is rebuilt so a fresh fighter re-fetches.
+var _fighterNewsLoaded = false;
+
+function _wireFighterModalTabs(fighter) {
+  var modal = document.getElementById('fighterModal');
+  if (!modal) return;
+  _fighterNewsLoaded = false;
+  var tabs = modal.querySelectorAll('[data-modal-tab]');
+  tabs.forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      var which = tab.getAttribute('data-modal-tab');
+      tabs.forEach(function (t) { t.classList.toggle('fighter-modal__tab--active', t === tab); });
+      modal.querySelectorAll('[data-modal-panel]').forEach(function (p) {
+        p.hidden = p.getAttribute('data-modal-panel') !== which;
+      });
+      if (which === 'news' && !_fighterNewsLoaded) {
+        _fighterNewsLoaded = true;
+        _loadFighterNews(fighter);
+      }
+    });
+  });
+}
+
+async function _loadFighterNews(fighter) {
+  var panel = document.querySelector('#fighterModal [data-modal-panel="news"]');
+  if (!panel) return;
+
+  var name = String(fighter.name || '').trim();
+  var rows = [];
+  try {
+    // hero_fighter_id is the precise match; the name ilikes are the bridge
+    // until embeds land. Fighter names have no commas, so the or() filter is
+    // safe to build by concatenation.
+    var filter = 'hero_fighter_id.eq.' + fighter.id;
+    if (name && name.indexOf(',') === -1) {
+      filter += ',title.ilike.*' + name + '*' +
+                ',dek.ilike.*' + name + '*' +
+                ',body_md.ilike.*' + name + '*';
+    }
+    var res = await supabaseClient
+      .from('articles')
+      .select('slug, title, dek, category, author_name, published_at')
+      .eq('status', 'published')
+      .or(filter)
+      .order('published_at', { ascending: false })
+      .limit(20);
+    rows = res.data || [];
+  } catch (e) { rows = []; }
+
+  if (!document.body.contains(panel)) return;   // modal closed mid-fetch
+  if (!rows.length) {
+    panel.innerHTML = '<p class="draft-empty">No articles about ' + _mEsc(fighter.name) + ' yet.</p>';
+    return;
+  }
+  panel.innerHTML = rows.map(function (a) {
+    var meta = [];
+    if (a.author_name)  meta.push(_mEsc(a.author_name));
+    if (a.published_at) meta.push(_modalFormatDate(a.published_at));
+    return (
+      '<a class="fighter-news__item" href="article.html?slug=' + encodeURIComponent(a.slug) + '">' +
+        '<span class="fighter-news__cat">' + _mEsc(_fighterNewsCat(a.category)) + '</span>' +
+        '<span class="fighter-news__title">' + _mEsc(a.title) + '</span>' +
+        (a.dek ? '<span class="fighter-news__dek">' + _mEsc(a.dek) + '</span>' : '') +
+        (meta.length ? '<span class="fighter-news__meta">' + meta.join(' · ') + '</span>' : '') +
+      '</a>'
+    );
+  }).join('');
 }
 
 // ========================================================================

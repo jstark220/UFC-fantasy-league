@@ -3,7 +3,6 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <!-- iOS home-screen app: icon + full-screen (standalone) launch. -->
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
   <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png">
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
@@ -21,67 +20,43 @@
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="styles/tokens.css?v=2">
-  <link rel="stylesheet" href="styles/components.css?v=42">
+  <link rel="stylesheet" href="styles/components.css?v=43">
 
-  <title>Fighter - Knockdown Fantasy</title>
+  <title>Analysis - Knockdown Fantasy</title>
   <script src="js/loading-screen.js"></script>
 </head>
 <body>
 
-  <div class="dashboard-page" id="pageContent" style="display: none;">
+  <div class="dashboard-page" id="pageContent">
 
     <nav class="top-nav">
       <a href="index.html" class="top-nav__logo">
         <span class="kf-red">Knockdown</span> Fantasy
       </a>
       <div class="top-nav__links">
-        <a href="#" class="btn-ghost" id="backLink">← Back</a>
-        <a href="analysis.html" class="btn-ghost">Analysis</a>
+        <a href="analysis.html" class="btn-ghost">← Analysis</a>
       </div>
       <div class="top-nav__actions">
         <button class="btn-theme" onclick="toggleTheme()" aria-label="Toggle theme">☾</button>
-        <button id="globalLogoutBtn" class="btn-ghost" onclick="logOut()">Log out</button>
+        <span id="navAuth"></span>
       </div>
     </nav>
 
-    <!-- Fighter hero: photo + bio rendered by fighter.js -->
-    <div id="fighterHero"></div>
-
-    <div class="dashboard-body">
-
-      <!-- Fight history table -->
-      <div class="lineup-section">
-        <p class="section-label">
-          Fight History
-          <span class="section-label__count" id="fightCount"></span>
-        </p>
-        <div id="fightHistory"></div>
-      </div>
-
-      <!-- Next booked fight -->
-      <div class="lineup-section">
-        <p class="section-label">Next Fight</p>
-        <div id="nextFight"></div>
-      </div>
-
+    <div class="dashboard-body article-wrap">
+      <article id="articleRoot">
+        <p class="draft-empty" id="articleLoading">Loading…</p>
+      </article>
     </div>
+
   </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/supabase-config.js"></script>
-  <script src="js/auth-guard.js"></script>
-  <script src="js/empty-state.js"></script>
-  <script src="js/chat.js"></script>
-  <script src="js/chat-widget.js"></script>
-  <script src="js/chat-nav.js"></script>
-  <script src="js/scoring.js"></script>
-  <script src="js/score-breakdown.js"></script>
-  <script src="js/country-flags.js"></script>
-  <script src="js/next-fight.js"></script>
-  <script src="js/fight-odds.js?v=2"></script>
-  <script src="js/projections.js?v=2"></script>
-  <script src="js/fantasy-value.js?v=1"></script>
-  <script src="js/fighter.js"></script>
+  <script src="js/articles.js?v=1"></script>
+  <script src="js/article.js?v=1"></script>
 
   <script>
     document.querySelectorAll('.btn-theme').forEach(function(btn) {

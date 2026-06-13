@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Knockdown">
+  <meta name="theme-color" content="#0E0E10">
+
+  <script src="js/theme.js"></script>
+  <script src="js/mobile-nav.js" defer></script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="styles/tokens.css?v=2">
+  <link rel="stylesheet" href="styles/components.css?v=43">
+
+  <title>Write - Knockdown Fantasy</title>
+  <script src="js/loading-screen.js"></script>
+</head>
+<body>
+
+  <div class="dashboard-page" id="pageContent" style="display: none;">
+
+    <nav class="top-nav">
+      <a href="index.html" class="top-nav__logo">
+        <span class="kf-red">Knockdown</span> Fantasy
+      </a>
+      <div class="top-nav__links">
+        <a href="analysis.html" class="btn-ghost">← Analysis</a>
+      </div>
+      <div class="top-nav__actions">
+        <button class="btn-theme" onclick="toggleTheme()" aria-label="Toggle theme">☾</button>
+        <button id="globalLogoutBtn" class="btn-ghost" onclick="logOut()">Log out</button>
+      </div>
+    </nav>
+
+    <div class="dashboard-header">
+      <div class="dashboard-header__inner">
+        <p class="dashboard-welcome__eyebrow">Analysis Desk</p>
+        <h1 class="dashboard-welcome__name">Write</h1>
+        <p class="dashboard-welcome__sub" id="writeSub">Draft and publish analysis, rankings, and previews.</p>
+      </div>
+    </div>
+
+    <div class="dashboard-body">
+
+      <!-- Shown when the signed-in user is not flagged is_author. -->
+      <div id="notAuthor" class="article-gate" style="display:none;">
+        <p class="article-gate__title">You don't have writer access yet.</p>
+        <p class="article-gate__sub">Ask the commissioner to flag your account as an author.</p>
+      </div>
+
+      <!-- The editor (hidden until we confirm the user is an author). -->
+      <div id="editor" class="write-layout" style="display:none;">
+
+        <!-- Left: the form -->
+        <div class="write-form">
+          <div class="write-form__row">
+            <button class="btn-secondary btn-sm" id="newArticleBtn" type="button">+ New article</button>
+            <span class="write-status" id="saveStatus"></span>
+          </div>
+
+          <label class="write-label" for="fTitle">Headline</label>
+          <input type="text" id="fTitle" class="input" maxlength="140" placeholder="UFC 320: Five waiver-wire targets">
+
+          <label class="write-label" for="fDek">Summary</label>
+          <input type="text" id="fDek" class="input" maxlength="240" placeholder="One line that sells the read.">
+
+          <div class="form-grid form-grid--2">
+            <div>
+              <label class="write-label" for="fCategory">Category</label>
+              <select id="fCategory" class="input"></select>
+            </div>
+            <div>
+              <label class="write-label" for="fHero">Cover fighter (optional)</label>
+              <input type="text" id="fHero" class="input" placeholder="Search a fighter…" autocomplete="off">
+              <div id="heroResults" class="write-hero-results"></div>
+              <div id="heroChosen" class="write-hero-chosen" style="display:none;"></div>
+            </div>
+          </div>
+
+          <label class="write-label" for="fBody">
+            Body
+            <span class="write-label__hint">Markdown supported — ## headings, **bold**, lists, [links](url), &gt; quotes</span>
+          </label>
+          <textarea id="fBody" class="input write-textarea" placeholder="Write the piece here…"></textarea>
+
+          <div class="write-actions">
+            <button class="btn-primary" id="publishBtn" type="button">Publish</button>
+            <button class="btn-secondary" id="draftBtn" type="button">Save draft</button>
+            <a class="btn-ghost" id="viewLink" href="#" target="_blank" rel="noopener" style="display:none;">View →</a>
+            <button class="btn-ghost write-delete" id="deleteBtn" type="button" style="display:none;">Delete</button>
+          </div>
+        </div>
+
+        <!-- Right: live preview + my drafts -->
+        <aside class="write-side">
+          <p class="section-label">Preview</p>
+          <div class="write-preview" id="preview"></div>
+
+          <p class="section-label" style="margin-top: var(--space-6)">Your articles</p>
+          <div id="myArticles" class="write-list"></div>
+        </aside>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Markdown: marked (parse) + DOMPurify (sanitize). CDN, no build step. -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/auth-guard.js"></script>
+  <script src="js/articles.js?v=1"></script>
+  <script src="js/write.js?v=1"></script>
+
+  <script>
+    document.querySelectorAll('.btn-theme').forEach(function(btn) {
+      var theme = document.documentElement.getAttribute('data-theme');
+      btn.textContent = theme === 'light' ? '☀' : '☾';
+    });
+  </script>
+
+</body>
+</html>

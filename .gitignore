@@ -154,3 +154,5 @@ temp/
 
 # Netlify (if ever used)
 .netlify/
+# Local design-exploration mockups (rendered PNGs + harnesses, not part of the site)
+design-explorations/
