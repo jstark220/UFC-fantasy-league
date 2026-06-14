@@ -140,14 +140,23 @@ async function showFighterModal(fighterId) {
   var fvLoadPromise = (typeof FantasyValue !== 'undefined')
     ? FantasyValue.ensureLoaded(pageLeagueId, _modalScoringConfig).catch(function () { return null; })
     : Promise.resolve(null);
+  // League team that rosters this fighter (null = free agent / no league
+  // context). Fetched in parallel below so it adds no latency, and kept
+  // separate from the rosters/CTA logic above so it can never break the
+  // Propose Trade button.
+  var ownerTeamName = null;
   try {
-    var [oddsMap, projMap] = await Promise.all([
+    var [oddsMap, projMap, teamRes] = await Promise.all([
       typeof FightOdds   !== 'undefined' ? FightOdds.loadFightOdds([fighterId]) : {},
-      typeof Projections !== 'undefined' ? Projections.load([fighterId])        : {}
+      typeof Projections !== 'undefined' ? Projections.load([fighterId])        : {},
+      ownerMemberId
+        ? supabaseClient.from('league_members').select('team_name').eq('id', ownerMemberId).maybeSingle()
+        : Promise.resolve(null)
     ]);
     _modalFightOdds  = oddsMap[fighterId] || null;
     _modalProjection = projMap[fighterId] || null;
-  } catch (_e) { /* both are optional */ }
+    ownerTeamName    = (teamRes && teamRes.data) ? teamRes.data.team_name : null;
+  } catch (_e) { /* all optional */ }
 
   if (fighterRes.error || !fighterRes.data) {
     document.querySelector('#fighterModal .fighter-modal').innerHTML =
@@ -182,6 +191,7 @@ async function showFighterModal(fighterId) {
     buildFighterModalHtml(fighter, fights, fighterId, opponentMap, {
       leagueId:        pageLeagueId,
       ownerMemberId:   ownerMemberId,
+      ownerTeamName:   ownerTeamName,
       draftCompleted:  draftCompleted,
       draftActive:     draftActive
     });
@@ -441,6 +451,28 @@ function buildFighterModalHtml(fighter, fights, fighterId, opponentMap, tradeCtx
         '<div class="fighter-modal__hero-info">' +
           (fighter.nickname ? '<p class="fighter-modal__nickname">"' + _mEsc(fighter.nickname) + '"</p>' : '') +
           '<h2 class="fighter-modal__name">' + _mEsc(fighter.name) + '</h2>' +
+          (function() {
+            // League ownership chip: who has this fighter rostered. Only shown
+            // in a league context; "Free agent" when nobody owns them. Text,
+            // not team color, so it reads clearly without a legend.
+            if (!tradeCtx.leagueId) return '';
+            if (tradeCtx.ownerTeamName) {
+              // Inner label + team name, shared by the link and non-link forms.
+              var ownerInner = '<span class="fighter-modal__owner-label">Rostered by</span>' +
+                               '<span class="fighter-modal__owner-team">' + _mEsc(tradeCtx.ownerTeamName) + '</span>';
+              // When we know which member owns this fighter, make the chip a link
+              // to that team's roster (the same view-mode page standings uses).
+              if (tradeCtx.ownerMemberId) {
+                return '<a class="fighter-modal__owner fighter-modal__owner--link" ' +
+                         'href="lineup.html?id=' + encodeURIComponent(tradeCtx.leagueId) +
+                         '&member=' + encodeURIComponent(tradeCtx.ownerMemberId) + '">' +
+                         ownerInner +
+                       '</a>';
+              }
+              return '<p class="fighter-modal__owner">' + ownerInner + '</p>';
+            }
+            return '<p class="fighter-modal__owner fighter-modal__owner--fa">Free agent</p>';
+          })() +
           (function() {
             // Country (with flag) and age on a single line. Each piece is
             // optional — falls through when missing instead of showing

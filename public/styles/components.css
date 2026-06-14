@@ -17930,3 +17930,60 @@ button.hub-corner-chip:active, .hub-section__head:active { transform: scale(0.98
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 .fighter-news__meta { font-size: var(--text-caption); color: var(--text-tertiary); margin-top: 2px; }
+
+/* ---- Fighter modal: league ownership chip ("Rostered by …") ---- */
+.fighter-modal__owner {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;   /* hug content; hero-info is a stretch flex column */
+  gap: 6px;
+  max-width: 100%;
+  margin: 0;                /* hero-info already spaces children with gap */
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  font-size: var(--text-body-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.fighter-modal__owner-label { color: var(--text-tertiary); font-weight: 500; flex: none; }
+.fighter-modal__owner-team {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fighter-modal__owner--fa { color: var(--text-secondary); font-weight: 500; }
+/* Linked chip: navigates to the owning team's roster. Keep it reading as a
+   pill (no underline by default), but signal it's tappable on hover/focus. */
+.fighter-modal__owner--link {
+  text-decoration: none;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.fighter-modal__owner--link:hover,
+.fighter-modal__owner--link:focus-visible {
+  border-color: var(--accent-crimson);
+  background: var(--accent-crimson-subtle);
+  outline: none;
+}
+.fighter-modal__owner--link:hover .fighter-modal__owner-team,
+.fighter-modal__owner--link:focus-visible .fighter-modal__owner-team {
+  text-decoration: underline;
+}
+/* Mobile hero centers its content, so center the chip to match. Bump the
+   linked chip's vertical padding to a comfortable tap target on phones. */
+@media (max-width: 720px) {
+  .fighter-modal__owner { align-self: center; }
+  .fighter-modal__owner--link { padding: 8px 14px; }
+}
+
+/* Fighter modal: top-align the card so its top lines up with the nickname
+   (the hero row is align-items:flex-end, which otherwise drops the shorter
+   card down to the middle). Mobile stacks the hero, so keep the card centered
+   there. */
+.fighter-modal__hero > .fighter-card { align-self: flex-start; }
+@media (max-width: 720px) {
+  .fighter-modal__hero > .fighter-card { align-self: center; }
+}
