@@ -9967,6 +9967,41 @@ select.form-input option,
 }
 .fight-projection--final .fight-projection__label { opacity: 0.85; }
 
+/* "Live" treatment — crimson with a pulsing dot, shown WHILE the bout is in
+   progress. The running score (strikes + takedowns + knockdowns + control)
+   replaces the projection and climbs every cron/realtime tick; once the bout is
+   decided it flips to the gold "PTS" final chip above. Same chip shape, so it
+   inherits the responsive sizing the projection/final chips already have. */
+.fight-projection--live {
+  background: var(--accent-crimson-subtle);
+  border-color: rgba(193, 59, 46, 0.40);
+  color: var(--accent-crimson);
+}
+.fight-projection--live .fight-projection__label {
+  opacity: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.fight-live-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--accent-crimson);
+  box-shadow: 0 0 0 0 rgba(193, 59, 46, 0.55);
+  animation: fight-live-pulse 1.8s ease-out infinite;
+}
+@keyframes fight-live-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(193, 59, 46, 0.5); }
+  70%  { box-shadow: 0 0 0 6px rgba(193, 59, 46, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(193, 59, 46, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fight-live-dot { animation: none; }
+}
+
 /* Larger badge used in the fighter modal where there's room for "Projected
    24.7 pts" with the word spelled out. */
 .fight-projection--badge {

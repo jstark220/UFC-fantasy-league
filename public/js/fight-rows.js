@@ -87,9 +87,20 @@
     return parts[0].charAt(0).toUpperCase() + '. ' + parts.slice(1).join(' ');
   }
 
-  // Earned-fantasy-points chip shown once a bout is decided.
-  function scoreChipHtml(pts) {
+  // Fantasy-points chip. Two flavours, same shape:
+  //   * live  — crimson + pulsing dot, shown WHILE the bout is in progress. The
+  //     running score (strikes + takedowns + knockdowns + control) replaces the
+  //     projection and climbs every cron/realtime tick.
+  //   * final — gold, shown once the bout is decided (adds the win/finish/title
+  //     bonuses on top of the base).
+  function scoreChipHtml(pts, isLive) {
     var val = (Math.round(pts * 100) / 100).toFixed(1);
+    if (isLive) {
+      return '<span class="fight-projection fight-projection--live" title="Live fantasy points, updating as the fight unfolds">' +
+               '<span class="fight-projection__label"><span class="fight-live-dot"></span>LIVE</span>' +
+               '<span class="fight-projection__val">' + val + '</span>' +
+             '</span>';
+    }
     return '<span class="fight-projection fight-projection--final" title="Fantasy points earned">' +
              '<span class="fight-projection__label">PTS</span>' +
              '<span class="fight-projection__val">' + val + '</span>' +
@@ -111,7 +122,8 @@
       : '';
     var scorePts  = opts.scoreMap ? opts.scoreMap[fighter.id] : undefined;
     var hasScore  = scorePts != null;
-    var scoreChip = hasScore ? scoreChipHtml(scorePts) : '';
+    var isLive    = hasScore && opts.liveSet && opts.liveSet[fighter.id];
+    var scoreChip = hasScore ? scoreChipHtml(scorePts, isLive) : '';
     var proj = (!hasScore && typeof Projections !== 'undefined' && opts.projMap && opts.projMap[fighter.id])
       ? Projections.pillHtml(opts.projMap[fighter.id], {
           fighterId:    fighter.id,

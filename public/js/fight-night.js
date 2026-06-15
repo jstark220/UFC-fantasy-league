@@ -720,20 +720,45 @@
       '</div>';
   }
 
+  // A bout is "in progress" for live scoring once any stat has landed but no
+  // result is in yet. Future bouts read all-zero and decided bouts have an
+  // `outcome`, so this cleanly isolates the live fight. (The 2-min cron writes
+  // these stats before `outcome`, so the score starts moving as soon as the
+  // round's first numbers post — matching the live stat bars in the Octagon.)
+  function fightInProgress(f) {
+    if (!f || f.outcome) return false;
+    return !!(f.fighter_a_sig_strikes || f.fighter_b_sig_strikes ||
+              f.fighter_a_takedowns || f.fighter_b_takedowns ||
+              f.fighter_a_knockdowns || f.fighter_b_knockdowns ||
+              f.fighter_a_control_seconds || f.fighter_b_control_seconds);
+  }
+
   function rowOptsFor() {
     var starterIds = {};
     state.starters.forEach(function (s) {
       if (s.league_member_id === myMemberId) starterIds[s.fighter_id] = true;
     });
     var scoreMap = {};
+    var liveSet = {};   // fighterId -> true when the score is live (bout in progress)
     var cfg = state.league && state.league.scoring_config;
     for (var id in state.fights) {
       var f = state.fights[id];
-      if (!f.outcome) continue;
-      if (f.fighter_a_id) scoreMap[f.fighter_a_id] = Scoring.computeFighterScore(f, true, cfg).total;
-      if (f.fighter_b_id) scoreMap[f.fighter_b_id] = Scoring.computeFighterScore(f, false, cfg).total;
+      if (f.outcome) {
+        // Decided bout: final earned points (base + win/finish/title bonuses).
+        if (f.fighter_a_id) scoreMap[f.fighter_a_id] = Scoring.computeFighterScore(f, true, cfg).total;
+        if (f.fighter_b_id) scoreMap[f.fighter_b_id] = Scoring.computeFighterScore(f, false, cfg).total;
+      } else if (fightInProgress(f)) {
+        // In-progress bout: stats are landing but there's no result yet. Score
+        // it LIVE off the running stat line so the number replaces the
+        // projection and climbs as the fight unfolds. computeFighterScore yields
+        // base points only here (every win/finish/title bonus gates on a winner,
+        // which is null mid-fight) — i.e. exactly strikes + takedowns +
+        // knockdowns + control, times the card-position multiplier.
+        if (f.fighter_a_id) { scoreMap[f.fighter_a_id] = Scoring.computeFighterScore(f, true, cfg).total; liveSet[f.fighter_a_id] = true; }
+        if (f.fighter_b_id) { scoreMap[f.fighter_b_id] = Scoring.computeFighterScore(f, false, cfg).total; liveSet[f.fighter_b_id] = true; }
+      }
     }
-    return { oddsMap: oddsMap, projMap: projMap, scoreMap: scoreMap, rosterIds: rosterIds, starterIds: starterIds };
+    return { oddsMap: oddsMap, projMap: projMap, scoreMap: scoreMap, liveSet: liveSet, rosterIds: rosterIds, starterIds: starterIds };
   }
 
   function shapedFights() {
