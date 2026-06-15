@@ -16969,6 +16969,7 @@ button.hub-corner-chip:hover { border-color: var(--border-strong); }
   body[data-hub-tab="race"] .hub-main { display: none; }
   body[data-hub-tab="feed"] #hubNowSection,
   body[data-hub-tab="feed"] #hubUpNextSection,
+  body[data-hub-tab="feed"] #hubPreviousSection,
   body[data-hub-tab="feed"] #hubCardSection { display: none; }
   body[data-hub-tab="feed"] .hub-rail { display: none; }
 

@@ -132,9 +132,11 @@ function basePayload(extra) {
   assert(order.join(',') === 'f1,f2,f3', 'run order sorts fight_order descending');
   assert(S.currentFight(st).id === 'f1', 'current fight = next in run order');
   assert(S.upNextFight(st).id === 'f2', 'up next = the one after');
+  assert(S.previousFight(st) === null, 'no previous fight before any are decided');
   // f1 finishes -> current advances
   st = S.apply(st, { type: 'fightChange', row: fight('f1', 12, 'ko') }).state;
   assert(S.currentFight(st).id === 'f2' && S.upNextFight(st).id === 'f3', 'current advances when a fight ends');
+  assert(S.previousFight(st).id === 'f1', 'previous fight = the one that just ended');
 }
 
 // ---- 10. race math: event mode, season mode, tie-aware ranks -------------------

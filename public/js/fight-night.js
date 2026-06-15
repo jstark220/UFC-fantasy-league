@@ -588,6 +588,7 @@
     renderWinner(phase);
     renderNow(phase);
     renderUpNext(phase);
+    renderPrevious(phase);
     renderCard(phase);
     renderRace(phase);
     renderFeed(phase);
@@ -820,6 +821,20 @@
     el.style.display = '';
     var shaped = shapedFights().find(function (f) { return f.id === next.id; });
     el.innerHTML = '<p class="hub-section__label">Up Next</p>' +
+      (shaped ? FightRows.rowHtml(shaped, state.event && state.event.name, rowOptsFor()) : '');
+  }
+
+  // Mirror of renderUpNext, one slot in the other direction: the bout that just
+  // ended. Same box, but the decided fight's row shows the gold final PTS chips
+  // (rowOptsFor scores it final), so it reads distinctly from Up Next's projections.
+  function renderPrevious(phase) {
+    var el = document.getElementById('hubPreviousSection');
+    if (!el) return;
+    var prev = phase === 'LIVE' ? store.previousFight(state) : null;
+    if (!prev) { el.style.display = 'none'; return; }
+    el.style.display = '';
+    var shaped = shapedFights().find(function (f) { return f.id === prev.id; });
+    el.innerHTML = '<p class="hub-section__label">Previous Fight</p>' +
       (shaped ? FightRows.rowHtml(shaped, state.event && state.event.name, rowOptsFor()) : '');
   }
 
@@ -1238,7 +1253,7 @@
       el.innerHTML = html0;
       return;
     }
-    var html = '<p class="hub-section__label">Round by Round</p>';
+    var html = '<p class="hub-section__label">Fight Results</p>';
     var cfg = state.league && state.league.scoring_config;
     decided.slice().reverse().forEach(function (f) {
       var winner = state.fighters[f.winner_id];

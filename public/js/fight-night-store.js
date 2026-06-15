@@ -239,6 +239,21 @@
     return undecided.length > 1 ? undecided[1] : null;
   }
 
+  // The bout that just happened — the decided fight immediately before the
+  // current one. runOrder is chronological (descending fight_order), so the
+  // fight directly above the first undecided one is the most recent final.
+  function previousFight(state) {
+    var order = runOrder(state);
+    for (var i = 0; i < order.length; i++) {
+      if (!order[i].outcome) {
+        // order[i] is the current (live) fight; the one before it just ended.
+        return (i > 0 && order[i - 1].outcome) ? order[i - 1] : null;
+      }
+    }
+    // No undecided fights left (card complete): the last bout chronologically.
+    return order.length ? order[order.length - 1] : null;
+  }
+
   function decidedCount(state) {
     var n = 0;
     for (var id in state.fights) if (state.fights[id].outcome) n++;
@@ -337,6 +352,7 @@
     runOrder: runOrder,
     currentFight: currentFight,
     upNextFight: upNextFight,
+    previousFight: previousFight,
     decidedCount: decidedCount,
     fightCount: fightCount,
     eventPointsByMember: eventPointsByMember,
