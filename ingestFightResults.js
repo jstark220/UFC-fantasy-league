@@ -42,6 +42,11 @@ const supabaseClient = createClient(process.env.SUPABASE_URL, process.env.SUPABA
 // Vercel cron function calls runIngest({ back: 2 })).
 let DRY_RUN = false;
 let DAYS_BACK = 21;
+// null = no upper bound (process every espn-linked event from DAYS_BACK forward,
+// the original behavior). The hourly card-refresh cron sets this to bound the
+// query to a short rolling window (e.g. 7 days) so it doesn't fan out across
+// every scheduled future event in the DB.
+let DAYS_AHEAD = null;
 let singleEspnId = null;
 
 // Fold names to a comparable key. NFD handles most accents (é, ñ, ç...) but a
@@ -201,11 +206,18 @@ async function processEvent(dbEvent) {
   if (!data || !data.fights.length) { console.log('  No fights from ESPN. Skipping.'); return; }
 
   // Existing rows for this event, to reconcile against (avoid duplicates).
+  // `outcome` is included so the prune pass below can leave historical
+  // results alone (we only delete rows where outcome IS NULL).
   const ex = await supabaseClient
     .from('fight_results')
-    .select('id, fighter_a_id, fighter_b_id, espn_competition_id, fighter_a_opponent_rank, fighter_b_opponent_rank')
+    .select('id, fighter_a_id, fighter_b_id, espn_competition_id, fighter_a_opponent_rank, fighter_b_opponent_rank, outcome')
     .eq('event_id', dbEvent.id);
   const existing = ex.data || [];
+
+  // Track which existing rows get matched (either by espn_competition_id or
+  // by fighter overlap). Any row left UNMATCHED is a candidate for the prune
+  // pass that runs after the upsert loop — see the end of this function.
+  const matchedExistingIds = new Set();
 
   let upd = 0, ins = 0;
   for (const f of data.fights) {
@@ -266,6 +278,7 @@ async function processEvent(dbEvent) {
       (f.completed ? ` ${f.method} R${f.endRound}` : ' (scheduled)');
 
     if (match) {
+      matchedExistingIds.add(match.id);
       // Never overwrite an existing row's weight_class with null.
       if (payload.weight_class == null) delete payload.weight_class;
       // Freeze opponent rank at first capture: only fill it when the existing
@@ -290,6 +303,38 @@ async function processEvent(dbEvent) {
     }
   }
   console.log(`  -> ${upd} updated, ${ins} inserted`);
+
+  // ---- Orphan prune ---------------------------------------------------------
+  // Any existing row for this event that DIDN'T get matched by the upsert
+  // loop (neither by espn_competition_id nor by fighter overlap) is a bout
+  // ESPN no longer lists — either a replacement or an outright cancellation.
+  // Drop those, but ONLY if outcome IS NULL (we never touch a row that has
+  // a recorded result — those are historical truth). A safety threshold also
+  // skips the prune when ESPN returns suspiciously few fights, so a transient
+  // upstream hiccup can't wipe a real card.
+  const SAFE_PRUNE_THRESHOLD = 5;
+  const orphans = existing.filter((r) =>
+    !matchedExistingIds.has(r.id) && r.outcome == null
+  );
+  if (orphans.length > 0) {
+    if (data.fights.length < SAFE_PRUNE_THRESHOLD) {
+      console.log(`  ! ${orphans.length} unmatched row(s), but ESPN only returned ${data.fights.length} fight(s) — skipping prune (treating as upstream hiccup).`);
+    } else {
+      // Resolve fighter names for a useful log line. byId already has names.
+      orphans.forEach((r) => {
+        const a = (byId.get(r.fighter_a_id) || {}).name || r.fighter_a_id;
+        const b = (byId.get(r.fighter_b_id) || {}).name || r.fighter_b_id;
+        console.log(`  PRUNE ${a} vs ${b}  (espn_competition_id=${r.espn_competition_id ?? 'null'})`);
+      });
+      if (!DRY_RUN) {
+        const { error } = await supabaseClient
+          .from('fight_results')
+          .delete()
+          .in('id', orphans.map((r) => r.id));
+        if (error) console.log('     prune failed: ' + error.message);
+      }
+    }
+  }
 }
 
 // ----------------------------------------------------------------------------
@@ -297,8 +342,11 @@ async function processEvent(dbEvent) {
 // ----------------------------------------------------------------------------
 async function runIngest(opts = {}) {
   // Apply caller options (CLI passes none and uses the argv-set module vars;
-  // the Vercel function passes { back } / { singleEspnId }).
+  // the Vercel functions pass { back }, { ahead }, or { singleEspnId }).
+  // `ahead` caps the event_date upper bound — used by the hourly cron-refresh
+  // path so an out-of-window run doesn't process every future event in the DB.
   if (opts.back != null)         DAYS_BACK = opts.back;
+  if (opts.ahead != null)        DAYS_AHEAD = opts.ahead;
   if (opts.singleEspnId != null) singleEspnId = opts.singleEspnId;
   if (opts.dryRun != null)       DRY_RUN = !!opts.dryRun;
 
@@ -320,11 +368,15 @@ async function runIngest(opts = {}) {
     if (!events.length) throw new Error('No ufc_events row with espn_event_id ' + singleEspnId + ' (run ingestEvents.js first).');
   } else {
     const cutoff = new Date(Date.now() - DAYS_BACK * 86400000).toISOString().slice(0, 10);
-    const r = await supabaseClient.from('ufc_events')
+    let q = supabaseClient.from('ufc_events')
       .select('id, name, full_name, espn_event_id, event_date')
       .not('espn_event_id', 'is', null)
-      .gte('event_date', cutoff)
-      .order('event_date', { ascending: true });
+      .gte('event_date', cutoff);
+    if (DAYS_AHEAD != null) {
+      const horizon = new Date(Date.now() + DAYS_AHEAD * 86400000).toISOString().slice(0, 10);
+      q = q.lte('event_date', horizon);
+    }
+    const r = await q.order('event_date', { ascending: true });
     if (r.error) throw new Error('Failed to load events: ' + r.error.message);
     events = r.data || [];
   }

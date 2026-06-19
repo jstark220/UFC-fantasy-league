@@ -1,8 +1,10 @@
 {
   "crons": [
-    { "path": "/api/cron-ingest", "schedule": "* * * * *" }
+    { "path": "/api/cron-ingest",        "schedule": "* * * * *" },
+    { "path": "/api/cron-refresh-cards", "schedule": "0 * * * *" }
   ],
   "functions": {
-    "api/cron-ingest.js": { "maxDuration": 120 }
+    "api/cron-ingest.js":        { "maxDuration": 120 },
+    "api/cron-refresh-cards.js": { "maxDuration": 120 }
   }
 }
