@@ -53,11 +53,13 @@ var WOMENS_DIVISIONS_KEYS = ['strawweight', 'flyweight_w', 'bantamweight_w'];
 // Maximum the cap can grow to during event-week expansion. Used as a
 // fallback when no event context is provided; callers that DO know the
 // upcoming event should use getEventBonusSize(event) instead.
-var ROSTER_SIZE_EXPANDED      = 18; // event-week +3 cap (numbered events)
+var ROSTER_SIZE_EXPANDED      = 17; // event-week +2 cap (all cards — starters/TERF are now 2 across the board)
 
-// Defaults when a league's scoring_config doesn't override these. Numbered
-// PPVs get 3 starters / +3 TERF; Fight Nights get 2 starters / +2 TERF.
-var DEFAULT_STARTERS_NUMBERED    = 3;
+// Defaults when a league's scoring_config doesn't override these. All cards
+// now get 2 starters / +2 TERF by default. (Historical note: numbered PPVs
+// were 3 starters through UFC 328. Changed to 2 across the board starting
+// with UFC 329; existing leagues migrated via one-shot DB update.)
+var DEFAULT_STARTERS_NUMBERED    = 2;
 var DEFAULT_STARTERS_FIGHT_NIGHT = 2;
 
 // Detects "UFC 329", "UFC 330", etc. Everything else (Fight Night, UFC on
@@ -92,8 +94,8 @@ function getStarterCountForEvent(event, scoringConfig) {
 }
 
 // The roster cap that applies during the expansion window for THIS event.
-// Bigger numbered events get +3, smaller Fight Night cards get +2 — both
-// configurable per-league.
+// Both numbered PPVs and Fight Nights default to +2 — per-league
+// scoring_config can override either independently.
 function getRosterCapExpandedForEvent(event, scoringConfig) {
   return ROSTER_SIZE_BASE + getEventBonusSize(event, scoringConfig);
 }
@@ -253,9 +255,9 @@ function isCapExpanded(now, nextEventDateStr) {
 }
 
 // The roster cap that applies right now. Base size normally; during the
-// event-week expansion window, base + 2 (Fight Night) or base + 3
-// (numbered). Pass the upcoming event when you want the correct expanded
-// size — without it we fall back to +3 (the old default).
+// event-week expansion window, base + 2 (all cards). Pass the upcoming
+// event when you want the exact size (still driven by scoringConfig
+// overrides); without it we fall back to +2.
 function getRosterCap(now, nextEventDateStr, nextEvent) {
   if (!isCapExpanded(now, nextEventDateStr)) return ROSTER_SIZE_BASE;
   return nextEvent

@@ -109,9 +109,9 @@ manager. They are the priority.
   starters, so it should read "/ 2 set" on those cards.
 - **Why it matters:** Tells managers they are missing a starter they cannot set,
   and contradicts the real lineup page.
-- **Where:** `public/js/lineups.js` line 320 hardcodes `' / 3 set'`. The real
-  fix is to use the same `currentStarterCount()` logic that `public/js/lineup.js`
-  already uses (2 for Fight Nights, 3 for numbered PPVs).
+- **Where:** `public/js/lineups.js` used to hardcode `' / 3 set'`; the fix is to
+  use the same `currentStarterCount()` logic that `public/js/lineup.js` already
+  uses (2 across all card types — starters default is 2 everywhere now).
 - **Effort:** Quick.
 
 ### P1.2 Unranked (NR) fighters share the grey dot used for "slot not filled"

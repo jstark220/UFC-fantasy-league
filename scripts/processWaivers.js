@@ -46,7 +46,7 @@ const WOMENS_DIVISIONS_KEYS = ['strawweight', 'flyweight_w', 'bantamweight_w'];
 function isNumbered(ev) { return /^UFC\s+\d+\b/i.test(String((ev && (ev.name || ev.full_name)) || '').trim()); }
 function eventBonus(ev, cfg) {
   cfg = cfg || {};
-  if (isNumbered(ev)) return cfg.starters_numbered != null ? Number(cfg.starters_numbered) : 3;
+  if (isNumbered(ev)) return cfg.starters_numbered != null ? Number(cfg.starters_numbered) : 2;
   return cfg.starters_fight_night != null ? Number(cfg.starters_fight_night) : 2;
 }
 

@@ -96,7 +96,7 @@
     var womensFlex  = 1;
     var anyFlex     = Math.max(0, rosterSize - mensSlots - womensFlex);
 
-    var startersNumbered   = scoringCfg.starters_numbered    != null ? Number(scoringCfg.starters_numbered)    : 3;
+    var startersNumbered   = scoringCfg.starters_numbered    != null ? Number(scoringCfg.starters_numbered)    : 2;
     var startersFightNight = scoringCfg.starters_fight_night != null ? Number(scoringCfg.starters_fight_night) : 2;
 
     return {

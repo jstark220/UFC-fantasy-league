@@ -45,7 +45,7 @@ var MAX_OPEN_CLAIMS   = 4;
 // Waiver-phase state — recomputed at every page load and refresh
 var nextEvent       = null;          // ufc_events row used as the schedule anchor
 var phaseInfo       = { phase: 'FA', closesAt: null, opensAt: null };
-var rosterCap       = ROSTER_SIZE_BASE; // grows to ROSTER_SIZE_EXPANDED during the +3 event-week window
+var rosterCap       = ROSTER_SIZE_BASE; // grows to ROSTER_SIZE_EXPANDED during the +2 event-week window
 var fighterDropMap  = {};            // { fighter_id: { dropped_at, league_member_id, source } } — most recent drop per fighter
 
 // ========================================================================
@@ -2481,10 +2481,10 @@ async function refreshData() {
 // Returns null when fighters fit, otherwise a user-facing error message.
 
 // Optional opts.useExpansion = true loosens the limits to the event-week
-// expansion caps. The expansion size depends on the upcoming event:
-// numbered PPVs get +3, Fight Nights get +2. Pass opts.event (the next
-// ufc_events row) so the caller's view of the cap matches reality;
-// without it we fall back to the +3 numbered-event default.
+// expansion caps. The expansion size defaults to +2 for every card type
+// (per-league scoring_config can override). Pass opts.event (the next
+// ufc_events row) so the caller's view of the cap matches any custom
+// per-league value; without it we fall back to the +2 default.
 function checkRosterConstruction(fighters, opts) {
   opts = opts || {};
   var baseTotal   = (league && typeof league.roster_size === 'number') ? league.roster_size : ROSTER_SIZE_BASE;

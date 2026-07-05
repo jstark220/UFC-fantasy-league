@@ -182,7 +182,7 @@ RLS policies protect user data; reference data (fighters, events, results) is pu
 
 **Requirements:**
 - Lineup lock at first prelim fight start time
-- Starters per card depends on event type: 3 for numbered PPVs (UFC 329, UFC 330, etc.), 2 for Fight Nights. Starters must be from the manager's roster. (Note: the all-lineups summary view in lineups.js currently hardcodes "/ 3 set"; see PRIORITIES.md P1.1.)
+- Starters per card: 2 across all card types (numbered PPVs and Fight Nights). Starters must be from the manager's roster. Historical note: numbered PPVs were 3 through UFC 328; changed to 2 across the board starting with UFC 329.
 - Starter must be competing on this card (enforced)
 - Visual indicator of which fighters on roster are scheduled
 - Last lineup persists if no change made before lock
@@ -334,7 +334,7 @@ Multiplier applies to total points scored in that fight (base + bonuses).
 
 - 8 managers per league (default)
 - 20 fighters per roster
-- Starters per card by event type: 3 for numbered PPVs, 2 for Fight Nights
+- Starters per card: 2 for all card types (both numbered PPVs and Fight Nights)
 
 ### 6.2 Roster Construction Requirements
 

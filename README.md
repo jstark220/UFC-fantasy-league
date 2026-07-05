@@ -12,7 +12,7 @@ https://knockdown-nine.vercel.app
 
 - Account creation and league setup: Users sign up with email, create or join a league.
 - Drafting and roster management: Each manager builds a 20-fighter roster across required divisions, with weekly add/drop and trade functionality.
-- Weekly starter selection: Managers pick 3 starters per UFC card before the lineup lock at the first prelim.
+- Weekly starter selection: Managers pick 2 starters per UFC card before the lineup lock at the first prelim.
 - Live scoring and standings: Points are calculated automatically from fight stats (strikes, takedowns, finishes, bonuses) and standings update after each event.
 - League chat: A built-in group chat for each league so managers can talk trash and negotiate trades.
 

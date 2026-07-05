@@ -359,13 +359,13 @@ async function loadLineupsTab() {
   renderLineupPane();  // prompt until a team is picked
 }
 
-// Starter count for an event: 3 for numbered PPVs, 2 for Fight Nights, with
-// per-league scoring_config overrides. Local copy of waiver-phase's rule so
-// this page stays self-contained.
+// Starter count for an event: 2 across the board (numbered PPVs and Fight
+// Nights alike) by default, with per-league scoring_config overrides. Local
+// copy of waiver-phase's rule so this page stays self-contained.
 function starterCountForEvent(ev) {
   var cfg = (league && league.scoring_config) || {};
   var numbered = /^UFC\s+\d+\b/i.test(String((ev && ev.name) || '').trim());
-  if (numbered) return cfg.starters_numbered != null ? Number(cfg.starters_numbered) : 3;
+  if (numbered) return cfg.starters_numbered != null ? Number(cfg.starters_numbered) : 2;
   return cfg.starters_fight_night != null ? Number(cfg.starters_fight_night) : 2;
 }
 

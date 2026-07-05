@@ -72,7 +72,7 @@ Multipliers: Main event 1.2x, Co-main 1.1x
 
 ## League Rules v1.2 (reference for future work)
 
-8 managers per league. 20 fighters per roster. 3 starters per card. Roster construction: 2 per men's division (including flyweight), 2 women's flex, 2 any-division flex. Season-long or dynasty. Highest cumulative points wins. Weekly schedule: Thursday roster +2 cap / FA→waivers, Friday waivers process (reverse standings), Saturday lineup lock at first prelim, Tuesday drop-down deadline, Wednesday auto-drop.
+8 managers per league. 20 fighters per roster. 2 starters per card (all card types — numbered PPVs were 3 through UFC 328, changed to 2 for UFC 329 onward). Roster construction: 2 per men's division (including flyweight), 2 women's flex, 2 any-division flex. Season-long or dynasty. Highest cumulative points wins. Weekly schedule: Thursday roster +2 cap / FA→waivers, Friday waivers process (reverse standings), Saturday lineup lock at first prelim, Tuesday drop-down deadline, Wednesday auto-drop.
 
 ## How to Help Me Best
 

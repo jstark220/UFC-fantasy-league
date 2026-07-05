@@ -394,7 +394,7 @@ function renderManagerCard(member, totalScore, anyScoresThisEvent) {
   const selectionIds = selectionsByMember[member.id] || [];
   const memberScores = scoresByMember[member.id]    || {};
 
-  // Build slots — count depends on event type (3 for numbered, 2 for FN)
+  // Build slots — count comes from scoring_config, defaults to 2 across all card types
   const starterCount = currentStarterCount();
   let slotsHtml = '';
   for (let i = 0; i < starterCount; i++) {

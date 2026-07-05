@@ -1,7 +1,8 @@
 // ========================================================================
 // LINEUP PAGE LOGIC
 // Lets each manager pick starters from their roster for the next UFC event.
-// Numbered PPVs (UFC 329, UFC 330, …) get 3 starters; Fight Nights get 2.
+// All card types get 2 starters by default (per-league override via
+// scoring_config.starters_numbered / .starters_fight_night).
 // Starter cards display at the top; the full roster list is below.
 // Clicking "Start" on a roster row fills a card slot. Clicking "Bench" on
 // a card empties that slot and returns the fighter to the bench.
@@ -56,11 +57,11 @@ const DIVISION_ABBR = {
   heavyweight:       "HW"
 };
 
-// Maximum possible starter count — used for empty-slot rendering caps,
-// fallback labels, and any callsite that doesn't have an event in hand.
-// The actual count for the currently-selected event comes from
-// getStarterCountForEvent(selectedEvent): 3 for numbered, 2 for Fight Night.
-const MAX_STARTERS = 3;
+// Fallback starter count — used only when the shared getStarterCountForEvent
+// helper hasn't loaded (defensive; shouldn't happen in production). The real
+// per-event value comes from getStarterCountForEvent(selectedEvent), which
+// reads the league's scoring_config and defaults to 2 across all card types.
+const MAX_STARTERS = 2;
 function currentStarterCount() {
   return (typeof getStarterCountForEvent === 'function')
     ? getStarterCountForEvent(selectedEvent, leagueScoringConfig)
@@ -673,7 +674,7 @@ function onSelectTeam(memberId) {
 function renderEventBanner() {
   const el = document.getElementById('eventBanner');
   const started = selections.size;
-  // Numbered PPVs use 3 starters, Fight Nights use 2 — pull from the
+  // Starter count defaults to 2 for every card type — pull from the
   // shared helper so the banner reflects whatever rule the commissioner
   // configured (or the league defaults).
   const total = currentStarterCount();
@@ -992,8 +993,8 @@ function renderStarterSlots() {
   // names into the projection-pill breakdown context. Computed once and
   // passed in.
   const fightCardLookup = buildFightCardLookup();
-  // Numbered events get 3 starters, Fight Nights get 2 — fewer fighters
-  // available on the smaller cards.
+  // Every card type defaults to 2 starters; league scoring_config can
+  // override per event type.
   const starterCount = currentStarterCount();
 
   let html = '';
