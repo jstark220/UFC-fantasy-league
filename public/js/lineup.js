@@ -304,7 +304,7 @@ async function initLineup() {
   // Fetch this user's roster ONCE — it's not event-specific.
   const rostersRes = await supabaseClient
     .from('rosters')
-    .select('id, draft_pick, slot_override, acquired_at, fighters(id, name, primary_division, current_rank, is_champion, is_sub_champion, sub_title_type, record_wins, record_losses, record_draws, photo_url, age, country)')
+    .select('id, draft_pick, slot_override, acquired_at, fighters(id, name, primary_division, eligible_divisions, current_rank, is_champion, is_sub_champion, sub_title_type, record_wins, record_losses, record_draws, photo_url, age, country)')
     .eq('league_id', leagueId)
     .eq('league_member_id', myMemberId)
     .order('draft_pick');
@@ -993,6 +993,10 @@ function renderStarterSlots() {
   // names into the projection-pill breakdown context. Computed once and
   // passed in.
   const fightCardLookup = buildFightCardLookup();
+  // Slot assignment map so a started multi-division fighter's card shows the
+  // same division as their roster-list row (e.g. Costa's card reads "Light
+  // Heavyweight" when auto-fit/pinned there, not his primary "Middleweight").
+  const slotAssignMap = currentSlotAssignmentMap();
   // Every card type defaults to 2 starters; league scoring_config can
   // override per event type.
   const starterCount = currentStarterCount();
@@ -1002,7 +1006,7 @@ function renderStarterSlots() {
   for (let slot = 0; slot < starterCount; slot++) {
     const fighter = startedFighters[slot];
     if (fighter) {
-      html += buildStarterCard(fighter, slot + 1, fightCardLookup);
+      html += buildStarterCard(fighter, slot + 1, fightCardLookup, slotAssignMap);
     } else {
       html += buildEmptySlot(slot + 1);
     }
@@ -1044,11 +1048,17 @@ function renderStarterSlots() {
 }
 
 // Returns the HTML for a filled starter card
-function buildStarterCard(fighter, slotNum, fightCardLookup) {
+function buildStarterCard(fighter, slotNum, fightCardLookup, slotAssignMap) {
   const tierClass  = tierModifier(fighter);
   const rankLabel  = fighter.is_champion ? 'C'     : (fighter.current_rank ? '#' + fighter.current_rank : 'NR');
   const rankSub    = fighter.is_champion ? 'CHAMP' : 'RANK';
-  const divLabel   = DIVISION_LABELS[fighter.primary_division] || fighter.primary_division;
+  // Division follows the fighter's assigned SLOT (matches their roster-list
+  // row) — falls back to primary_division for non-men's slots or when no
+  // assignment is available (off-roster past-event starters).
+  const assignedSlot = slotAssignMap ? slotAssignMap[fighter.id] : null;
+  const slotDivision = (assignedSlot && MENS_DIVISIONS.indexOf(assignedSlot) !== -1)
+    ? assignedSlot : fighter.primary_division;
+  const divLabel   = DIVISION_LABELS[slotDivision] || slotDivision;
   const record     = fighter.record_wins + '-' + fighter.record_losses + (fighter.record_draws ? '-' + fighter.record_draws : '');
   const photoHtml  = fighter.photo_url
     ? '<img class="fighter-card__photo" src="' + fighter.photo_url + '" alt="' + escapeHtml(fighter.name) + '" onerror="this.style.display=\'none\'">'
@@ -1316,6 +1326,17 @@ function renderRosterList() {
     });
   });
 
+  // Wire segmented weight-slot chips (multi-division fighters). Clicking a
+  // chip pins that fighter to the chosen slot via slot_override.
+  el.querySelectorAll('.lineup-slot-chip').forEach(function(chip) {
+    chip.addEventListener('click', function() {
+      setSlotOverride(
+        chip.getAttribute('data-slot-fighter-id'),
+        chip.getAttribute('data-slot-key')
+      );
+    });
+  });
+
   // Wire fighter name buttons to open the profile modal
   el.querySelectorAll('[data-open-fighter]').forEach(function(btn) {
     btn.addEventListener('click', function() {
@@ -1519,6 +1540,48 @@ function renderSlotSection(title, fighters, totalSlots, ctx, slotType) {
   return html;
 }
 
+// Segmented weight-slot toggle for a multi-division fighter. Renders one chip
+// per eligible MEN'S division (primary first, then weight order) plus a FLEX
+// chip; the chip matching the fighter's current assigned slot is highlighted.
+// Returns null for fighters who don't need it (single men's division, or a
+// women's fighter — all women's divisions pool into the one Women's Flex slot,
+// so there's no division CHOICE to make). Chips carry data-slot-* attributes;
+// clicks are delegated in renderRosterList -> setSlotOverride().
+function renderSlotToggle(fighter, slotType) {
+  var elig = (typeof RosterSlots !== 'undefined' && RosterSlots.eligibleDivisionsOf)
+    ? RosterSlots.eligibleDivisionsOf(fighter)
+    : [fighter.primary_division];
+  var mensElig = elig.filter(function(d) { return MENS_DIVISIONS.indexOf(d) !== -1; });
+  if (mensElig.length < 2) return null;
+
+  // Primary division first (nicest default), then any other eligible men's
+  // divisions in canonical weight order.
+  var ordered = [];
+  if (fighter.primary_division && mensElig.indexOf(fighter.primary_division) !== -1) {
+    ordered.push(fighter.primary_division);
+  }
+  MENS_DIVISIONS.forEach(function(d) {
+    if (mensElig.indexOf(d) !== -1 && ordered.indexOf(d) === -1) ordered.push(d);
+  });
+
+  function chip(key, label, titleText) {
+    var active = slotType === key;
+    return '<button type="button" class="lineup-slot-chip' + (active ? ' lineup-slot-chip--active' : '') + '"' +
+      ' data-slot-fighter-id="' + fighter.id + '" data-slot-key="' + escapeHtml(key) + '"' +
+      ' title="' + escapeHtml(titleText) + '"' +
+      (active ? ' aria-pressed="true"' : ' aria-pressed="false"') + '>' +
+      escapeHtml(label) + '</button>';
+  }
+
+  var chips = ordered.map(function(d) {
+    return chip(d, DIVISION_ABBR[d] || d, DIVISION_LABELS[d] || d);
+  });
+  chips.push(chip('any_flex', 'FLEX', 'Any-Division Flex'));
+
+  return '<div class="lineup-slot-toggle" role="group" aria-label="Weight slot for ' +
+    escapeHtml(fighter.name) + '">' + chips.join('') + '</div>';
+}
+
 // Returns the HTML for a single roster row.
 function renderRosterRow(fighter, ctx, slotType) {
   const isStarted  = selections.has(fighter.id);
@@ -1542,7 +1605,14 @@ function renderRosterRow(fighter, ctx, slotType) {
   } else if (fighter.is_sub_champion && fighter.sub_title_type === 'bmf') {
     subBadge = '<span class="subrank-badge subrank-bmf">BMF</span>';
   }
-  const divLabel   = DIVISION_LABELS[fighter.primary_division] || fighter.primary_division;
+  // Division text reflects the SLOT the fighter is assigned to, not their raw
+  // primary_division — so a multi-division fighter auto-fit (or pinned) to
+  // Light Heavyweight reads "Men's Light Heavyweight" instead of contradicting
+  // his section/chip by still saying "Middleweight". Non-men's slots
+  // (womens_flex / any_flex) aren't a single weight class, so those fall back
+  // to the fighter's primary division.
+  const slotDivision = (MENS_DIVISIONS.indexOf(slotType) !== -1) ? slotType : fighter.primary_division;
+  const divLabel   = DIVISION_LABELS[slotDivision] || slotDivision;
   const record     = fighter.record_wins + '-' + fighter.record_losses + (fighter.record_draws ? '-' + fighter.record_draws : '');
   // Build the flag · division · age sub-line as separate spans so the
   // mobile stylesheet can hide individual pieces (e.g. age is hidden
@@ -1694,13 +1764,24 @@ function renderRosterRow(fighter, ctx, slotType) {
     }
   }
 
+  // Segmented weight-slot toggle for fighters eligible at 2+ MEN'S divisions
+  // (e.g. Vinicius Oliveira BW/FE). It supersedes the → Flex / ← Out buttons
+  // for those fighters — the FLEX chip covers the "move to flex" case — and
+  // lets the manager pick which division slot the fighter fills. Single-
+  // division fighters (and all women, whose divisions all pool into the one
+  // Women's Flex slot) keep the original → Flex / ← Out buttons unchanged.
+  var slotToggleHtml = (!isViewMode) ? renderSlotToggle(fighter, slotType) : null;
+
   // Group the action chrome into a single wrapper so we can lay it out
   // as a unit. On desktop it reads as a clean trailing group; on mobile
   // CSS reflows it onto its own row beneath the fighter info, with the
   // country flag prepended inside so it sits to the left of the buttons.
-  var actionsHtml = btnHtml + flexBtn + unflexBtn + dropBtn;
+  var actionsHtml = slotToggleHtml
+    ? (btnHtml + slotToggleHtml + dropBtn)
+    : (btnHtml + flexBtn + unflexBtn + dropBtn);
   var hasActions = actionsHtml.length > 0;
-  var divAbbr = DIVISION_ABBR[fighter.primary_division] || '';
+  // Mobile abbreviation follows the assigned slot too (see slotDivision above).
+  var divAbbr = DIVISION_ABBR[slotDivision] || '';
   // Flag rendered inside the actions wrapper so on mobile it lands at
   // the left of the action row (under the name). Hidden on desktop via
   // CSS — the full division line still carries the flag there.
@@ -2049,6 +2130,58 @@ function closeMoveToFlexModal() {
 
 function handleFlexModalEscape(e) {
   if (e.key === 'Escape') closeMoveToFlexModal();
+}
+
+// Segmented-toggle handler: pin a multi-division fighter to a chosen slot
+// (a men's division key or 'any_flex') via rosters.slot_override. Validates
+// that the resulting roster still assigns before persisting, so a manager
+// can't pin themselves into an illegal construction (e.g. forcing a flex
+// overflow). Re-renders on success; reverts + warns on failure.
+async function setSlotOverride(fighterId, slotKey) {
+  var fighter = myRoster.find(function(f) { return f.id === fighterId; });
+  if (!fighter) return;
+  // No-op if it's already pinned there — avoids a pointless DB write.
+  if (fighter.slot_override === slotKey) return;
+
+  var prevOverride = fighter.slot_override || null;
+
+  // Tentatively apply, then re-derive the CORE roster (same TERF split as
+  // renderRosterList) and confirm the engine can still seat everyone.
+  fighter.slot_override = slotKey;
+
+  var anyFlexCap = typeof getAnyFlexSlots === 'function' ? getAnyFlexSlots(league) : ROSTER_FLEX_SLOTS;
+  var eventDate  = selectedEvent ? selectedEvent.event_date : null;
+  var capExpanded = typeof isCapExpanded === 'function' ? isCapExpanded(new Date(), eventDate) : false;
+  var overflow   = Math.max(0, myRoster.length - ROSTER_SIZE_BASE);
+  var coreRoster = myRoster;
+  if (capExpanded && overflow > 0) {
+    var sorted = myRoster.slice().sort(function(a, b) {
+      return (a.acquired_at ? new Date(a.acquired_at).getTime() : 0) -
+             (b.acquired_at ? new Date(b.acquired_at).getTime() : 0);
+    });
+    coreRoster = sorted.slice(0, sorted.length - overflow);
+  }
+  if (typeof RosterSlots !== 'undefined' && RosterSlots.computeAssignment) {
+    var res = RosterSlots.computeAssignment(coreRoster, { anyFlexCap: anyFlexCap });
+    if (!res.ok) {
+      fighter.slot_override = prevOverride; // revert
+      alert('Can’t move ' + fighter.name + ' there — it would overflow your roster slots. Move another fighter first.');
+      return;
+    }
+  }
+
+  // Persist. rosterRowIds maps fighter_id -> rosters row id.
+  var rowId = rosterRowIds[fighterId];
+  if (rowId) {
+    var upd = await supabaseClient.from('rosters')
+      .update({ slot_override: slotKey }).eq('id', rowId);
+    if (upd.error) {
+      fighter.slot_override = prevOverride; // revert local on write failure
+      alert('Could not save the slot change: ' + upd.error.message);
+      return;
+    }
+  }
+  renderRosterList();
 }
 
 // Persists the flex move to Supabase and updates local state.
@@ -2736,47 +2869,71 @@ async function saveEditEvent() {
 // consistent with how picks were made. Given fighters in roster order,
 // greedily assigns each to its slot category.
 // ========================================================================
+// Returns a { fighterId: slotType } map for the CURRENT core roster, using the
+// same TERF core/extended split as renderRosterList so a fighter's assigned
+// slot is identical whether we're rendering the roster list or a starter card.
+// Lets surfaces that don't have a section context (e.g. the starter cards at
+// the top of the lineup) show a multi-division fighter's real slot instead of
+// defaulting to primary_division.
+function currentSlotAssignmentMap() {
+  var anyFlexCap = typeof getAnyFlexSlots === 'function' ? getAnyFlexSlots(league) : ROSTER_FLEX_SLOTS;
+  var eventDate  = selectedEvent ? selectedEvent.event_date : null;
+  var capExpanded = typeof isCapExpanded === 'function' ? isCapExpanded(new Date(), eventDate) : false;
+  var overflow   = Math.max(0, myRoster.length - ROSTER_SIZE_BASE);
+  var core = myRoster;
+  if (capExpanded && overflow > 0) {
+    var sorted = myRoster.slice().sort(function(a, b) {
+      return (a.acquired_at ? new Date(a.acquired_at).getTime() : 0) -
+             (b.acquired_at ? new Date(b.acquired_at).getTime() : 0);
+    });
+    core = sorted.slice(0, sorted.length - overflow);
+  }
+  if (typeof RosterSlots !== 'undefined' && RosterSlots.computeAssignment) {
+    return RosterSlots.computeAssignment(core, { anyFlexCap: anyFlexCap }).byFighter || {};
+  }
+  return {};
+}
+
 function assignSlots(fighters) {
-  // Greedy slot assignment for the new construction rules:
-  //   * Each men's division gets up to ROSTER_SLOTS_PER_DIVISION slots (1).
-  //   * Women's divisions share a single Women's Flex slot — first women's
-  //     fighter assigned fills it, subsequent ones overflow to any-flex.
-  //   * Any-Division Flex catches everything else (up to ROSTER_FLEX_SLOTS).
-  //   * Pinned fighters (slot_override = 'any_flex') claim a flex slot first
-  //     so the algorithm doesn't hand those slots to ordinary overflow.
+  // Slot assignment now runs through the shared RosterSlots engine so the
+  // rules live in ONE place (draft, waivers, server all use the same one) and
+  // multi-division eligibility works: a fighter eligible at two weight classes
+  // (e.g. Vinicius Oliveira BW/FE) auto-fits into whichever division slot is
+  // open, or an any-flex slot, instead of always landing in primary_division.
+  // slot_override still pins a fighter (to 'any_flex' or, now, a specific
+  // eligible division). Returns the same [{fighter, slotType}] shape callers
+  // already expect. Falls back to the old primary-division greedy pass if the
+  // engine somehow isn't loaded (defensive; it's a hard dependency via
+  // lineup.html).
+  var anyFlexCap = typeof getAnyFlexSlots === 'function' ? getAnyFlexSlots(league) : ROSTER_FLEX_SLOTS;
+  if (typeof RosterSlots !== 'undefined' && RosterSlots.computeAssignment) {
+    var res = RosterSlots.computeAssignment(fighters, { anyFlexCap: anyFlexCap });
+    return fighters.map(function(f) {
+      // Unassigned (over-capacity) fighters shouldn't happen for a legal
+      // roster; show them in flex so nothing vanishes from the UI.
+      return { fighter: f, slotType: res.byFighter[f.id] || 'any_flex' };
+    });
+  }
+
+  // ---- Fallback (engine unavailable): original primary-division greedy ----
   const divCounts = {};
   MENS_DIVISIONS.forEach(function(d) { divCounts[d] = 0; });
   let womensFlexFilled = 0;
   const result = [];
-
   const pinned   = fighters.filter(function(f) { return f.slot_override === 'any_flex'; });
   const unpinned = fighters.filter(function(f) { return f.slot_override !== 'any_flex'; });
-
-  pinned.forEach(function(f) {
-    result.push({ fighter: f, slotType: 'any_flex' });
-  });
-
+  pinned.forEach(function(f) { result.push({ fighter: f, slotType: 'any_flex' }); });
   unpinned.forEach(function(f) {
     const div = f.primary_division;
     if (WOMENS_DIVISIONS.indexOf(div) !== -1) {
-      // Women's fighter — fill the shared Women's Flex slot first, then
-      // overflow to any-flex.
-      if (womensFlexFilled < ROSTER_WOMENS_FLEX_SLOTS) {
-        womensFlexFilled++;
-        result.push({ fighter: f, slotType: 'womens_flex' });
-      } else {
-        result.push({ fighter: f, slotType: 'any_flex' });
-      }
+      if (womensFlexFilled < ROSTER_WOMENS_FLEX_SLOTS) { womensFlexFilled++; result.push({ fighter: f, slotType: 'womens_flex' }); }
+      else { result.push({ fighter: f, slotType: 'any_flex' }); }
     } else if (divCounts[div] !== undefined && divCounts[div] < ROSTER_SLOTS_PER_DIVISION) {
-      // Men's division with an open slot
-      divCounts[div]++;
-      result.push({ fighter: f, slotType: div });
+      divCounts[div]++; result.push({ fighter: f, slotType: div });
     } else {
-      // Men's division already full, or unknown division → any-flex
       result.push({ fighter: f, slotType: 'any_flex' });
     }
   });
-
   return result;
 }
 

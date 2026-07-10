@@ -6174,6 +6174,10 @@ body {
     justify-self: start;
     align-self: center;
     gap: 4px;
+    /* Allow the cluster (Start/Bench + weight-slot toggle + Drop) to wrap
+       onto a second line rather than spill off the right edge when a
+       multi-division fighter's toggle adds 3-4 chips. */
+    flex-wrap: wrap;
   }
   /* Earlier design surfaced a duplicate flag inside the action wrapper.
      The flag is already shown in the division line under the name, so
@@ -6208,7 +6212,8 @@ body {
      the fighter name above gets more horizontal room. */
   .lineup-roster-row__actions .lineup-row-btn,
   .lineup-roster-row__actions .lineup-flex-btn,
-  .lineup-roster-row__actions .lineup-drop-btn {
+  .lineup-roster-row__actions .lineup-drop-btn,
+  .lineup-roster-row__actions .lineup-slot-chip {
     padding: 3px 6px;
     font-size: 9px;
     letter-spacing: 0;
@@ -6597,6 +6602,50 @@ body {
 .lineup-drop-btn:hover {
   border-color: var(--accent-crimson);
   color: var(--accent-crimson);
+}
+
+/* Segmented weight-slot toggle — shown on the roster row for fighters
+   eligible at 2+ men's divisions (e.g. Vinicius Oliveira "BW / FE / FLEX").
+   A connected pill of small chips; the active slot is filled crimson. Tapping
+   a chip pins the fighter to that division slot (or Any-Flex). */
+.lineup-slot-toggle {
+  display: inline-flex;
+  flex-shrink: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  overflow: hidden;
+  /* Let it wrap onto its own line inside the actions group rather than
+     spill horizontally when a fighter is eligible at three divisions. */
+  max-width: 100%;
+}
+.lineup-slot-chip {
+  flex-shrink: 0;
+  padding: 5px 9px;
+  background: transparent;
+  border: 0;
+  border-right: 1px solid var(--border-strong);
+  color: var(--text-tertiary);
+  font-family: var(--font-body);
+  font-size: var(--text-caption);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.lineup-slot-chip:last-child { border-right: 0; }
+.lineup-slot-chip--active {
+  background: var(--accent-crimson);
+  color: #fff;
+}
+/* Hover gated so a tap on a touch device doesn't leave a chip stuck in the
+   hover state until the next tap elsewhere. */
+@media (hover: hover) {
+  .lineup-slot-chip:not(.lineup-slot-chip--active):hover {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+  }
 }
 
 /* Section header inside the grouped roster list — shows slot category + pip fill indicator */
