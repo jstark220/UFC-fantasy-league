@@ -1361,6 +1361,30 @@ function renderRosterList() {
 //
 // Returns null when balanced; otherwise { shortages, excesses }.
 function detectRosterImbalance(roster) {
+  // Prefer the shared slot-assignment engine so multi-division eligibility is
+  // honored: a roster that's actually assignable (e.g. a fighter who fits an
+  // alternate division slot, like Paulo Costa at LHW) is NOT flagged. This
+  // avoids the false "out of alignment" alarm the old primary-division count
+  // raised for legal multi-division rosters. Only a genuinely un-assignable
+  // roster (more fighters than slots can hold) trips the banner.
+  var engineFlexCap = typeof getAnyFlexSlots === 'function' ? getAnyFlexSlots(league) : ROSTER_FLEX_SLOTS;
+  if (typeof RosterSlots !== 'undefined' && RosterSlots.computeAssignment) {
+    var res = RosterSlots.computeAssignment(roster, { anyFlexCap: engineFlexCap });
+    if (res.ok) return null;
+    var unseat = (res.unassigned || []).map(function(id) {
+      var f = roster.find(function(x) { return x.id === id; });
+      return f ? f.name : id;
+    });
+    return {
+      shortages: [],
+      excesses: [
+        unseat.length + ' fighter' + (unseat.length === 1 ? '' : 's') +
+        ' can\'t fit your division slots (' + unseat.join(', ') + ')'
+      ]
+    };
+  }
+
+  // ---- Fallback (engine unavailable): original primary-division detection ----
   // Count by division + tally women's separately (they share one slot).
   const counts = {};
   MENS_DIVISIONS.forEach(function(d) { counts[d] = 0; });
@@ -1454,9 +1478,10 @@ function renderImbalanceBanner(roster, capExpanded) {
     '<p class="roster-imbalance-banner__title">Roster construction is out of alignment</p>' +
     body +
     '<p class="roster-imbalance-banner__hint">' +
-      'Add a fighter from a short division and drop one from an over slot to rebalance. ' +
-      'You can still set starters, but the roster won\'t be valid for league play until ' +
-      'it matches the construction rules.' +
+      'Drop a fighter or add to an open division to rebalance. ' +
+      'This does not affect scoring — any starters you set still score normally. ' +
+      'You just can\'t make waiver or trade moves until the roster fits the ' +
+      'construction rules.' +
     '</p>';
   el.style.display = '';
 }
