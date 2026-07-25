@@ -1845,6 +1845,14 @@ function renderRosterRow(fighter, ctx, slotType) {
               (projPill ? ' ' + projPill : '') +
             '</span>'
           : nextFightLine) +
+        // Mobile-only projection line. The inline projPill above lives inside
+        // the nowrap matchup line, which is clipped on mobile — so its pill is
+        // hidden there and this dedicated line surfaces the same projection on
+        // its own row instead. Hidden on desktop (where the inline pill shows),
+        // shown on mobile. Same markup, so clicking still opens the breakdown.
+        (projPill
+          ? '<span class="lineup-roster-row__proj-mobile">' + projPill + '</span>'
+          : '') +
         '<span class="lineup-roster-row__division">' + divLineHtml + '</span>' +
       '</div>' +
       fvChip +

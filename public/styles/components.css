@@ -6146,6 +6146,22 @@ body {
   .lineup-roster-row .lineup-roster-row__matchup .fight-projection {
     display: none;
   }
+  /* ...but surface the projection on its own line here instead, so mobile
+     roster rows still show each fighter's projected points. Sits last in the
+     info column (order 4, after name / division / matchup). The inner pill is
+     NOT inside .matchup, so the hide rule above doesn't touch it. */
+  .lineup-roster-row__proj-mobile {
+    display: block;
+    order: 4;
+    margin-top: 2px;
+  }
+  .lineup-roster-row__proj-mobile .fight-projection {
+    padding: 1px 6px;
+    font-size: 10px;
+  }
+  .lineup-roster-row__proj-mobile .fight-projection__label {
+    font-size: 8px;
+  }
   /* Keep the division line as line 2 so the order reads name / division /
      next-fight (the next-fight node sits before division in the DOM). */
   .lineup-roster-row__division { order: 2; }
@@ -9990,6 +10006,14 @@ select.form-input option,
   white-space: nowrap;
   line-height: 1;
 }
+
+/* Mobile-only projection line on roster rows. Hidden on desktop, where the
+   inline pill inside the matchup line already shows the projection. Revealed
+   at the mobile breakpoint (see the max-width: 720px block) as its own line. */
+.lineup-roster-row__proj-mobile {
+  display: none;
+}
+
 .fight-projection__label {
   font-size: 9px;
   font-weight: 700;
