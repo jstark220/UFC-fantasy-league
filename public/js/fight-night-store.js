@@ -311,10 +311,21 @@
   function phaseOf(input, now) {
     var lockMs = input.lockMs, untilMs = input.untilMs;
     var total = input.totalFights || 0, decided = input.decidedFights || 0;
-    if (lockMs != null && now < lockMs) return 'PREVIEW';
+    // FINAL first: the card is over (every bout decided, or past the
+    // current-event window). Checked before anything else so a finished card
+    // is never mistaken for live or preview.
     if (untilMs != null && now >= untilMs) return 'FINAL';
     if (total > 0 && decided >= total) return 'FINAL';
-    if (lockMs == null) return total > 0 && decided > 0 ? 'LIVE' : 'PREVIEW';
+    // LIVE as soon as results start landing — this WINS over the lock-time
+    // gate below. Otherwise the hub stayed stuck in PREVIEW (no Octagon, no
+    // round-by-round, no next/previous fight) whenever an event's
+    // lineup_lock_time was set later than the real first bout, or prelims
+    // started before the nominal lock. If fights are being scored, it's live.
+    if (total > 0 && decided > 0) return 'LIVE';
+    // PREVIEW: pre-event, nothing decided yet, lock still ahead.
+    if (lockMs != null && now < lockMs) return 'PREVIEW';
+    if (lockMs == null) return 'PREVIEW';
+    // Lock has passed with no results yet — the card is imminent; show live.
     return 'LIVE';
   }
 
